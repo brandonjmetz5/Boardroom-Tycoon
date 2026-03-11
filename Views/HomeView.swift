@@ -86,7 +86,7 @@ struct HomeView: View {
                     DashboardCard(
                         title: "Inventory",
                         systemImage: "shippingbox",
-                        destination: InventoryView()
+                        destination: InventoryView(userID: userID)
                     )
 
                     DashboardCard(

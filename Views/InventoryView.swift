@@ -8,45 +8,64 @@
 import SwiftUI
 
 struct InventoryView: View {
-    let inventoryItems: [InventoryItem] = [
-        InventoryItem(
-            id: "inv-gold-bar",
-            item: Item(id: "gold-bar", name: "Gold Bar", category: .refinedMaterial, isFractional: true),
-            quantity: 0.75
-        ),
-        InventoryItem(
-            id: "inv-fuel-cell",
-            item: Item(id: "fuel-cell", name: "Fuel Cell", category: .fuel, isFractional: false),
-            quantity: 12
-        ),
-        InventoryItem(
-            id: "inv-cut-diamond",
-            item: Item(id: "cut-diamond", name: "Cut Diamond", category: .refinedMaterial, isFractional: false),
-            quantity: 3
-        ),
-        InventoryItem(
-            id: "inv-steel",
-            item: Item(id: "steel", name: "Steel", category: .buildingMaterial, isFractional: false),
-            quantity: 5
-        )
-    ]
+    let userID: String
+
+    @State private var inventoryItems: [InventoryItem] = []
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
+    private let inventoryService = InventoryService()
 
     var body: some View {
-        List(inventoryItems) { inventoryItem in
-            VStack(alignment: .leading, spacing: 4) {
-                Text(inventoryItem.item.name)
-                    .font(.headline)
+        Group {
+            if isLoading {
+                ProgressView("Loading inventory...")
+                    .controlSize(.large)
+            } else if let errorMessage {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Failed to load inventory")
+                        .font(.headline)
 
-                Text("Quantity: \(formattedQuantity(for: inventoryItem))")
-                    .font(.subheadline)
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                }
+                .padding()
+            } else {
+                List(inventoryItems) { inventoryItem in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(inventoryItem.item.name)
+                            .font(.headline)
 
-                Text("Category: \(inventoryItem.item.category.rawValue)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                        Text("Quantity: \(formattedQuantity(for: inventoryItem))")
+                            .font(.subheadline)
+
+                        Text("Category: \(inventoryItem.item.category.rawValue)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .listStyle(.insetGrouped)
             }
-            .padding(.vertical, 4)
         }
-        .listStyle(.insetGrouped)
+        .onAppear {
+            loadInventory()
+        }
+    }
+
+    private func loadInventory() {
+        inventoryService.fetchInventory(for: userID) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let items):
+                    self.inventoryItems = items
+                    self.isLoading = false
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                    self.isLoading = false
+                }
+            }
+        }
     }
 
     private func formattedQuantity(for inventoryItem: InventoryItem) -> String {
@@ -60,6 +79,6 @@ struct InventoryView: View {
 
 #Preview {
     NavigationStack {
-        InventoryView()
+        InventoryView(userID: "demo-user-id-12345")
     }
 }

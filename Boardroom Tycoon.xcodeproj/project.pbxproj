@@ -35,6 +35,8 @@
 		A8AB73AF2F61F0C90012C9BC /* StockPricePoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73AE2F61F0C90012C9BC /* StockPricePoint.swift */; };
 		A8AB73B12F61F20F0012C9BC /* ProspectingJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73B02F61F20F0012C9BC /* ProspectingJob.swift */; };
 		A8AB73B32F61FEC30012C9BC /* PlayerProfileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73B22F61FEC30012C9BC /* PlayerProfileService.swift */; };
+		A8AB73B52F62075A0012C9BC /* InventoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73B42F62075A0012C9BC /* InventoryService.swift */; };
+		A8AB73B72F620B8A0012C9BC /* OwnedMineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73B62F620B8A0012C9BC /* OwnedMineService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,6 +66,8 @@
 		A8AB73AE2F61F0C90012C9BC /* StockPricePoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockPricePoint.swift; sourceTree = "<group>"; };
 		A8AB73B02F61F20F0012C9BC /* ProspectingJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProspectingJob.swift; sourceTree = "<group>"; };
 		A8AB73B22F61FEC30012C9BC /* PlayerProfileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerProfileService.swift; sourceTree = "<group>"; };
+		A8AB73B42F62075A0012C9BC /* InventoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InventoryService.swift; sourceTree = "<group>"; };
+		A8AB73B62F620B8A0012C9BC /* OwnedMineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnedMineService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -167,6 +171,8 @@
 			isa = PBXGroup;
 			children = (
 				A8AB73B22F61FEC30012C9BC /* PlayerProfileService.swift */,
+				A8AB73B42F62075A0012C9BC /* InventoryService.swift */,
+				A8AB73B62F620B8A0012C9BC /* OwnedMineService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -266,6 +272,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A8AB73B72F620B8A0012C9BC /* OwnedMineService.swift in Sources */,
 				A8AB73B12F61F20F0012C9BC /* ProspectingJob.swift in Sources */,
 				A8AB739D2F61E6EB0012C9BC /* InventoryItem.swift in Sources */,
 				A8AB73932F61E3200012C9BC /* PlayerProfile.swift in Sources */,
@@ -286,6 +293,7 @@
 				A8AB738D2F61D57F0012C9BC /* InventoryView.swift in Sources */,
 				A8AB73AF2F61F0C90012C9BC /* StockPricePoint.swift in Sources */,
 				A8AB73A32F61E88C0012C9BC /* OperationType.swift in Sources */,
+				A8AB73B52F62075A0012C9BC /* InventoryService.swift in Sources */,
 				A8AB73872F61D5090012C9BC /* OperationsView.swift in Sources */,
 				A8AB73952F61E4AF0012C9BC /* Mine.swift in Sources */,
 				A8AB73A72F61EDEA0012C9BC /* Machine.swift in Sources */,
