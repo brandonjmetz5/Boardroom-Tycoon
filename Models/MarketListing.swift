@@ -6,3 +6,11 @@
 //
 
 import Foundation
+
+struct MarketListing: Identifiable {
+    let id: String
+    let item: Item
+    let quantity: Double
+    let pricePerUnit: Double
+    let sellerName: String
+}

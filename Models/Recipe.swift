@@ -6,3 +6,11 @@
 //
 
 import Foundation
+
+struct Recipe: Identifiable {
+    let id: String
+    let name: String
+    let inputItems: [RecipeIngredient]
+    let outputItems: [RecipeIngredient]
+    let cycleTimeInMinutes: Int
+}

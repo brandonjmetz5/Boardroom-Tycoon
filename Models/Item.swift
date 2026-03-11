@@ -6,3 +6,10 @@
 //
 
 import Foundation
+
+struct Item: Identifiable {
+    let id: String
+    let name: String
+    let category: ItemCategory
+    let isFractional: Bool
+}

@@ -7,12 +7,37 @@
 
 import SwiftUI
 
-struct DashboardCard: View {
+struct DashboardCard<Destination: View>: View {
+    let title: String
+    let systemImage: String
+    let destination: Destination
+
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        NavigationLink(destination: destination.navigationTitle(title)) {
+            VStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 28))
+
+                Text(title)
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 120)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(16)
+        }
+        .buttonStyle(.plain)
     }
 }
 
 #Preview {
-    DashboardCard()
+    NavigationStack {
+        DashboardCard(
+            title: "Operations",
+            systemImage: "gearshape",
+            destination: OperationsView()
+        )
+        .padding()
+    }
 }

@@ -6,8 +6,64 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A8AB73742F61B7D00012C9BC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */; };
+		A8AB73772F61B7F70012C9BC /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB73762F61B7F70012C9BC /* FirebaseAuth */; };
+		A8AB73792F61B7F70012C9BC /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB73782F61B7F70012C9BC /* FirebaseCore */; };
+		A8AB737B2F61B7F70012C9BC /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB737A2F61B7F70012C9BC /* FirebaseFirestore */; };
+		A8AB73852F61D4CD0012C9BC /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73842F61D4CD0012C9BC /* HomeView.swift */; };
+		A8AB73872F61D5090012C9BC /* OperationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73862F61D5090012C9BC /* OperationsView.swift */; };
+		A8AB73892F61D5460012C9BC /* MarketView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73882F61D5460012C9BC /* MarketView.swift */; };
+		A8AB738B2F61D5680012C9BC /* StocksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB738A2F61D5680012C9BC /* StocksView.swift */; };
+		A8AB738D2F61D57F0012C9BC /* InventoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB738C2F61D57F0012C9BC /* InventoryView.swift */; };
+		A8AB738F2F61D5960012C9BC /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB738E2F61D5960012C9BC /* ProfileView.swift */; };
+		A8AB73912F61E1340012C9BC /* DashboardCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73902F61E1340012C9BC /* DashboardCard.swift */; };
+		A8AB73932F61E3200012C9BC /* PlayerProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73922F61E3200012C9BC /* PlayerProfile.swift */; };
+		A8AB73952F61E4AF0012C9BC /* Mine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73942F61E4AF0012C9BC /* Mine.swift */; };
+		A8AB73972F61E4E20012C9BC /* ResourceType.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73962F61E4E20012C9BC /* ResourceType.swift */; };
+		A8AB73992F61E5D90012C9BC /* ItemCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73982F61E5D90012C9BC /* ItemCategory.swift */; };
+		A8AB739B2F61E5FB0012C9BC /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB739A2F61E5FB0012C9BC /* Item.swift */; };
+		A8AB739D2F61E6EB0012C9BC /* InventoryItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB739C2F61E6EB0012C9BC /* InventoryItem.swift */; };
+		A8AB739F2F61E7DA0012C9BC /* RecipeIngredient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB739E2F61E7DA0012C9BC /* RecipeIngredient.swift */; };
+		A8AB73A12F61E7E80012C9BC /* Recipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73A02F61E7E80012C9BC /* Recipe.swift */; };
+		A8AB73A32F61E88C0012C9BC /* OperationType.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73A22F61E88C0012C9BC /* OperationType.swift */; };
+		A8AB73A52F61E8DA0012C9BC /* Operation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73A42F61E8DA0012C9BC /* Operation.swift */; };
+		A8AB73A72F61EDEA0012C9BC /* Machine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73A62F61EDEA0012C9BC /* Machine.swift */; };
+		A8AB73A92F61EE0E0012C9BC /* OperationDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73A82F61EE0E0012C9BC /* OperationDetailView.swift */; };
+		A8AB73AB2F61EEEB0012C9BC /* MarketListing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73AA2F61EEEB0012C9BC /* MarketListing.swift */; };
+		A8AB73AD2F61EF570012C9BC /* Stock.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73AC2F61EF570012C9BC /* Stock.swift */; };
+		A8AB73AF2F61F0C90012C9BC /* StockPricePoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73AE2F61F0C90012C9BC /* StockPricePoint.swift */; };
+		A8AB73B12F61F20F0012C9BC /* ProspectingJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73B02F61F20F0012C9BC /* ProspectingJob.swift */; };
+		A8AB73B32F61FEC30012C9BC /* PlayerProfileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73B22F61FEC30012C9BC /* PlayerProfileService.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		A8AB73652F61B7B20012C9BC /* Boardroom Tycoon.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Boardroom Tycoon.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		A8AB73842F61D4CD0012C9BC /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		A8AB73862F61D5090012C9BC /* OperationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationsView.swift; sourceTree = "<group>"; };
+		A8AB73882F61D5460012C9BC /* MarketView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketView.swift; sourceTree = "<group>"; };
+		A8AB738A2F61D5680012C9BC /* StocksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StocksView.swift; sourceTree = "<group>"; };
+		A8AB738C2F61D57F0012C9BC /* InventoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InventoryView.swift; sourceTree = "<group>"; };
+		A8AB738E2F61D5960012C9BC /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		A8AB73902F61E1340012C9BC /* DashboardCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardCard.swift; sourceTree = "<group>"; };
+		A8AB73922F61E3200012C9BC /* PlayerProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerProfile.swift; sourceTree = "<group>"; };
+		A8AB73942F61E4AF0012C9BC /* Mine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mine.swift; sourceTree = "<group>"; };
+		A8AB73962F61E4E20012C9BC /* ResourceType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceType.swift; sourceTree = "<group>"; };
+		A8AB73982F61E5D90012C9BC /* ItemCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCategory.swift; sourceTree = "<group>"; };
+		A8AB739A2F61E5FB0012C9BC /* Item.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Item.swift; sourceTree = "<group>"; };
+		A8AB739C2F61E6EB0012C9BC /* InventoryItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InventoryItem.swift; sourceTree = "<group>"; };
+		A8AB739E2F61E7DA0012C9BC /* RecipeIngredient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipeIngredient.swift; sourceTree = "<group>"; };
+		A8AB73A02F61E7E80012C9BC /* Recipe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recipe.swift; sourceTree = "<group>"; };
+		A8AB73A22F61E88C0012C9BC /* OperationType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationType.swift; sourceTree = "<group>"; };
+		A8AB73A42F61E8DA0012C9BC /* Operation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Operation.swift; sourceTree = "<group>"; };
+		A8AB73A62F61EDEA0012C9BC /* Machine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Machine.swift; sourceTree = "<group>"; };
+		A8AB73A82F61EE0E0012C9BC /* OperationDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationDetailView.swift; sourceTree = "<group>"; };
+		A8AB73AA2F61EEEB0012C9BC /* MarketListing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketListing.swift; sourceTree = "<group>"; };
+		A8AB73AC2F61EF570012C9BC /* Stock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stock.swift; sourceTree = "<group>"; };
+		A8AB73AE2F61F0C90012C9BC /* StockPricePoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockPricePoint.swift; sourceTree = "<group>"; };
+		A8AB73B02F61F20F0012C9BC /* ProspectingJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProspectingJob.swift; sourceTree = "<group>"; };
+		A8AB73B22F61FEC30012C9BC /* PlayerProfileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerProfileService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -23,6 +79,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A8AB73792F61B7F70012C9BC /* FirebaseCore in Frameworks */,
+				A8AB73772F61B7F70012C9BC /* FirebaseAuth in Frameworks */,
+				A8AB737B2F61B7F70012C9BC /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -32,7 +91,14 @@
 		A8AB735C2F61B7B20012C9BC = {
 			isa = PBXGroup;
 			children = (
-				A8AB73672F61B7B20012C9BC /* Boardroom Tycoon */,
+				A8AB73822F61D3DA0012C9BC /* Utilities */,
+				A8AB73812F61D3950012C9BC /* Managers */,
+				A8AB73802F61D3840012C9BC /* Services */,
+				A8AB737F2F61D3760012C9BC /* ViewModels */,
+				A8AB737E2F61D3610012C9BC /* Views */,
+				A8AB737D2F61D35B0012C9BC /* Models */,
+				A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */,
+				A8AB737C2F61D3080012C9BC /* New Group */,
 				A8AB73662F61B7B20012C9BC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +109,80 @@
 				A8AB73652F61B7B20012C9BC /* Boardroom Tycoon.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A8AB737C2F61D3080012C9BC /* New Group */ = {
+			isa = PBXGroup;
+			children = (
+				A8AB73672F61B7B20012C9BC /* Boardroom Tycoon */,
+			);
+			path = "New Group";
+			sourceTree = "<group>";
+		};
+		A8AB737D2F61D35B0012C9BC /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A8AB73922F61E3200012C9BC /* PlayerProfile.swift */,
+				A8AB73942F61E4AF0012C9BC /* Mine.swift */,
+				A8AB73962F61E4E20012C9BC /* ResourceType.swift */,
+				A8AB73982F61E5D90012C9BC /* ItemCategory.swift */,
+				A8AB739A2F61E5FB0012C9BC /* Item.swift */,
+				A8AB739C2F61E6EB0012C9BC /* InventoryItem.swift */,
+				A8AB739E2F61E7DA0012C9BC /* RecipeIngredient.swift */,
+				A8AB73A02F61E7E80012C9BC /* Recipe.swift */,
+				A8AB73A22F61E88C0012C9BC /* OperationType.swift */,
+				A8AB73A42F61E8DA0012C9BC /* Operation.swift */,
+				A8AB73A62F61EDEA0012C9BC /* Machine.swift */,
+				A8AB73AA2F61EEEB0012C9BC /* MarketListing.swift */,
+				A8AB73AC2F61EF570012C9BC /* Stock.swift */,
+				A8AB73AE2F61F0C90012C9BC /* StockPricePoint.swift */,
+				A8AB73B02F61F20F0012C9BC /* ProspectingJob.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A8AB737E2F61D3610012C9BC /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A8AB73842F61D4CD0012C9BC /* HomeView.swift */,
+				A8AB73862F61D5090012C9BC /* OperationsView.swift */,
+				A8AB73882F61D5460012C9BC /* MarketView.swift */,
+				A8AB738A2F61D5680012C9BC /* StocksView.swift */,
+				A8AB738C2F61D57F0012C9BC /* InventoryView.swift */,
+				A8AB738E2F61D5960012C9BC /* ProfileView.swift */,
+				A8AB73902F61E1340012C9BC /* DashboardCard.swift */,
+				A8AB73A82F61EE0E0012C9BC /* OperationDetailView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A8AB737F2F61D3760012C9BC /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		A8AB73802F61D3840012C9BC /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A8AB73B22F61FEC30012C9BC /* PlayerProfileService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A8AB73812F61D3950012C9BC /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Managers;
+			sourceTree = "<group>";
+		};
+		A8AB73822F61D3DA0012C9BC /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Utilities;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -65,6 +205,9 @@
 			);
 			name = "Boardroom Tycoon";
 			packageProductDependencies = (
+				A8AB73762F61B7F70012C9BC /* FirebaseAuth */,
+				A8AB73782F61B7F70012C9BC /* FirebaseCore */,
+				A8AB737A2F61B7F70012C9BC /* FirebaseFirestore */,
 			);
 			productName = "Boardroom Tycoon";
 			productReference = A8AB73652F61B7B20012C9BC /* Boardroom Tycoon.app */;
@@ -94,6 +237,9 @@
 			);
 			mainGroup = A8AB735C2F61B7B20012C9BC;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A8AB73752F61B7F70012C9BC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A8AB73662F61B7B20012C9BC /* Products */;
 			projectDirPath = "";
@@ -109,6 +255,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A8AB73742F61B7D00012C9BC /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,6 +266,30 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A8AB73B12F61F20F0012C9BC /* ProspectingJob.swift in Sources */,
+				A8AB739D2F61E6EB0012C9BC /* InventoryItem.swift in Sources */,
+				A8AB73932F61E3200012C9BC /* PlayerProfile.swift in Sources */,
+				A8AB73AD2F61EF570012C9BC /* Stock.swift in Sources */,
+				A8AB73B32F61FEC30012C9BC /* PlayerProfileService.swift in Sources */,
+				A8AB739F2F61E7DA0012C9BC /* RecipeIngredient.swift in Sources */,
+				A8AB738F2F61D5960012C9BC /* ProfileView.swift in Sources */,
+				A8AB73AB2F61EEEB0012C9BC /* MarketListing.swift in Sources */,
+				A8AB73A92F61EE0E0012C9BC /* OperationDetailView.swift in Sources */,
+				A8AB73852F61D4CD0012C9BC /* HomeView.swift in Sources */,
+				A8AB73A12F61E7E80012C9BC /* Recipe.swift in Sources */,
+				A8AB73892F61D5460012C9BC /* MarketView.swift in Sources */,
+				A8AB739B2F61E5FB0012C9BC /* Item.swift in Sources */,
+				A8AB73A52F61E8DA0012C9BC /* Operation.swift in Sources */,
+				A8AB73992F61E5D90012C9BC /* ItemCategory.swift in Sources */,
+				A8AB738B2F61D5680012C9BC /* StocksView.swift in Sources */,
+				A8AB73912F61E1340012C9BC /* DashboardCard.swift in Sources */,
+				A8AB738D2F61D57F0012C9BC /* InventoryView.swift in Sources */,
+				A8AB73AF2F61F0C90012C9BC /* StockPricePoint.swift in Sources */,
+				A8AB73A32F61E88C0012C9BC /* OperationType.swift in Sources */,
+				A8AB73872F61D5090012C9BC /* OperationsView.swift in Sources */,
+				A8AB73952F61E4AF0012C9BC /* Mine.swift in Sources */,
+				A8AB73A72F61EDEA0012C9BC /* Machine.swift in Sources */,
+				A8AB73972F61E4E20012C9BC /* ResourceType.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -332,6 +503,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A8AB73752F61B7F70012C9BC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A8AB73762F61B7F70012C9BC /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8AB73752F61B7F70012C9BC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		A8AB73782F61B7F70012C9BC /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8AB73752F61B7F70012C9BC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		A8AB737A2F61B7F70012C9BC /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A8AB73752F61B7F70012C9BC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A8AB735D2F61B7B20012C9BC /* Project object */;
 }

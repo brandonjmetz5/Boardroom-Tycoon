@@ -6,3 +6,11 @@
 //
 
 import Foundation
+
+struct Stock: Identifiable {
+    let id: String
+    let name: String
+    let symbol: String
+    var currentPrice: Double
+    var priceChange: Double
+}

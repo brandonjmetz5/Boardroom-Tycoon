@@ -6,3 +6,9 @@
 //
 
 import Foundation
+
+struct StockPricePoint: Identifiable {
+    let id: String
+    let timestamp: Date
+    let price: Double
+}

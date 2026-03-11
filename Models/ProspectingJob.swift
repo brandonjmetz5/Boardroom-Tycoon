@@ -6,3 +6,11 @@
 //
 
 import Foundation
+
+struct ProspectingJob: Identifiable {
+    let id: String
+    let resourceType: ResourceType
+    let startedAt: Date
+    let endsAt: Date
+    var isComplete: Bool
+}

@@ -6,3 +6,9 @@
 //
 
 import Foundation
+
+struct InventoryItem: Identifiable {
+    let id: String
+    let item: Item
+    var quantity: Double
+}

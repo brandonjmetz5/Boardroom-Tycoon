@@ -13,77 +13,93 @@ struct ContentView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
 
+    private let playerProfileService = PlayerProfileService()
+
     var body: some View {
-        VStack(spacing: 16) {
+        Group {
             if isLoading {
                 ProgressView("Signing in...")
                     .controlSize(.large)
             } else if let errorMessage {
-                Text("Authentication Failed")
-                    .font(.title2)
-                    .bold()
-
-                Text(errorMessage)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            } else if let userID {
                 VStack(spacing: 12) {
-                    Text("Boardroom Tycoon")
-                        .font(.largeTitle)
+                    Text("Authentication Failed")
+                        .font(.title2)
                         .bold()
 
-                    Text("Authenticated Successfully")
-                        .font(.headline)
-
-                    Text("Player ID")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    Text(userID)
-                        .font(.caption)
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
                         .multilineTextAlignment(.center)
-                        .padding()
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
+                        .padding(.horizontal)
+                }
+                .padding()
+            } else if let userID {
+                NavigationStack {
+                    HomeView(userID: userID)
                 }
             } else {
                 Text("No user found.")
+                    .padding()
             }
         }
-        .padding()
-       // .onAppear {
-       //     signInAnonymouslyIfNeeded()
-       // }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 signInAnonymouslyIfNeeded()
             }
         }
+       // .onAppear {
+       //     signInAnonymouslyIfNeeded()
+       // }
+        
         /// This loading sign in spinner was added for visual testing. I wanted to make sure that the user knows that app isnt slow to launch but simply signing in, can later add some sort of Gamelogo UI movement viual to mask the authentication process!
     }
 
     private func signInAnonymouslyIfNeeded() {
-        if let currentUser = Auth.auth().currentUser {
-            self.userID = currentUser.uid
-            self.isLoading = false
-            return
+            if let currentUser = Auth.auth().currentUser {
+                createPlayerProfile(for: currentUser.uid)
+                return
+            }
+
+            Auth.auth().signInAnonymously { authResult, error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        self.errorMessage = error.localizedDescription
+                        self.isLoading = false
+                        return
+                    }
+
+                    if let uid = authResult?.user.uid {
+                        createPlayerProfile(for: uid)
+                    } else {
+                        self.errorMessage = "Failed to retrieve user ID."
+                        self.isLoading = false
+                    }
+                }
+            }
         }
 
-        Auth.auth().signInAnonymously { authResult, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    self.errorMessage = error.localizedDescription
-                    self.isLoading = false
-                    return
-                }
+        private func createPlayerProfile(for uid: String) {
+            let profile = PlayerProfile(
+                id: uid,
+                cash: 10000,
+                level: 1,
+                starterMineClaimed: false,
+                createdAt: Date()
+            )
 
-                self.userID = authResult?.user.uid
-                self.isLoading = false
+            playerProfileService.createPlayerProfileIfNeeded(for: profile) { result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success:
+                        self.userID = uid
+                        self.isLoading = false
+                    case .failure(let error):
+                        self.errorMessage = error.localizedDescription
+                        self.isLoading = false
+                    }
+                }
             }
         }
     }
-}
 
 #Preview {
     ContentView()

@@ -6,3 +6,10 @@
 //
 
 import Foundation
+
+struct Machine: Identifiable {
+    let id: String
+    let name: String
+    var level: Int
+    var efficiencyBonus: Double
+}

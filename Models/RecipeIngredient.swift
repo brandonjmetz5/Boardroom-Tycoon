@@ -6,3 +6,9 @@
 //
 
 import Foundation
+
+struct RecipeIngredient: Identifiable {
+    let id: String
+    let item: Item
+    let quantity: Double
+}

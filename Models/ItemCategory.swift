@@ -6,3 +6,14 @@
 //
 
 import Foundation
+
+enum ItemCategory: String, CaseIterable, Identifiable {
+    case rawMaterial = "Raw Material"
+    case refinedMaterial = "Refined Material"
+    case fuel = "Fuel"
+    case component = "Component"
+    case luxuryGood = "Luxury Good"
+    case buildingMaterial = "Building Material"
+
+    var id: String { rawValue }
+}
