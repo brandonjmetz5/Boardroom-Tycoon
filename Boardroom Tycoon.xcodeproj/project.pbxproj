@@ -37,6 +37,9 @@
 		A8AB73B32F61FEC30012C9BC /* PlayerProfileService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73B22F61FEC30012C9BC /* PlayerProfileService.swift */; };
 		A8AB73B52F62075A0012C9BC /* InventoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73B42F62075A0012C9BC /* InventoryService.swift */; };
 		A8AB73B72F620B8A0012C9BC /* OwnedMineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73B62F620B8A0012C9BC /* OwnedMineService.swift */; };
+		A8AB73B92F6275F80012C9BC /* BuildingType.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73B82F6275F80012C9BC /* BuildingType.swift */; };
+		A8AB73BB2F6276340012C9BC /* Building.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73BA2F6276340012C9BC /* Building.swift */; };
+		A8AB73BD2F6277730012C9BC /* BuildingDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73BC2F6277730012C9BC /* BuildingDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -68,6 +71,9 @@
 		A8AB73B22F61FEC30012C9BC /* PlayerProfileService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerProfileService.swift; sourceTree = "<group>"; };
 		A8AB73B42F62075A0012C9BC /* InventoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InventoryService.swift; sourceTree = "<group>"; };
 		A8AB73B62F620B8A0012C9BC /* OwnedMineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnedMineService.swift; sourceTree = "<group>"; };
+		A8AB73B82F6275F80012C9BC /* BuildingType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingType.swift; sourceTree = "<group>"; };
+		A8AB73BA2F6276340012C9BC /* Building.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Building.swift; sourceTree = "<group>"; };
+		A8AB73BC2F6277730012C9BC /* BuildingDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingDetailView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -141,6 +147,8 @@
 				A8AB73AC2F61EF570012C9BC /* Stock.swift */,
 				A8AB73AE2F61F0C90012C9BC /* StockPricePoint.swift */,
 				A8AB73B02F61F20F0012C9BC /* ProspectingJob.swift */,
+				A8AB73B82F6275F80012C9BC /* BuildingType.swift */,
+				A8AB73BA2F6276340012C9BC /* Building.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -156,6 +164,7 @@
 				A8AB738E2F61D5960012C9BC /* ProfileView.swift */,
 				A8AB73902F61E1340012C9BC /* DashboardCard.swift */,
 				A8AB73A82F61EE0E0012C9BC /* OperationDetailView.swift */,
+				A8AB73BC2F6277730012C9BC /* BuildingDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -279,7 +288,9 @@
 				A8AB73AD2F61EF570012C9BC /* Stock.swift in Sources */,
 				A8AB73B32F61FEC30012C9BC /* PlayerProfileService.swift in Sources */,
 				A8AB739F2F61E7DA0012C9BC /* RecipeIngredient.swift in Sources */,
+				A8AB73BB2F6276340012C9BC /* Building.swift in Sources */,
 				A8AB738F2F61D5960012C9BC /* ProfileView.swift in Sources */,
+				A8AB73B92F6275F80012C9BC /* BuildingType.swift in Sources */,
 				A8AB73AB2F61EEEB0012C9BC /* MarketListing.swift in Sources */,
 				A8AB73A92F61EE0E0012C9BC /* OperationDetailView.swift in Sources */,
 				A8AB73852F61D4CD0012C9BC /* HomeView.swift in Sources */,
@@ -290,6 +301,7 @@
 				A8AB73992F61E5D90012C9BC /* ItemCategory.swift in Sources */,
 				A8AB738B2F61D5680012C9BC /* StocksView.swift in Sources */,
 				A8AB73912F61E1340012C9BC /* DashboardCard.swift in Sources */,
+				A8AB73BD2F6277730012C9BC /* BuildingDetailView.swift in Sources */,
 				A8AB738D2F61D57F0012C9BC /* InventoryView.swift in Sources */,
 				A8AB73AF2F61F0C90012C9BC /* StockPricePoint.swift in Sources */,
 				A8AB73A32F61E88C0012C9BC /* OperationType.swift in Sources */,

@@ -13,7 +13,7 @@ struct OperationDetailView: View {
     let mockMines: [Mine] = [
         Mine(
             id: "mine-001",
-            operationID: "op-gold-production",
+            buildingID: "op-gold-production",
             resourceType: .gold,
             level: 1,
             abundance: 65,
@@ -22,7 +22,7 @@ struct OperationDetailView: View {
         ),
         Mine(
             id: "mine-002",
-            operationID: "op-gold-production",
+            buildingID: "op-gold-production",
             resourceType: .gold,
             level: 1,
             abundance: 81,
@@ -109,7 +109,7 @@ struct OperationDetailView: View {
     }
 
     private var matchingMines: [Mine] {
-        mockMines.filter { $0.operationID == operation.id }
+        mockMines.filter { $0.buildingID == operation.id }
     }
 }
 

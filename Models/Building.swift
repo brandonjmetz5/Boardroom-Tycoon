@@ -6,3 +6,11 @@
 //
 
 import Foundation
+
+struct Building: Identifiable {
+    let id: String
+    let name: String
+    let type: BuildingType
+    var level: Int
+    var capacity: Int
+}

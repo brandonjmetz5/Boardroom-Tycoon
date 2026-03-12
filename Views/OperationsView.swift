@@ -8,46 +8,48 @@
 import SwiftUI
 
 struct OperationsView: View {
-    let operations: [Operation] = [
-        Operation(
-            id: "op-gold-production",
-            name: "Gold Production Operation",
-            type: .production,
+    let userID: String
+
+    let buildings: [Building] = [
+        Building(
+            id: "building-gold-mine",
+            name: "Gold Mine",
+            type: .mine,
             level: 1,
             capacity: 2
         ),
-        Operation(
-            id: "op-gold-refinery",
-            name: "Gold Refinery Operation",
+        Building(
+            id: "building-gold-refinery",
+            name: "Gold Refinery",
             type: .refinery,
             level: 1,
             capacity: 2
         ),
-        Operation(
-            id: "op-jewelry",
-            name: "Jewelry Operation",
-            type: .retail,
+        Building(
+            id: "building-jewelry-shop",
+            name: "Jewelry Shop",
+            type: .shop,
             level: 1,
             capacity: 1
         )
     ]
 
     var body: some View {
-        List(operations) { operation in
-            NavigationLink(destination: OperationDetailView(operation: operation)) {
+        List(buildings) { building in
+            NavigationLink(destination: BuildingDetailView(building: building)) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(operation.name)
+                    Text(building.name)
                         .font(.headline)
 
-                    Text("Type: \(operation.type.rawValue)")
+                    Text("Type: \(building.type.rawValue)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    Text("Level: \(operation.level)")
+                    Text("Level: \(building.level)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    Text("Capacity: \(operation.capacity)")
+                    Text("Capacity: \(building.capacity)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -60,6 +62,6 @@ struct OperationsView: View {
 
 #Preview {
     NavigationStack {
-        OperationsView()
+        OperationsView(userID: "demo-user-id-12345")
     }
 }

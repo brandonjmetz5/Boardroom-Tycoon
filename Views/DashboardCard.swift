@@ -36,7 +36,7 @@ struct DashboardCard<Destination: View>: View {
         DashboardCard(
             title: "Operations",
             systemImage: "gearshape",
-            destination: OperationsView()
+            destination: OperationsView(userID: "1625")
         )
         .padding()
     }
