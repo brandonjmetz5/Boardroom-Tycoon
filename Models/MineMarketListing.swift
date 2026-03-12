@@ -7,9 +7,12 @@
 
 import Foundation
 
+import Foundation
+
 struct MineMarketListing: Identifiable {
     let id: String
     let sellerID: String
+    let buildingID: String
     let resourceType: ResourceType
     let level: Int
     let abundance: Int
@@ -17,6 +20,7 @@ struct MineMarketListing: Identifiable {
     let buyNowPrice: Double
     let startingBid: Double
     let currentBid: Double
+    let currentBidderID: String?
     let createdAt: Date
     let endsAt: Date
     let status: String

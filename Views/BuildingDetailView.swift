@@ -63,6 +63,12 @@ struct BuildingDetailView: View {
                             Text("Stability: \(currentBuilding.stability ?? 0)")
                             Text("Starter Mine: \((currentBuilding.isStarterMine ?? false) ? "Yes" : "No")")
                             Text("Output Range: \(formattedOutputRange())")
+
+                            if currentBuilding.isListedOnMarket == true {
+                                Text("Market Status: Listed on Market")
+                                    .foregroundStyle(.orange)
+                                    .bold()
+                            }
                         }
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -78,7 +84,10 @@ struct BuildingDetailView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Producing: \((currentBuilding.isProducing ?? false) ? "Yes" : "No")")
 
-                                if currentBuilding.isProducing == true {
+                                if currentBuilding.isListedOnMarket == true {
+                                    Text("Production unavailable while listed on the market.")
+                                        .foregroundStyle(.secondary)
+                                } else if currentBuilding.isProducing == true {
                                     if isReadyToCollect(at: context.date) {
                                         Text("Status: Ready to Collect")
                                             .bold()
@@ -104,6 +113,9 @@ struct BuildingDetailView: View {
 
                             if isWorking {
                                 ProgressView()
+                            } else if currentBuilding.isListedOnMarket == true {
+                                Text("This mine is currently listed on the marketplace.")
+                                    .foregroundStyle(.secondary)
                             } else if currentBuilding.isProducing == true {
                                 if isReadyToCollect(at: context.date) {
                                     Button("Collect Output") {
@@ -250,7 +262,9 @@ struct BuildingDetailView: View {
                 isProducing: false,
                 productionStartedAt: nil,
                 productionEndsAt: nil,
-                pendingOutputQuantity: nil
+                pendingOutputQuantity: nil,
+                isListedOnMarket: false,
+                marketListingID: nil
             )
         )
     }

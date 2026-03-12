@@ -33,6 +33,16 @@ final class ProductionService {
                 return
             }
 
+            let isListedOnMarket = data["isListedOnMarket"] as? Bool ?? false
+            if isListedOnMarket {
+                completion(.failure(NSError(
+                    domain: "ProductionService",
+                    code: 2004,
+                    userInfo: [NSLocalizedDescriptionKey: "This mine is listed on the market and cannot produce right now."]
+                )))
+                return
+            }
+
             let startedAt = Date()
             // let endsAt = startedAt.addingTimeInterval(60 * 60) // 60 minutes
             let endsAt = startedAt.addingTimeInterval(10) // temporary 10 seconds for testing
@@ -76,6 +86,17 @@ final class ProductionService {
                         domain: "ProductionService",
                         code: 2001,
                         userInfo: [NSLocalizedDescriptionKey: "Invalid building production data."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                let isListedOnMarket = buildingData["isListedOnMarket"] as? Bool ?? false
+                if isListedOnMarket {
+                    let error = NSError(
+                        domain: "ProductionService",
+                        code: 2005,
+                        userInfo: [NSLocalizedDescriptionKey: "This mine is listed on the market and cannot collect production."]
                     )
                     errorPointer?.pointee = error
                     return nil

@@ -116,7 +116,7 @@ struct HomeView: View {
                     DashboardCard(
                         title: "Market",
                         systemImage: "cart",
-                        destination: MarketView()
+                        destination: MarketView(userID: userID)
                     )
 
                     DashboardCard(

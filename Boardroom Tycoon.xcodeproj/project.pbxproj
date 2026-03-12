@@ -11,6 +11,7 @@
 		A865774E2F631D020029071D /* PurchasableBuilding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A865774D2F631D020029071D /* PurchasableBuilding.swift */; };
 		A86577502F631D340029071D /* BuildingCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A865774F2F631D340029071D /* BuildingCatalog.swift */; };
 		A86577522F634F0B0029071D /* MineMarketListing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86577512F634F0B0029071D /* MineMarketListing.swift */; };
+		A86577542F6353440029071D /* MineMarketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86577532F6353440029071D /* MineMarketService.swift */; };
 		A8AB73742F61B7D00012C9BC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */; };
 		A8AB73772F61B7F70012C9BC /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB73762F61B7F70012C9BC /* FirebaseAuth */; };
 		A8AB73792F61B7F70012C9BC /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB73782F61B7F70012C9BC /* FirebaseCore */; };
@@ -70,6 +71,7 @@
 		A865774D2F631D020029071D /* PurchasableBuilding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurchasableBuilding.swift; sourceTree = "<group>"; };
 		A865774F2F631D340029071D /* BuildingCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingCatalog.swift; sourceTree = "<group>"; };
 		A86577512F634F0B0029071D /* MineMarketListing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MineMarketListing.swift; sourceTree = "<group>"; };
+		A86577532F6353440029071D /* MineMarketService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MineMarketService.swift; sourceTree = "<group>"; };
 		A8AB73652F61B7B20012C9BC /* Boardroom Tycoon.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Boardroom Tycoon.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A8AB73842F61D4CD0012C9BC /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -250,6 +252,7 @@
 				A8AB73DC2F62FCF80012C9BC /* NotificationService.swift */,
 				A8AB73E02F62FD3F0012C9BC /* TransactionService.swift */,
 				A8AB73E22F62FF6F0012C9BC /* ProductionService.swift */,
+				A86577532F6353440029071D /* MineMarketService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -359,6 +362,7 @@
 				A8AB73AD2F61EF570012C9BC /* Stock.swift in Sources */,
 				A8AB73B32F61FEC30012C9BC /* PlayerProfileService.swift in Sources */,
 				A8AB739F2F61E7DA0012C9BC /* RecipeIngredient.swift in Sources */,
+				A86577542F6353440029071D /* MineMarketService.swift in Sources */,
 				A865774E2F631D020029071D /* PurchasableBuilding.swift in Sources */,
 				A8AB73DB2F62FCE10012C9BC /* AppNotification.swift in Sources */,
 				A8AB73BB2F6276340012C9BC /* Building.swift in Sources */,
