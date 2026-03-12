@@ -15,7 +15,7 @@ final class ProductionService {
         let buildingRef = db.collection("playerProfiles").document(userID).collection("buildings").document(buildingID)
 
         let startedAt = Date()
-        //let endsAt = startedAt.addingTimeInterval(60 * 60) // 60 minutes
+        // let endsAt = startedAt.addingTimeInterval(60 * 60) // 60 minutes
         let endsAt = startedAt.addingTimeInterval(10) // temporary 10 seconds for testing
         let pendingOutputQuantity = 10.0
 
@@ -84,6 +84,7 @@ final class ProductionService {
                 let currentQuantity = inventorySnapshot.data()?["quantity"] as? Double ?? 0.0
                 let xpReward = 10
                 let updatedXP = currentXP + xpReward
+                let updatedLevel = self.levelForTotalXP(updatedXP)
 
                 let inventoryData: [String: Any] = [
                     "id": "raw-gold",
@@ -102,7 +103,8 @@ final class ProductionService {
                 ], forDocument: buildingRef)
 
                 transaction.updateData([
-                    "xp": updatedXP
+                    "xp": updatedXP,
+                    "level": updatedLevel
                 ], forDocument: profileRef)
 
                 return nil
@@ -117,5 +119,21 @@ final class ProductionService {
                 completion(.success(()))
             }
         }
+    }
+
+    private func xpNeededForNextLevel(from level: Int) -> Int {
+        100 + ((level - 1) * 25)
+    }
+
+    private func levelForTotalXP(_ totalXP: Int) -> Int {
+        var level = 1
+        var xpRemaining = totalXP
+
+        while xpRemaining >= xpNeededForNextLevel(from: level) {
+            xpRemaining -= xpNeededForNextLevel(from: level)
+            level += 1
+        }
+
+        return level
     }
 }
