@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct BuildingDetailView: View {
     let userID: String
@@ -14,6 +15,7 @@ struct BuildingDetailView: View {
     @State private var currentBuilding: Building
     @State private var isWorking = false
     @State private var errorMessage: String?
+    @State private var now = Date()
 
     private let productionService = ProductionService()
     private let buildingService = BuildingService()
@@ -76,9 +78,9 @@ struct BuildingDetailView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Producing: \((currentBuilding.isProducing ?? false) ? "Yes" : "No")")
 
-                            if let productionEndsAt = currentBuilding.productionEndsAt,
-                               currentBuilding.isProducing == true {
-                                Text("Ends: \(productionEndsAt.formatted(date: .abbreviated, time: .shortened))")
+                            if currentBuilding.isProducing == true,
+                               let productionEndsAt = currentBuilding.productionEndsAt {
+                                Text("Time Remaining: \(formattedTimeRemaining(until: productionEndsAt))")
                             }
 
                             if let pendingOutputQuantity = currentBuilding.pendingOutputQuantity,
@@ -100,7 +102,7 @@ struct BuildingDetailView: View {
                             ProgressView()
                         } else if currentBuilding.isProducing == true {
                             if let productionEndsAt = currentBuilding.productionEndsAt,
-                               productionEndsAt <= Date() {
+                               productionEndsAt <= now {
                                 Button("Collect Output") {
                                     collectProduction()
                                 }
@@ -144,6 +146,9 @@ struct BuildingDetailView: View {
         .navigationTitle(currentBuilding.name)
         .onAppear {
             refreshBuilding()
+        }
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { currentTime in
+            now = currentTime
         }
     }
 
@@ -196,6 +201,13 @@ struct BuildingDetailView: View {
                 }
             }
         }
+    }
+
+    private func formattedTimeRemaining(until endDate: Date) -> String {
+        let remainingSeconds = max(0, Int(endDate.timeIntervalSince(now)))
+        let minutes = remainingSeconds / 60
+        let seconds = remainingSeconds % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 }
 
