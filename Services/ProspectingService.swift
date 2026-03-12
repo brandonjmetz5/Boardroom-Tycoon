@@ -394,7 +394,8 @@ final class ProspectingService {
                 let buildingName = self.buildingName(for: resourceType)
                 let startingBid = self.startingBid(for: resourceType, level: 1, abundance: abundance, stability: stability)
                 let createdAt = Date()
-                let endsAt = createdAt.addingTimeInterval(60 * 60 * 24)
+                //let endsAt = createdAt.addingTimeInterval(60 * 60 * 24)
+                let endsAt = createdAt.addingTimeInterval(60)
 
                 let buildingData: [String: Any] = [
                     "id": newBuildingRef.documentID,

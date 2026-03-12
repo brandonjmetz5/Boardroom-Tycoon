@@ -12,64 +12,72 @@ final class MineMarketService {
     private let db = Firestore.firestore()
 
     func fetchActiveMineListings(completion: @escaping (Result<[MineMarketListing], Error>) -> Void) {
-        db.collection("marketListings")
-            .whereField("listingType", isEqualTo: "mine")
-            .whereField("status", isEqualTo: "active")
-            .getDocuments { snapshot, error in
-                if let error = error {
-                    completion(.failure(error))
-                    return
-                }
+        settleExpiredMineListings { settlementResult in
+            switch settlementResult {
+            case .failure(let error):
+                completion(.failure(error))
 
-                guard let documents = snapshot?.documents else {
-                    completion(.success([]))
-                    return
-                }
+            case .success:
+                self.db.collection("marketListings")
+                    .whereField("listingType", isEqualTo: "mine")
+                    .whereField("status", isEqualTo: "active")
+                    .getDocuments { snapshot, error in
+                        if let error = error {
+                            completion(.failure(error))
+                            return
+                        }
 
-                let listings: [MineMarketListing] = documents.compactMap { document in
-                    let data = document.data()
+                        guard let documents = snapshot?.documents else {
+                            completion(.success([]))
+                            return
+                        }
 
-                    guard
-                        let id = data["id"] as? String,
-                        let sellerID = data["sellerID"] as? String,
-                        let buildingID = data["buildingID"] as? String,
-                        let resourceTypeRawValue = data["resourceType"] as? String,
-                        let resourceType = ResourceType(rawValue: resourceTypeRawValue),
-                        let level = data["level"] as? Int,
-                        let abundance = data["abundance"] as? Int,
-                        let stability = data["stability"] as? Int,
-                        let buyNowPrice = data["buyNowPrice"] as? Double,
-                        let startingBid = data["startingBid"] as? Double,
-                        let currentBid = data["currentBid"] as? Double,
-                        let createdAtTimestamp = data["createdAt"] as? Timestamp,
-                        let endsAtTimestamp = data["endsAt"] as? Timestamp,
-                        let status = data["status"] as? String
-                    else {
-                        return nil
+                        let listings: [MineMarketListing] = documents.compactMap { document in
+                            let data = document.data()
+
+                            guard
+                                let id = data["id"] as? String,
+                                let sellerID = data["sellerID"] as? String,
+                                let buildingID = data["buildingID"] as? String,
+                                let resourceTypeRawValue = data["resourceType"] as? String,
+                                let resourceType = ResourceType(rawValue: resourceTypeRawValue),
+                                let level = data["level"] as? Int,
+                                let abundance = data["abundance"] as? Int,
+                                let stability = data["stability"] as? Int,
+                                let buyNowPrice = data["buyNowPrice"] as? Double,
+                                let startingBid = data["startingBid"] as? Double,
+                                let currentBid = data["currentBid"] as? Double,
+                                let createdAtTimestamp = data["createdAt"] as? Timestamp,
+                                let endsAtTimestamp = data["endsAt"] as? Timestamp,
+                                let status = data["status"] as? String
+                            else {
+                                return nil
+                            }
+
+                            let currentBidderID = data["currentBidderID"] as? String
+
+                            return MineMarketListing(
+                                id: id,
+                                sellerID: sellerID,
+                                buildingID: buildingID,
+                                resourceType: resourceType,
+                                level: level,
+                                abundance: abundance,
+                                stability: stability,
+                                buyNowPrice: buyNowPrice,
+                                startingBid: startingBid,
+                                currentBid: currentBid,
+                                currentBidderID: currentBidderID,
+                                createdAt: createdAtTimestamp.dateValue(),
+                                endsAt: endsAtTimestamp.dateValue(),
+                                status: status
+                            )
+                        }
+
+                        completion(.success(listings.sorted { $0.endsAt < $1.endsAt }))
                     }
-
-                    let currentBidderID = data["currentBidderID"] as? String
-
-                    return MineMarketListing(
-                        id: id,
-                        sellerID: sellerID,
-                        buildingID: buildingID,
-                        resourceType: resourceType,
-                        level: level,
-                        abundance: abundance,
-                        stability: stability,
-                        buyNowPrice: buyNowPrice,
-                        startingBid: startingBid,
-                        currentBid: currentBid,
-                        currentBidderID: currentBidderID,
-                        createdAt: createdAtTimestamp.dateValue(),
-                        endsAt: endsAtTimestamp.dateValue(),
-                        status: status
-                    )
-                }
-
-                completion(.success(listings.sorted { $0.endsAt < $1.endsAt }))
             }
+        }
     }
 
     func buyNowMineListing(for buyerID: String, listing: MineMarketListing, completion: @escaping (Result<Void, Error>) -> Void) {
@@ -162,14 +170,34 @@ final class MineMarketService {
                             return nil
                         }
 
-                        if buyerCash < buyNowPrice {
-                            let error = NSError(
-                                domain: "MineMarketService",
-                                code: 4005,
-                                userInfo: [NSLocalizedDescriptionKey: "Not enough cash to buy this listing."]
-                            )
-                            errorPointer?.pointee = error
-                            return nil
+                        let buyerFinalCash: Double
+
+                        if currentBidderID == buyerID {
+                            let additionalAmountNeeded = buyNowPrice - currentBid
+
+                            if buyerCash < additionalAmountNeeded {
+                                let error = NSError(
+                                    domain: "MineMarketService",
+                                    code: 4007,
+                                    userInfo: [NSLocalizedDescriptionKey: "Not enough cash to complete buy now from your current bid position."]
+                                )
+                                errorPointer?.pointee = error
+                                return nil
+                            }
+
+                            buyerFinalCash = buyerCash - additionalAmountNeeded
+                        } else {
+                            if buyerCash < buyNowPrice {
+                                let error = NSError(
+                                    domain: "MineMarketService",
+                                    code: 4005,
+                                    userInfo: [NSLocalizedDescriptionKey: "Not enough cash to buy this listing."]
+                                )
+                                errorPointer?.pointee = error
+                                return nil
+                            }
+
+                            buyerFinalCash = buyerCash - buyNowPrice
                         }
 
                         // Refund current highest bidder if one exists and it isn't the buyer.
@@ -201,7 +229,7 @@ final class MineMarketService {
                         transaction.deleteDocument(sellerBuildingRef)
 
                         transaction.updateData([
-                            "cash": buyerCash - buyNowPrice
+                            "cash": buyerFinalCash
                         ], forDocument: buyerProfileRef)
 
                         transaction.updateData([
@@ -288,6 +316,14 @@ final class MineMarketService {
                     return nil
                 }
 
+                let currentEndDate = endsAtTimestamp.dateValue()
+                let secondsRemaining = currentEndDate.timeIntervalSince(Date())
+
+                var updatedEndDate = currentEndDate
+                if secondsRemaining < 10{
+                    updatedEndDate = currentEndDate.addingTimeInterval(10)
+                }
+
                 if bidAmount <= currentBid {
                     let error = NSError(
                         domain: "MineMarketService",
@@ -327,7 +363,8 @@ final class MineMarketService {
 
                     transaction.updateData([
                         "currentBid": bidAmount,
-                        "currentBidderID": bidderID
+                        "currentBidderID": bidderID,
+                        "endsAt": Timestamp(date: updatedEndDate)
                     ], forDocument: listingRef)
                 } else {
                     if bidderCash < bidAmount {
@@ -340,7 +377,6 @@ final class MineMarketService {
                         return nil
                     }
 
-                    // Refund previous highest bidder if one exists.
                     if let currentBidderID, !currentBidderID.isEmpty {
                         let previousBidderProfileRef = self.db.collection("playerProfiles").document(currentBidderID)
                         let previousBidderSnapshot = try transaction.getDocument(previousBidderProfileRef)
@@ -361,15 +397,206 @@ final class MineMarketService {
                         ], forDocument: previousBidderProfileRef)
                     }
 
-                    // Withdraw full new bid amount from new highest bidder.
                     transaction.updateData([
                         "cash": bidderCash - bidAmount
                     ], forDocument: bidderProfileRef)
 
                     transaction.updateData([
                         "currentBid": bidAmount,
-                        "currentBidderID": bidderID
+                        "currentBidderID": bidderID,
+                        "endsAt": Timestamp(date: updatedEndDate)
                     ], forDocument: listingRef)
+                }
+
+                return nil
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
+            }
+        }) { _, error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
+
+    func settleExpiredMineListings(completion: @escaping (Result<Void, Error>) -> Void) {
+        db.collection("marketListings")
+            .whereField("listingType", isEqualTo: "mine")
+            .whereField("status", isEqualTo: "active")
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    completion(.failure(error))
+                    return
+                }
+
+                guard let documents = snapshot?.documents else {
+                    completion(.success(()))
+                    return
+                }
+
+                let expiredDocuments = documents.filter { document in
+                    guard let endsAtTimestamp = document.data()["endsAt"] as? Timestamp else { return false }
+                    return endsAtTimestamp.dateValue() <= Date()
+                }
+
+                self.settleExpiredDocuments(expiredDocuments, index: 0, completion: completion)
+            }
+    }
+
+    private func settleExpiredDocuments(_ documents: [QueryDocumentSnapshot], index: Int, completion: @escaping (Result<Void, Error>) -> Void) {
+        if index >= documents.count {
+            completion(.success(()))
+            return
+        }
+
+        let document = documents[index]
+        settleExpiredDocument(document) { result in
+            switch result {
+            case .success:
+                self.settleExpiredDocuments(documents, index: index + 1, completion: completion)
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    private func settleExpiredDocument(_ document: QueryDocumentSnapshot, completion: @escaping (Result<Void, Error>) -> Void) {
+        let data = document.data()
+        let listingRef = document.reference
+
+        guard
+            data["sellerID"] as? String != nil,
+            data["buildingID"] as? String != nil,
+            data["currentBid"] as? Double != nil,
+            data["currentBidderID"] as? String != nil
+        else {
+            self.db.runTransaction({ transaction, errorPointer in
+                do {
+                    let listingSnapshot = try transaction.getDocument(listingRef)
+
+                    guard let listingData = listingSnapshot.data(),
+                          let sellerID = listingData["sellerID"] as? String,
+                          let buildingID = listingData["buildingID"] as? String,
+                          let status = listingData["status"] as? String
+                    else {
+                        let error = NSError(
+                            domain: "MineMarketService",
+                            code: 4020,
+                            userInfo: [NSLocalizedDescriptionKey: "Invalid expired listing data."]
+                        )
+                        errorPointer?.pointee = error
+                        return nil
+                    }
+
+                    if status != "active" {
+                        return nil
+                    }
+
+                    let sellerBuildingRef = self.db.collection("playerProfiles")
+                        .document(sellerID)
+                        .collection("buildings")
+                        .document(buildingID)
+
+                    transaction.updateData([
+                        "status": "expired"
+                    ], forDocument: listingRef)
+
+                    transaction.updateData([
+                        "isListedOnMarket": false,
+                        "marketListingID": NSNull()
+                    ], forDocument: sellerBuildingRef)
+
+                    return nil
+                } catch let error as NSError {
+                    errorPointer?.pointee = error
+                    return nil
+                }
+            }) { _, error in
+                if let error = error {
+                    completion(.failure(error))
+                } else {
+                    completion(.success(()))
+                }
+            }
+            return
+        }
+
+        self.db.runTransaction({ transaction, errorPointer in
+            do {
+                let listingSnapshot = try transaction.getDocument(listingRef)
+
+                guard
+                    let listingData = listingSnapshot.data(),
+                    let sellerID = listingData["sellerID"] as? String,
+                    let buildingID = listingData["buildingID"] as? String,
+                    let status = listingData["status"] as? String,
+                    let currentBid = listingData["currentBid"] as? Double
+                else {
+                    let error = NSError(
+                        domain: "MineMarketService",
+                        code: 4021,
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid expired listing data."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                if status != "active" {
+                    return nil
+                }
+
+                let currentBidderID = listingData["currentBidderID"] as? String
+
+                let sellerProfileRef = self.db.collection("playerProfiles").document(sellerID)
+                let sellerBuildingRef = sellerProfileRef.collection("buildings").document(buildingID)
+
+                if let currentBidderID, !currentBidderID.isEmpty {
+                    let bidderProfileRef = self.db.collection("playerProfiles").document(currentBidderID)
+                    let bidderBuildingRef = bidderProfileRef.collection("buildings").document(buildingID)
+
+                    let sellerProfileSnapshot = try transaction.getDocument(sellerProfileRef)
+                    let sellerBuildingSnapshot = try transaction.getDocument(sellerBuildingRef)
+
+                    guard
+                        let sellerProfileData = sellerProfileSnapshot.data(),
+                        let sellerCash = sellerProfileData["cash"] as? Double,
+                        let sellerBuildingData = sellerBuildingSnapshot.data()
+                    else {
+                        let error = NSError(
+                            domain: "MineMarketService",
+                            code: 4022,
+                            userInfo: [NSLocalizedDescriptionKey: "Invalid seller data during settlement."]
+                        )
+                        errorPointer?.pointee = error
+                        return nil
+                    }
+
+                    var transferredBuildingData = sellerBuildingData
+                    transferredBuildingData["isListedOnMarket"] = false
+                    transferredBuildingData["marketListingID"] = NSNull()
+
+                    transaction.setData(transferredBuildingData, forDocument: bidderBuildingRef)
+                    transaction.deleteDocument(sellerBuildingRef)
+
+                    transaction.updateData([
+                        "cash": sellerCash + currentBid
+                    ], forDocument: sellerProfileRef)
+
+                    transaction.updateData([
+                        "status": "sold"
+                    ], forDocument: listingRef)
+                } else {
+                    transaction.updateData([
+                        "status": "expired"
+                    ], forDocument: listingRef)
+
+                    transaction.updateData([
+                        "isListedOnMarket": false,
+                        "marketListingID": NSNull()
+                    ], forDocument: sellerBuildingRef)
                 }
 
                 return nil
