@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct HomeView: View {
     let userID: String
@@ -13,6 +14,7 @@ struct HomeView: View {
     @State private var prospectingJobs: [ProspectingJob] = []
     @State private var isLoadingProspecting = true
     @State private var prospectingErrorMessage: String?
+    @State private var now = Date()
 
     private let prospectingService = ProspectingService()
 
@@ -74,9 +76,14 @@ struct HomeView: View {
                         .cornerRadius(12)
                     } else if let activeJob = prospectingJobs.first(where: { !$0.isComplete }) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Resource: \(activeJob.resourceType.rawValue)")
-                            Text("Complete: \(activeJob.isComplete ? "Yes" : "No")")
-                            Text("Ends: \(activeJob.endsAt.formatted(date: .abbreviated, time: .shortened))")
+                            Text("Resource: \(prospectingLabel(for: activeJob.resourceType))")
+
+                            if activeJob.endsAt <= now {
+                                Text("Status: Ready to Reveal")
+                                    .bold()
+                            } else {
+                                Text("Time Remaining: \(formattedTimeRemaining(until: activeJob.endsAt))")
+                            }
                         }
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -88,7 +95,7 @@ struct HomeView: View {
                                 .font(.subheadline)
                                 .bold()
 
-                            Text("Start prospecting later to discover new mines.")
+                            Text("Start prospecting from an empty building slot.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -137,6 +144,9 @@ struct HomeView: View {
         .onAppear {
             loadProspectingJobs()
         }
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { currentTime in
+            now = currentTime
+        }
     }
 
     private func loadProspectingJobs() {
@@ -152,6 +162,32 @@ struct HomeView: View {
                     self.isLoadingProspecting = false
                 }
             }
+        }
+    }
+
+    private func formattedTimeRemaining(until endDate: Date) -> String {
+        let remainingSeconds = max(0, Int(endDate.timeIntervalSince(now)))
+        let minutes = remainingSeconds / 60
+        let seconds = remainingSeconds % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    private func prospectingLabel(for resourceType: ResourceType) -> String {
+        switch resourceType {
+        case .gold:
+            return "Gold Mine"
+        case .silver:
+            return "Silver Mine"
+        case .diamond:
+            return "Diamond Mine"
+        case .oil:
+            return "Oil Rig"
+        case .coal:
+            return "Coal Mine"
+        case .iron:
+            return "Iron Mine"
+        default:
+            return resourceType.rawValue
         }
     }
 }

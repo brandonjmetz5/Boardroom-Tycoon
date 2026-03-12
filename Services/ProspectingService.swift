@@ -51,4 +51,114 @@ final class ProspectingService {
             completion(.success(jobs))
         }
     }
+
+    func startProspecting(for userID: String, resourceType: ResourceType, completion: @escaping (Result<Void, Error>) -> Void) {
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingsRef = profileRef.collection("buildings")
+        let jobsRef = profileRef.collection("prospectingJobs")
+
+        let prospectingCost = 750.0
+
+        buildingsRef.getDocuments { buildingSnapshot, buildingError in
+            if let buildingError = buildingError {
+                completion(.failure(buildingError))
+                return
+            }
+
+            jobsRef.getDocuments { jobSnapshot, jobError in
+                if let jobError = jobError {
+                    completion(.failure(jobError))
+                    return
+                }
+
+                let currentBuildingCount = buildingSnapshot?.documents.count ?? 0
+
+                let activeJobCount = jobSnapshot?.documents.filter { document in
+                    let data = document.data()
+                    let isComplete = data["isComplete"] as? Bool ?? false
+                    return !isComplete
+                }.count ?? 0
+
+                self.db.runTransaction({ transaction, errorPointer in
+                    do {
+                        let profileSnapshot = try transaction.getDocument(profileRef)
+
+                        guard
+                            let profileData = profileSnapshot.data(),
+                            let currentCash = profileData["cash"] as? Double,
+                            let buildingSlotCount = profileData["buildingSlotCount"] as? Int
+                        else {
+                            let error = NSError(
+                                domain: "ProspectingService",
+                                code: 3001,
+                                userInfo: [NSLocalizedDescriptionKey: "Invalid player profile data."]
+                            )
+                            errorPointer?.pointee = error
+                            return nil
+                        }
+
+                        if activeJobCount > 0 {
+                            let error = NSError(
+                                domain: "ProspectingService",
+                                code: 3002,
+                                userInfo: [NSLocalizedDescriptionKey: "Only one active prospecting job is allowed."]
+                            )
+                            errorPointer?.pointee = error
+                            return nil
+                        }
+
+                        let usedSlots = currentBuildingCount + activeJobCount
+                        if usedSlots >= buildingSlotCount {
+                            let error = NSError(
+                                domain: "ProspectingService",
+                                code: 3003,
+                                userInfo: [NSLocalizedDescriptionKey: "No available building slots for prospecting."]
+                            )
+                            errorPointer?.pointee = error
+                            return nil
+                        }
+
+                        if currentCash < prospectingCost {
+                            let error = NSError(
+                                domain: "ProspectingService",
+                                code: 3004,
+                                userInfo: [NSLocalizedDescriptionKey: "Not enough cash to start prospecting."]
+                            )
+                            errorPointer?.pointee = error
+                            return nil
+                        }
+
+                        let jobRef = jobsRef.document("prospecting-\(UUID().uuidString)")
+                        let startedAt = Date()
+                        let endsAt = startedAt.addingTimeInterval(10) // temporary 10 seconds for testing
+                        // let endsAt = startedAt.addingTimeInterval(60 * 60 * 4)
+
+                        let jobData: [String: Any] = [
+                            "id": jobRef.documentID,
+                            "resourceType": resourceType.rawValue,
+                            "startedAt": Timestamp(date: startedAt),
+                            "endsAt": Timestamp(date: endsAt),
+                            "isComplete": false
+                        ]
+
+                        transaction.setData(jobData, forDocument: jobRef)
+                        transaction.updateData([
+                            "cash": currentCash - prospectingCost
+                        ], forDocument: profileRef)
+
+                        return nil
+                    } catch let error as NSError {
+                        errorPointer?.pointee = error
+                        return nil
+                    }
+                }) { _, error in
+                    if let error = error {
+                        completion(.failure(error))
+                    } else {
+                        completion(.success(()))
+                    }
+                }
+            }
+        }
+    }
 }

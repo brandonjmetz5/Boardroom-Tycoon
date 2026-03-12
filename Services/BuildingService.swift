@@ -10,24 +10,24 @@ import FirebaseFirestore
 
 final class BuildingService {
     private let db = Firestore.firestore()
-
+    
     func fetchBuildings(for userID: String, completion: @escaping (Result<[Building], Error>) -> Void) {
         let buildingsRef = db.collection("playerProfiles").document(userID).collection("buildings")
-
+        
         buildingsRef.getDocuments { snapshot, error in
             if let error = error {
                 completion(.failure(error))
                 return
             }
-
+            
             guard let documents = snapshot?.documents else {
                 completion(.success([]))
                 return
             }
-
+            
             let buildings: [Building] = documents.compactMap { document in
                 let data = document.data()
-
+                
                 guard
                     let id = data["id"] as? String,
                     let name = data["name"] as? String,
@@ -38,36 +38,36 @@ final class BuildingService {
                 else {
                     return nil
                 }
-
+                
                 let resourceType: ResourceType?
                 if let resourceTypeRawValue = data["resourceType"] as? String {
                     resourceType = ResourceType(rawValue: resourceTypeRawValue)
                 } else {
                     resourceType = nil
                 }
-
+                
                 let abundance = data["abundance"] as? Int
                 let stability = data["stability"] as? Int
                 let isStarterMine = data["isStarterMine"] as? Bool
-
+                
                 let isProducing = data["isProducing"] as? Bool
-
+                
                 let productionStartedAt: Date?
                 if let startedAtTimestamp = data["productionStartedAt"] as? Timestamp {
                     productionStartedAt = startedAtTimestamp.dateValue()
                 } else {
                     productionStartedAt = nil
                 }
-
+                
                 let productionEndsAt: Date?
                 if let endsAtTimestamp = data["productionEndsAt"] as? Timestamp {
                     productionEndsAt = endsAtTimestamp.dateValue()
                 } else {
                     productionEndsAt = nil
                 }
-
+                
                 let pendingOutputQuantity = data["pendingOutputQuantity"] as? Double
-
+                
                 return Building(
                     id: id,
                     name: name,
@@ -84,21 +84,21 @@ final class BuildingService {
                     pendingOutputQuantity: pendingOutputQuantity
                 )
             }
-
+            
             completion(.success(buildings))
         }
     }
-
+    
     func purchaseStarterMine(for userID: String, completion: @escaping (Result<Void, Error>) -> Void) {
         let profileRef = db.collection("playerProfiles").document(userID)
         let buildingsRef = profileRef.collection("buildings")
         let starterMineRef = buildingsRef.document("building-starter-gold-mine")
-
+        
         db.runTransaction({ transaction, errorPointer in
             do {
                 let profileSnapshot = try transaction.getDocument(profileRef)
                 let starterMineSnapshot = try transaction.getDocument(starterMineRef)
-
+                
                 guard var cash = profileSnapshot.data()?["cash"] as? Double,
                       let starterMineClaimed = profileSnapshot.data()?["starterMineClaimed"] as? Bool
                 else {
@@ -110,9 +110,9 @@ final class BuildingService {
                     errorPointer?.pointee = error
                     return nil
                 }
-
+                
                 let starterMineCost = 500.0
-
+                
                 if starterMineClaimed {
                     let error = NSError(
                         domain: "BuildingService",
@@ -122,7 +122,7 @@ final class BuildingService {
                     errorPointer?.pointee = error
                     return nil
                 }
-
+                
                 if starterMineSnapshot.exists {
                     let error = NSError(
                         domain: "BuildingService",
@@ -132,7 +132,7 @@ final class BuildingService {
                     errorPointer?.pointee = error
                     return nil
                 }
-
+                
                 if cash < starterMineCost {
                     let error = NSError(
                         domain: "BuildingService",
@@ -142,9 +142,9 @@ final class BuildingService {
                     errorPointer?.pointee = error
                     return nil
                 }
-
+                
                 cash -= starterMineCost
-
+                
                 let buildingData: [String: Any] = [
                     "id": "building-starter-gold-mine",
                     "name": "Starter Gold Mine",
@@ -156,13 +156,13 @@ final class BuildingService {
                     "stability": 55,
                     "isStarterMine": true
                 ]
-
+                
                 transaction.setData(buildingData, forDocument: starterMineRef)
                 transaction.updateData([
                     "cash": cash,
                     "starterMineClaimed": true
                 ], forDocument: profileRef)
-
+                
                 return nil
             } catch let error as NSError {
                 errorPointer?.pointee = error
@@ -173,6 +173,88 @@ final class BuildingService {
                 completion(.failure(error))
             } else {
                 completion(.success(()))
+            }
+        }
+    }
+    
+    func purchaseBuilding(for userID: String, purchasableBuilding: PurchasableBuilding, completion: @escaping (Result<Void, Error>) -> Void) {
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingsRef = profileRef.collection("buildings")
+        
+        buildingsRef.getDocuments { snapshot, fetchError in
+            if let fetchError = fetchError {
+                completion(.failure(fetchError))
+                return
+            }
+            
+            let currentBuildingCount = snapshot?.documents.count ?? 0
+            
+            let newBuildingRef = buildingsRef.document("building-\(UUID().uuidString)")
+            
+            self.db.runTransaction({ transaction, errorPointer in
+                do {
+                    let profileSnapshot = try transaction.getDocument(profileRef)
+                    
+                    guard
+                        let profileData = profileSnapshot.data(),
+                        let currentCash = profileData["cash"] as? Double,
+                        let buildingSlotCount = profileData["buildingSlotCount"] as? Int
+                    else {
+                        let error = NSError(
+                            domain: "BuildingService",
+                            code: 1101,
+                            userInfo: [NSLocalizedDescriptionKey: "Invalid player profile data."]
+                        )
+                        errorPointer?.pointee = error
+                        return nil
+                    }
+                    
+                    if currentBuildingCount >= buildingSlotCount {
+                        let error = NSError(
+                            domain: "BuildingService",
+                            code: 1102,
+                            userInfo: [NSLocalizedDescriptionKey: "No available building slots."]
+                        )
+                        errorPointer?.pointee = error
+                        return nil
+                    }
+                    
+                    if currentCash < purchasableBuilding.cost {
+                        let error = NSError(
+                            domain: "BuildingService",
+                            code: 1103,
+                            userInfo: [NSLocalizedDescriptionKey: "Not enough cash to purchase this building."]
+                        )
+                        errorPointer?.pointee = error
+                        return nil
+                    }
+                    
+                    let updatedCash = currentCash - purchasableBuilding.cost
+                    
+                    let buildingData: [String: Any] = [
+                        "id": newBuildingRef.documentID,
+                        "name": purchasableBuilding.name,
+                        "type": purchasableBuilding.type.rawValue,
+                        "level": 1,
+                        "capacity": 1
+                    ]
+                    
+                    transaction.setData(buildingData, forDocument: newBuildingRef)
+                    transaction.updateData([
+                        "cash": updatedCash
+                    ], forDocument: profileRef)
+                    
+                    return nil
+                } catch let error as NSError {
+                    errorPointer?.pointee = error
+                    return nil
+                }
+            }) { _, error in
+                if let error = error {
+                    completion(.failure(error))
+                } else {
+                    completion(.success(()))
+                }
             }
         }
     }

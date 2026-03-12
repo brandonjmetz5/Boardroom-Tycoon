@@ -6,3 +6,10 @@
 //
 
 import Foundation
+
+struct PurchasableBuilding: Identifiable {
+    let id: String
+    let name: String
+    let type: BuildingType
+    let cost: Double
+}
