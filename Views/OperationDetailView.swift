@@ -13,6 +13,7 @@ struct OperationDetailView: View {
     let mockMines: [Mine] = [
         Mine(
             id: "mine-001",
+            operationID: "op-gold-production",
             resourceType: .gold,
             level: 1,
             abundance: 65,
@@ -21,6 +22,7 @@ struct OperationDetailView: View {
         ),
         Mine(
             id: "mine-002",
+            operationID: "op-gold-production",
             resourceType: .gold,
             level: 1,
             abundance: 81,
@@ -62,7 +64,7 @@ struct OperationDetailView: View {
                         Text("Mines")
                             .font(.headline)
 
-                        ForEach(mockMines.prefix(operation.capacity)) { mine in
+                        ForEach(matchingMines.prefix(operation.capacity)) { mine in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("\(mine.resourceType.rawValue) Mine")
                                     .font(.headline)
@@ -104,6 +106,10 @@ struct OperationDetailView: View {
             .padding()
         }
         .navigationTitle(operation.name)
+    }
+
+    private var matchingMines: [Mine] {
+        mockMines.filter { $0.operationID == operation.id }
     }
 }
 

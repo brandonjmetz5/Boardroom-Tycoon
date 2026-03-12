@@ -9,6 +9,7 @@ import Foundation
 
 struct Mine: Identifiable {
     let id: String
+    let operationID: String
     let resourceType: ResourceType
     var level: Int
     var abundance: Int
