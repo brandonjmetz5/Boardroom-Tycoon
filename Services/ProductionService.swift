@@ -85,6 +85,7 @@ final class ProductionService {
                 let xpReward = 10
                 let updatedXP = currentXP + xpReward
                 let updatedLevel = self.levelForTotalXP(updatedXP)
+                let updatedBuildingSlotCount = self.buildingSlotCount(for: updatedLevel)
 
                 let inventoryData: [String: Any] = [
                     "id": "raw-gold",
@@ -104,7 +105,8 @@ final class ProductionService {
 
                 transaction.updateData([
                     "xp": updatedXP,
-                    "level": updatedLevel
+                    "level": updatedLevel,
+                    "buildingSlotCount": updatedBuildingSlotCount
                 ], forDocument: profileRef)
 
                 return nil
@@ -135,5 +137,9 @@ final class ProductionService {
         }
 
         return level
+    }
+
+    private func buildingSlotCount(for level: Int) -> Int {
+        2 + ((level / 10) * 2)
     }
 }
