@@ -40,6 +40,8 @@
 		A8AB73B92F6275F80012C9BC /* BuildingType.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73B82F6275F80012C9BC /* BuildingType.swift */; };
 		A8AB73BB2F6276340012C9BC /* Building.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73BA2F6276340012C9BC /* Building.swift */; };
 		A8AB73BD2F6277730012C9BC /* BuildingDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73BC2F6277730012C9BC /* BuildingDetailView.swift */; };
+		A8AB73BF2F628A060012C9BC /* BuildingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73BE2F628A060012C9BC /* BuildingService.swift */; };
+		A8AB73C12F62911A0012C9BC /* ProspectingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8AB73C02F62911A0012C9BC /* ProspectingService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -74,6 +76,8 @@
 		A8AB73B82F6275F80012C9BC /* BuildingType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingType.swift; sourceTree = "<group>"; };
 		A8AB73BA2F6276340012C9BC /* Building.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Building.swift; sourceTree = "<group>"; };
 		A8AB73BC2F6277730012C9BC /* BuildingDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingDetailView.swift; sourceTree = "<group>"; };
+		A8AB73BE2F628A060012C9BC /* BuildingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingService.swift; sourceTree = "<group>"; };
+		A8AB73C02F62911A0012C9BC /* ProspectingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProspectingService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -182,6 +186,8 @@
 				A8AB73B22F61FEC30012C9BC /* PlayerProfileService.swift */,
 				A8AB73B42F62075A0012C9BC /* InventoryService.swift */,
 				A8AB73B62F620B8A0012C9BC /* OwnedMineService.swift */,
+				A8AB73BE2F628A060012C9BC /* BuildingService.swift */,
+				A8AB73C02F62911A0012C9BC /* ProspectingService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -291,11 +297,13 @@
 				A8AB73BB2F6276340012C9BC /* Building.swift in Sources */,
 				A8AB738F2F61D5960012C9BC /* ProfileView.swift in Sources */,
 				A8AB73B92F6275F80012C9BC /* BuildingType.swift in Sources */,
+				A8AB73C12F62911A0012C9BC /* ProspectingService.swift in Sources */,
 				A8AB73AB2F61EEEB0012C9BC /* MarketListing.swift in Sources */,
 				A8AB73A92F61EE0E0012C9BC /* OperationDetailView.swift in Sources */,
 				A8AB73852F61D4CD0012C9BC /* HomeView.swift in Sources */,
 				A8AB73A12F61E7E80012C9BC /* Recipe.swift in Sources */,
 				A8AB73892F61D5460012C9BC /* MarketView.swift in Sources */,
+				A8AB73BF2F628A060012C9BC /* BuildingService.swift in Sources */,
 				A8AB739B2F61E5FB0012C9BC /* Item.swift in Sources */,
 				A8AB73A52F61E8DA0012C9BC /* Operation.swift in Sources */,
 				A8AB73992F61E5D90012C9BC /* ItemCategory.swift in Sources */,

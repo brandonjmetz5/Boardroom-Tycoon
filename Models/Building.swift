@@ -13,4 +13,9 @@ struct Building: Identifiable {
     let type: BuildingType
     var level: Int
     var capacity: Int
+
+    var resourceType: ResourceType?
+    var abundance: Int?
+    var stability: Int?
+    var isStarterMine: Bool?
 }

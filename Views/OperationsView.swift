@@ -10,53 +10,112 @@ import SwiftUI
 struct OperationsView: View {
     let userID: String
 
-    let buildings: [Building] = [
-        Building(
-            id: "building-gold-mine",
-            name: "Gold Mine",
-            type: .mine,
-            level: 1,
-            capacity: 2
-        ),
-        Building(
-            id: "building-gold-refinery",
-            name: "Gold Refinery",
-            type: .refinery,
-            level: 1,
-            capacity: 2
-        ),
-        Building(
-            id: "building-jewelry-shop",
-            name: "Jewelry Shop",
-            type: .shop,
-            level: 1,
-            capacity: 1
-        )
-    ]
+    @State private var buildings: [Building] = []
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+    @State private var isPurchasingStarterMine = false
+
+    private let buildingService = BuildingService()
 
     var body: some View {
-        List(buildings) { building in
-            NavigationLink(destination: BuildingDetailView(building: building)) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(building.name)
+        Group {
+            if isLoading {
+                ProgressView("Loading buildings...")
+                    .controlSize(.large)
+            } else if let errorMessage {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Failed to load buildings")
                         .font(.headline)
 
-                    Text("Type: \(building.type.rawValue)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    Text("Level: \(building.level)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text("Capacity: \(building.capacity)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
                 }
-                .padding(.vertical, 4)
+                .padding()
+            } else if buildings.isEmpty {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("No Buildings Yet")
+                        .font(.headline)
+
+                    Text("Use your starter cash to purchase your first building.")
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        purchaseStarterMine()
+                    } label: {
+                        if isPurchasingStarterMine {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text("Buy Starter Mine")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isPurchasingStarterMine)
+                }
+                .padding()
+            } else {
+                List(buildings) { building in
+                    NavigationLink(destination: BuildingDetailView(building: building)) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(building.name)
+                                .font(.headline)
+
+                            Text("Type: \(building.type.rawValue)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            Text("Level: \(building.level)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Text("Capacity: \(building.capacity)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                .listStyle(.insetGrouped)
             }
         }
-        .listStyle(.insetGrouped)
+        .onAppear {
+            loadBuildings()
+        }
+    }
+
+    private func loadBuildings() {
+        buildingService.fetchBuildings(for: userID) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let loadedBuildings):
+                    self.buildings = loadedBuildings
+                    self.isLoading = false
+                    self.errorMessage = nil
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+
+    private func purchaseStarterMine() {
+        isPurchasingStarterMine = true
+        errorMessage = nil
+
+        buildingService.purchaseStarterMine(for: userID) { result in
+            DispatchQueue.main.async {
+                self.isPurchasingStarterMine = false
+
+                switch result {
+                case .success:
+                    loadBuildings()
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
     }
 }
 

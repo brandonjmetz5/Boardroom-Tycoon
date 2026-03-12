@@ -10,27 +10,6 @@ import SwiftUI
 struct BuildingDetailView: View {
     let building: Building
 
-    let mockMines: [Mine] = [
-        Mine(
-            id: "mine-001",
-            buildingID: "building-gold-mine",
-            resourceType: .gold,
-            level: 1,
-            abundance: 65,
-            stability: 72,
-            isStarterMine: true
-        ),
-        Mine(
-            id: "mine-002",
-            buildingID: "building-gold-mine",
-            resourceType: .gold,
-            level: 1,
-            abundance: 81,
-            stability: 60,
-            isStarterMine: false
-        )
-    ]
-
     let mockMachines: [Machine] = [
         Machine(
             id: "machine-001",
@@ -61,24 +40,19 @@ struct BuildingDetailView: View {
 
                 if building.type == .mine || building.type == .rig || building.type == .quarry {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Mines")
+                        Text("Mine Details")
                             .font(.headline)
 
-                        ForEach(matchingMines.prefix(building.capacity)) { mine in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("\(mine.resourceType.rawValue) Mine")
-                                    .font(.headline)
-
-                                Text("Level: \(mine.level)")
-                                Text("Abundance: \(mine.abundance)")
-                                Text("Stability: \(mine.stability)")
-                                Text("Starter Mine: \(mine.isStarterMine ? "Yes" : "No")")
-                            }
-                            .padding()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(12)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Resource: \(building.resourceType?.rawValue ?? "Unknown")")
+                            Text("Abundance: \(building.abundance ?? 0)")
+                            Text("Stability: \(building.stability ?? 0)")
+                            Text("Starter Mine: \((building.isStarterMine ?? false) ? "Yes" : "No")")
                         }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(12)
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 12) {
@@ -107,21 +81,21 @@ struct BuildingDetailView: View {
         }
         .navigationTitle(building.name)
     }
-
-    private var matchingMines: [Mine] {
-        mockMines.filter { $0.buildingID == building.id }
-    }
 }
 
 #Preview {
     NavigationStack {
         BuildingDetailView(
             building: Building(
-                id: "building-gold-mine",
-                name: "Gold Mine",
+                id: "building-starter-gold-mine",
+                name: "Starter Gold Mine",
                 type: .mine,
                 level: 1,
-                capacity: 2
+                capacity: 1,
+                resourceType: .gold,
+                abundance: 50,
+                stability: 55,
+                isStarterMine: true
             )
         )
     }
