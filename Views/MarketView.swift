@@ -8,58 +8,77 @@
 import SwiftUI
 
 struct MarketView: View {
-    let listings: [MarketListing] = [
-        MarketListing(
-            id: "listing-001",
-            item: Item(id: "raw-gold", name: "Raw Gold", category: .rawMaterial, isFractional: false),
-            quantity: 25,
-            pricePerUnit: 120.0,
-            sellerName: "PlayerOne"
-        ),
-        MarketListing(
-            id: "listing-002",
-            item: Item(id: "crude-oil", name: "Crude Oil", category: .rawMaterial, isFractional: false),
-            quantity: 40,
-            pricePerUnit: 85.0,
-            sellerName: "OilKing"
-        ),
-        MarketListing(
-            id: "listing-003",
-            item: Item(id: "gold-bar", name: "Gold Bar", category: .refinedMaterial, isFractional: true),
-            quantity: 1.75,
-            pricePerUnit: 950.0,
-            sellerName: "RefineryBoss"
-        ),
-        MarketListing(
-            id: "listing-004",
-            item: Item(id: "steel", name: "Steel", category: .buildingMaterial, isFractional: false),
-            quantity: 8,
-            pricePerUnit: 300.0,
-            sellerName: "SteelWorks"
-        )
-    ]
+    @State private var listings: [MarketListing] = []
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+
+    private let marketListingService = MarketListingService()
 
     var body: some View {
-        List(listings) { listing in
-            VStack(alignment: .leading, spacing: 4) {
-                Text(listing.item.name)
-                    .font(.headline)
+        Group {
+            if isLoading {
+                ProgressView("Loading market listings...")
+                    .controlSize(.large)
+            } else if let errorMessage {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Failed to load market")
+                        .font(.headline)
 
-                Text("Seller: \(listing.sellerName)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                }
+                .padding()
+            } else if listings.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("No Listings Yet")
+                        .font(.headline)
 
-                Text("Quantity: \(formattedQuantity(listing.quantity, isFractional: listing.item.isFractional))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text("Player market listings will appear here once items are posted for sale.")
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+            } else {
+                List(listings) { listing in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(listing.item.name)
+                            .font(.headline)
 
-                Text("Price Per Unit: $\(listing.pricePerUnit, specifier: "%.2f")")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                        Text("Seller: \(listing.sellerName)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Text("Quantity: \(formattedQuantity(listing.quantity, isFractional: listing.item.isFractional))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Text("Price Per Unit: $\(listing.pricePerUnit, specifier: "%.2f")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .listStyle(.insetGrouped)
             }
-            .padding(.vertical, 4)
         }
-        .listStyle(.insetGrouped)
+        .onAppear {
+            loadMarketListings()
+        }
+    }
+
+    private func loadMarketListings() {
+        marketListingService.fetchMarketListings { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let loadedListings):
+                    self.listings = loadedListings
+                    self.isLoading = false
+                    self.errorMessage = nil
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                    self.isLoading = false
+                }
+            }
+        }
     }
 
     private func formattedQuantity(_ quantity: Double, isFractional: Bool) -> String {

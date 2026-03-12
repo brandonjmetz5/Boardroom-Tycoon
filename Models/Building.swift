@@ -18,4 +18,9 @@ struct Building: Identifiable {
     var abundance: Int?
     var stability: Int?
     var isStarterMine: Bool?
+
+    var isProducing: Bool?
+    var productionStartedAt: Date?
+    var productionEndsAt: Date?
+    var pendingOutputQuantity: Double?
 }

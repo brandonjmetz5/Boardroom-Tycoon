@@ -1,5 +1,5 @@
 //
-//  MarketListingService.swift
+//  MarketOrderService.swift
 //  Boardroom Tycoon
 //
 //  Created by brandon metz on 3/12/26.
@@ -8,13 +8,13 @@
 import Foundation
 import FirebaseFirestore
 
-final class MarketListingService {
+final class MarketOrderService {
     private let db = Firestore.firestore()
 
-    func fetchMarketListings(completion: @escaping (Result<[MarketListing], Error>) -> Void) {
-        let listingsRef = db.collection("marketListings")
+    func fetchMarketOrders(completion: @escaping (Result<[MarketOrder], Error>) -> Void) {
+        let ordersRef = db.collection("marketOrders")
 
-        listingsRef.getDocuments { snapshot, error in
+        ordersRef.getDocuments { snapshot, error in
             if let error = error {
                 completion(.failure(error))
                 return
@@ -25,40 +25,40 @@ final class MarketListingService {
                 return
             }
 
-            let listings: [MarketListing] = documents.compactMap { document in
+            let orders: [MarketOrder] = documents.compactMap { document in
                 let data = document.data()
 
                 guard
                     let id = data["id"] as? String,
+                    let buyerID = data["buyerID"] as? String,
+                    let buyerName = data["buyerName"] as? String,
                     let itemID = data["itemID"] as? String,
                     let itemName = data["itemName"] as? String,
                     let categoryRawValue = data["category"] as? String,
                     let category = ItemCategory(rawValue: categoryRawValue),
                     let isFractional = data["isFractional"] as? Bool,
-                    let quantity = data["quantity"] as? Double,
+                    let quantityWanted = data["quantityWanted"] as? Double,
                     let pricePerUnit = data["pricePerUnit"] as? Double,
-                    let sellerName = data["sellerName"] as? String
+                    let isActive = data["isActive"] as? Bool
                 else {
                     return nil
                 }
 
-                let item = Item(
-                    id: itemID,
-                    name: itemName,
-                    category: category,
-                    isFractional: isFractional
-                )
-
-                return MarketListing(
+                return MarketOrder(
                     id: id,
-                    item: item,
-                    quantity: quantity,
+                    buyerID: buyerID,
+                    buyerName: buyerName,
+                    itemID: itemID,
+                    itemName: itemName,
+                    category: category,
+                    isFractional: isFractional,
+                    quantityWanted: quantityWanted,
                     pricePerUnit: pricePerUnit,
-                    sellerName: sellerName
+                    isActive: isActive
                 )
             }
 
-            completion(.success(listings))
+            completion(.success(orders))
         }
     }
 }

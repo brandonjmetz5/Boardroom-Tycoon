@@ -8,7 +8,21 @@
 import SwiftUI
 
 struct BuildingDetailView: View {
+    let userID: String
     let building: Building
+
+    @State private var currentBuilding: Building
+    @State private var isWorking = false
+    @State private var errorMessage: String?
+
+    private let productionService = ProductionService()
+    private let buildingService = BuildingService()
+
+    init(userID: String, building: Building) {
+        self.userID = userID
+        self.building = building
+        _currentBuilding = State(initialValue: building)
+    }
 
     let mockMachines: [Machine] = [
         Machine(
@@ -29,37 +43,85 @@ struct BuildingDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Type: \(building.type.rawValue)")
-                    Text("Level: \(building.level)")
-                    Text("Capacity: \(building.capacity)")
+                    Text("Type: \(currentBuilding.type.rawValue)")
+                    Text("Level: \(currentBuilding.level)")
+                    Text("Capacity: \(currentBuilding.capacity)")
                 }
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.gray.opacity(0.1))
                 .cornerRadius(12)
 
-                if building.type == .mine || building.type == .rig || building.type == .quarry {
+                if currentBuilding.type == .mine || currentBuilding.type == .rig || currentBuilding.type == .quarry {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Mine Details")
                             .font(.headline)
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Resource: \(building.resourceType?.rawValue ?? "Unknown")")
-                            Text("Abundance: \(building.abundance ?? 0)")
-                            Text("Stability: \(building.stability ?? 0)")
-                            Text("Starter Mine: \((building.isStarterMine ?? false) ? "Yes" : "No")")
+                            Text("Resource: \(currentBuilding.resourceType?.rawValue ?? "Unknown")")
+                            Text("Abundance: \(currentBuilding.abundance ?? 0)")
+                            Text("Stability: \(currentBuilding.stability ?? 0)")
+                            Text("Starter Mine: \((currentBuilding.isStarterMine ?? false) ? "Yes" : "No")")
                         }
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.gray.opacity(0.1))
                         .cornerRadius(12)
                     }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Production")
+                            .font(.headline)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Producing: \((currentBuilding.isProducing ?? false) ? "Yes" : "No")")
+
+                            if let productionEndsAt = currentBuilding.productionEndsAt,
+                               currentBuilding.isProducing == true {
+                                Text("Ends: \(productionEndsAt.formatted(date: .abbreviated, time: .shortened))")
+                            }
+
+                            if let pendingOutputQuantity = currentBuilding.pendingOutputQuantity,
+                               pendingOutputQuantity > 0 {
+                                Text("Pending Output: \(Int(pendingOutputQuantity))")
+                            }
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(12)
+
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .foregroundStyle(.red)
+                        }
+
+                        if isWorking {
+                            ProgressView()
+                        } else if currentBuilding.isProducing == true {
+                            if let productionEndsAt = currentBuilding.productionEndsAt,
+                               productionEndsAt <= Date() {
+                                Button("Collect Output") {
+                                    collectProduction()
+                                }
+                                .buttonStyle(.borderedProminent)
+                            } else {
+                                Text("Production is currently running.")
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            Button("Start Production") {
+                                startProduction()
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
                 } else {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Machines")
                             .font(.headline)
 
-                        ForEach(mockMachines.prefix(building.capacity)) { machine in
+                        ForEach(mockMachines.prefix(currentBuilding.capacity)) { machine in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(machine.name)
                                     .font(.headline)
@@ -79,13 +141,68 @@ struct BuildingDetailView: View {
             }
             .padding()
         }
-        .navigationTitle(building.name)
+        .navigationTitle(currentBuilding.name)
+        .onAppear {
+            refreshBuilding()
+        }
+    }
+
+    private func refreshBuilding() {
+        buildingService.fetchBuildings(for: userID) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let buildings):
+                    if let updated = buildings.first(where: { $0.id == currentBuilding.id }) {
+                        self.currentBuilding = updated
+                    }
+                case .failure:
+                    break
+                }
+            }
+        }
+    }
+
+    private func startProduction() {
+        isWorking = true
+        errorMessage = nil
+
+        productionService.startProduction(for: userID, buildingID: currentBuilding.id) { result in
+            DispatchQueue.main.async {
+                self.isWorking = false
+
+                switch result {
+                case .success:
+                    refreshBuilding()
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func collectProduction() {
+        isWorking = true
+        errorMessage = nil
+
+        productionService.collectProduction(for: userID, buildingID: currentBuilding.id) { result in
+            DispatchQueue.main.async {
+                self.isWorking = false
+
+                switch result {
+                case .success:
+                    refreshBuilding()
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
     }
 }
 
 #Preview {
     NavigationStack {
         BuildingDetailView(
+            userID: "demo-user-id-12345",
             building: Building(
                 id: "building-starter-gold-mine",
                 name: "Starter Gold Mine",
@@ -95,7 +212,11 @@ struct BuildingDetailView: View {
                 resourceType: .gold,
                 abundance: 50,
                 stability: 55,
-                isStarterMine: true
+                isStarterMine: true,
+                isProducing: false,
+                productionStartedAt: nil,
+                productionEndsAt: nil,
+                pendingOutputQuantity: nil
             )
         )
     }

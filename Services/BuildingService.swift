@@ -50,6 +50,24 @@ final class BuildingService {
                 let stability = data["stability"] as? Int
                 let isStarterMine = data["isStarterMine"] as? Bool
 
+                let isProducing = data["isProducing"] as? Bool
+
+                let productionStartedAt: Date?
+                if let startedAtTimestamp = data["productionStartedAt"] as? Timestamp {
+                    productionStartedAt = startedAtTimestamp.dateValue()
+                } else {
+                    productionStartedAt = nil
+                }
+
+                let productionEndsAt: Date?
+                if let endsAtTimestamp = data["productionEndsAt"] as? Timestamp {
+                    productionEndsAt = endsAtTimestamp.dateValue()
+                } else {
+                    productionEndsAt = nil
+                }
+
+                let pendingOutputQuantity = data["pendingOutputQuantity"] as? Double
+
                 return Building(
                     id: id,
                     name: name,
@@ -59,7 +77,11 @@ final class BuildingService {
                     resourceType: resourceType,
                     abundance: abundance,
                     stability: stability,
-                    isStarterMine: isStarterMine
+                    isStarterMine: isStarterMine,
+                    isProducing: isProducing,
+                    productionStartedAt: productionStartedAt,
+                    productionEndsAt: productionEndsAt,
+                    pendingOutputQuantity: pendingOutputQuantity
                 )
             }
 

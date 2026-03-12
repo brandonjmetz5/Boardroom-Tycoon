@@ -56,7 +56,7 @@ struct OperationsView: View {
                 .padding()
             } else {
                 List(buildings) { building in
-                    NavigationLink(destination: BuildingDetailView(building: building)) {
+                    NavigationLink(destination: BuildingDetailView(userID: userID, building: building)) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(building.name)
                                 .font(.headline)

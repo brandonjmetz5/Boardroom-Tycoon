@@ -8,54 +8,37 @@
 import SwiftUI
 
 struct StocksView: View {
-    let stocks: [Stock] = [
-        Stock(
-            id: "stock-gold",
-            name: "Gold Sector",
-            symbol: "GLD",
-            currentPrice: 124.50,
-            priceChange: 2.35
-        ),
-        Stock(
-            id: "stock-oil",
-            name: "Oil Sector",
-            symbol: "OIL",
-            currentPrice: 88.20,
-            priceChange: -1.40
-        ),
-        Stock(
-            id: "stock-steel",
-            name: "Steel Sector",
-            symbol: "STL",
-            currentPrice: 56.75,
-            priceChange: 0.85
-        ),
-        Stock(
-            id: "stock-construction",
-            name: "Construction Sector",
-            symbol: "CST",
-            currentPrice: 73.10,
-            priceChange: -0.55
-        )
-    ]
+    @State private var stocks: [Stock] = []
+    @State private var isLoading = true
+    @State private var errorMessage: String?
 
-    let samplePriceHistory: [StockPricePoint] = [
-        StockPricePoint(id: "point-1", timestamp: Date().addingTimeInterval(-14400), price: 120.25),
-        StockPricePoint(id: "point-2", timestamp: Date().addingTimeInterval(-10800), price: 121.80),
-        StockPricePoint(id: "point-3", timestamp: Date().addingTimeInterval(-7200), price: 122.40),
-        StockPricePoint(id: "point-4", timestamp: Date().addingTimeInterval(-3600), price: 123.10),
-        StockPricePoint(id: "point-5", timestamp: Date(), price: 124.50)
-    ]
+    private let stockService = StockService()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Tracked Price Points: \(samplePriceHistory.count)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
+        Group {
+            if isLoading {
+                ProgressView("Loading stocks...")
+                    .controlSize(.large)
+            } else if let errorMessage {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Failed to load stocks")
+                        .font(.headline)
 
-            List(stocks) { stock in
-                VStack(alignment: .leading, spacing: 4) {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                }
+                .padding()
+            } else if stocks.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("No Stocks Yet")
+                        .font(.headline)
+
+                    Text("Sector stocks will appear here once they are added to Firestore.")
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+            } else {
+                List(stocks) { stock in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(stock.name)
@@ -79,8 +62,27 @@ struct StocksView: View {
                     }
                     .padding(.vertical, 4)
                 }
+                .listStyle(.insetGrouped)
             }
-            .listStyle(.insetGrouped)
+        }
+        .onAppear {
+            loadStocks()
+        }
+    }
+
+    private func loadStocks() {
+        stockService.fetchStocks { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let loadedStocks):
+                    self.stocks = loadedStocks
+                    self.isLoading = false
+                    self.errorMessage = nil
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                    self.isLoading = false
+                }
+            }
         }
     }
 
