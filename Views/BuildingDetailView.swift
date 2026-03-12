@@ -64,6 +64,7 @@ struct BuildingDetailView: View {
                             Text("Abundance: \(currentBuilding.abundance ?? 0)")
                             Text("Stability: \(currentBuilding.stability ?? 0)")
                             Text("Starter Mine: \((currentBuilding.isStarterMine ?? false) ? "Yes" : "No")")
+                            Text("Output Range: \(formattedOutputRange())")
                         }
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -78,14 +79,18 @@ struct BuildingDetailView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Producing: \((currentBuilding.isProducing ?? false) ? "Yes" : "No")")
 
-                            if currentBuilding.isProducing == true,
-                               let productionEndsAt = currentBuilding.productionEndsAt {
-                                Text("Time Remaining: \(formattedTimeRemaining(until: productionEndsAt))")
-                            }
+                            if currentBuilding.isProducing == true {
+                                if isReadyToCollect {
+                                    Text("Status: Ready to Collect")
+                                        .bold()
 
-                            if let pendingOutputQuantity = currentBuilding.pendingOutputQuantity,
-                               pendingOutputQuantity > 0 {
-                                Text("Pending Output: \(Int(pendingOutputQuantity))")
+                                    if let pendingOutputQuantity = currentBuilding.pendingOutputQuantity,
+                                       pendingOutputQuantity > 0 {
+                                        Text("Output Ready: \(Int(pendingOutputQuantity))")
+                                    }
+                                } else {
+                                    Text("Time Remaining: \(formattedTimeRemaining())")
+                                }
                             }
                         }
                         .padding()
@@ -101,8 +106,7 @@ struct BuildingDetailView: View {
                         if isWorking {
                             ProgressView()
                         } else if currentBuilding.isProducing == true {
-                            if let productionEndsAt = currentBuilding.productionEndsAt,
-                               productionEndsAt <= now {
+                            if isReadyToCollect {
                                 Button("Collect Output") {
                                     collectProduction()
                                 }
@@ -150,6 +154,11 @@ struct BuildingDetailView: View {
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { currentTime in
             now = currentTime
         }
+    }
+
+    private var isReadyToCollect: Bool {
+        guard let productionEndsAt = currentBuilding.productionEndsAt else { return false }
+        return currentBuilding.isProducing == true && productionEndsAt <= now
     }
 
     private func refreshBuilding() {
@@ -203,11 +212,29 @@ struct BuildingDetailView: View {
         }
     }
 
-    private func formattedTimeRemaining(until endDate: Date) -> String {
+    private func formattedTimeRemaining() -> String {
+        guard let endDate = currentBuilding.productionEndsAt else { return "--:--" }
+
         let remainingSeconds = max(0, Int(endDate.timeIntervalSince(now)))
         let minutes = remainingSeconds / 60
         let seconds = remainingSeconds % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    private func formattedOutputRange() -> String {
+        guard
+            let abundance = currentBuilding.abundance,
+            let stability = currentBuilding.stability
+        else {
+            return "Unknown"
+        }
+
+        let maxOutput = max(1, abundance - 40)
+        let normalizedStability = Double(stability - 50) / 50.0
+        let stabilityMultiplier = 0.5 + (normalizedStability * 0.4)
+        let minOutput = max(1, Int((Double(maxOutput) * stabilityMultiplier).rounded(.down)))
+
+        return "\(minOutput)-\(maxOutput)"
     }
 }
 
