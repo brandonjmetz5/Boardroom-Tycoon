@@ -14,21 +14,41 @@ final class ProductionService {
     func startProduction(for userID: String, buildingID: String, completion: @escaping (Result<Void, Error>) -> Void) {
         let buildingRef = db.collection("playerProfiles").document(userID).collection("buildings").document(buildingID)
 
-        let startedAt = Date()
-        // let endsAt = startedAt.addingTimeInterval(60 * 60) // 60 minutes
-        let endsAt = startedAt.addingTimeInterval(10) // temporary 10 seconds for testing
-        let pendingOutputQuantity = 10.0
-
-        buildingRef.updateData([
-            "isProducing": true,
-            "productionStartedAt": Timestamp(date: startedAt),
-            "productionEndsAt": Timestamp(date: endsAt),
-            "pendingOutputQuantity": pendingOutputQuantity
-        ]) { error in
+        buildingRef.getDocument { snapshot, error in
             if let error = error {
                 completion(.failure(error))
-            } else {
-                completion(.success(()))
+                return
+            }
+
+            guard
+                let data = snapshot?.data(),
+                let abundance = data["abundance"] as? Int,
+                let stability = data["stability"] as? Int
+            else {
+                completion(.failure(NSError(
+                    domain: "ProductionService",
+                    code: 2000,
+                    userInfo: [NSLocalizedDescriptionKey: "Missing mine stat data."]
+                )))
+                return
+            }
+
+            let startedAt = Date()
+            // let endsAt = startedAt.addingTimeInterval(60 * 60) // 60 minutes
+            let endsAt = startedAt.addingTimeInterval(10) // temporary 10 seconds for testing
+            let pendingOutputQuantity = Double(self.generateMineOutput(abundance: abundance, stability: stability))
+
+            buildingRef.updateData([
+                "isProducing": true,
+                "productionStartedAt": Timestamp(date: startedAt),
+                "productionEndsAt": Timestamp(date: endsAt),
+                "pendingOutputQuantity": pendingOutputQuantity
+            ]) { error in
+                if let error = error {
+                    completion(.failure(error))
+                } else {
+                    completion(.success(()))
+                }
             }
         }
     }
@@ -121,6 +141,18 @@ final class ProductionService {
                 completion(.success(()))
             }
         }
+    }
+
+    private func generateMineOutput(abundance: Int, stability: Int) -> Int {
+        let maxOutput = max(1, abundance - 40)
+
+        let normalizedStability = Double(stability - 50) / 50.0
+        let stabilityMultiplier = 0.5 + (normalizedStability * 0.4)
+
+        let rawMinOutput = Double(maxOutput) * stabilityMultiplier
+        let minOutput = max(1, Int(rawMinOutput.rounded(.down)))
+
+        return Int.random(in: minOutput...maxOutput)
     }
 
     private func xpNeededForNextLevel(from level: Int) -> Int {
