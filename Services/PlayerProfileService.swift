@@ -29,6 +29,8 @@ final class PlayerProfileService {
                 "id": profile.id,
                 "cash": profile.cash,
                 "level": profile.level,
+                "xp": profile.xp,
+                "buildingSlotCount": profile.buildingSlotCount,
                 "starterMineClaimed": profile.starterMineClaimed,
                 "createdAt": Timestamp(date: profile.createdAt)
             ]
@@ -68,6 +70,8 @@ final class PlayerProfileService {
                 let id = data["id"] as? String,
                 let cash = data["cash"] as? Double,
                 let level = data["level"] as? Int,
+                let xp = data["xp"] as? Int,
+                let buildingSlotCount = data["buildingSlotCount"] as? Int,
                 let starterMineClaimed = data["starterMineClaimed"] as? Bool,
                 let createdAtTimestamp = data["createdAt"] as? Timestamp
             else {
@@ -83,6 +87,8 @@ final class PlayerProfileService {
                 id: id,
                 cash: cash,
                 level: level,
+                xp: xp,
+                buildingSlotCount: buildingSlotCount,
                 starterMineClaimed: starterMineClaimed,
                 createdAt: createdAtTimestamp.dateValue()
             )

@@ -68,7 +68,7 @@ struct HomeView: View {
                     DashboardCard(
                         title: "Operations",
                         systemImage: "gearshape",
-                        destination: OperationsView(userID: userID)
+                        destination: OperationsView()
                     )
 
                     DashboardCard(

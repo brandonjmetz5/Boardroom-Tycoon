@@ -33,6 +33,8 @@ struct ProfileView: View {
                         Text("Player ID: \(profile.id)")
                         Text("Cash: $\(profile.cash, specifier: "%.2f")")
                         Text("Level: \(profile.level)")
+                        Text("XP: \(profile.xp)")
+                        Text("Building Slots: \(profile.buildingSlotCount)")
                         Text("Starter Mine Claimed: \(profile.starterMineClaimed ? "Yes" : "No")")
                         Text("Created At: \(profile.createdAt.formatted(date: .abbreviated, time: .shortened))")
                     }

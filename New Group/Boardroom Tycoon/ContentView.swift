@@ -86,8 +86,11 @@ struct ContentView: View {
             id: uid,
             cash: 10000,
             level: 1,
+            xp: 0,
+            buildingSlotCount: 2,
             starterMineClaimed: false,
             createdAt: Date()
+            
         )
 
         playerProfileService.createPlayerProfileIfNeeded(for: profile) { result in

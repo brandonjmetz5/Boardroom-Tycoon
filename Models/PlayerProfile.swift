@@ -11,6 +11,8 @@ struct PlayerProfile: Identifiable {
     let id: String
     var cash: Double
     var level: Int
+    var xp: Int
+    var buildingSlotCount: Int
     var starterMineClaimed: Bool
     var createdAt: Date
 }
