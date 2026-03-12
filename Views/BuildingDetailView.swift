@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import Combine
 
 struct BuildingDetailView: View {
     let userID: String
@@ -15,7 +14,6 @@ struct BuildingDetailView: View {
     @State private var currentBuilding: Building
     @State private var isWorking = false
     @State private var errorMessage: String?
-    @State private var now = Date()
 
     private let productionService = ProductionService()
     private let buildingService = BuildingService()
@@ -76,50 +74,52 @@ struct BuildingDetailView: View {
                         Text("Production")
                             .font(.headline)
 
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Producing: \((currentBuilding.isProducing ?? false) ? "Yes" : "No")")
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Producing: \((currentBuilding.isProducing ?? false) ? "Yes" : "No")")
 
-                            if currentBuilding.isProducing == true {
-                                if isReadyToCollect {
-                                    Text("Status: Ready to Collect")
-                                        .bold()
+                                if currentBuilding.isProducing == true {
+                                    if isReadyToCollect(at: context.date) {
+                                        Text("Status: Ready to Collect")
+                                            .bold()
 
-                                    if let pendingOutputQuantity = currentBuilding.pendingOutputQuantity,
-                                       pendingOutputQuantity > 0 {
-                                        Text("Output Ready: \(Int(pendingOutputQuantity))")
+                                        if let pendingOutputQuantity = currentBuilding.pendingOutputQuantity,
+                                           pendingOutputQuantity > 0 {
+                                            Text("Output Ready: \(Int(pendingOutputQuantity))")
+                                        }
+                                    } else if let productionEndsAt = currentBuilding.productionEndsAt {
+                                        Text("Time Remaining: \(formattedTimeRemaining(until: productionEndsAt, now: context.date))")
                                     }
-                                } else {
-                                    Text("Time Remaining: \(formattedTimeRemaining())")
                                 }
                             }
-                        }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(12)
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(12)
 
-                        if let errorMessage {
-                            Text(errorMessage)
-                                .foregroundStyle(.red)
-                        }
+                            if let errorMessage {
+                                Text(errorMessage)
+                                    .foregroundStyle(.red)
+                            }
 
-                        if isWorking {
-                            ProgressView()
-                        } else if currentBuilding.isProducing == true {
-                            if isReadyToCollect {
-                                Button("Collect Output") {
-                                    collectProduction()
+                            if isWorking {
+                                ProgressView()
+                            } else if currentBuilding.isProducing == true {
+                                if isReadyToCollect(at: context.date) {
+                                    Button("Collect Output") {
+                                        collectProduction()
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                } else {
+                                    Text("Production is currently running.")
+                                        .foregroundStyle(.secondary)
+                                }
+                            } else {
+                                Button("Start Production") {
+                                    startProduction()
                                 }
                                 .buttonStyle(.borderedProminent)
-                            } else {
-                                Text("Production is currently running.")
-                                    .foregroundStyle(.secondary)
                             }
-                        } else {
-                            Button("Start Production") {
-                                startProduction()
-                            }
-                            .buttonStyle(.borderedProminent)
                         }
                     }
                 } else {
@@ -151,14 +151,11 @@ struct BuildingDetailView: View {
         .onAppear {
             refreshBuilding()
         }
-        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { currentTime in
-            now = currentTime
-        }
     }
 
-    private var isReadyToCollect: Bool {
+    private func isReadyToCollect(at date: Date) -> Bool {
         guard let productionEndsAt = currentBuilding.productionEndsAt else { return false }
-        return currentBuilding.isProducing == true && productionEndsAt <= now
+        return currentBuilding.isProducing == true && productionEndsAt <= date
     }
 
     private func refreshBuilding() {
@@ -212,10 +209,8 @@ struct BuildingDetailView: View {
         }
     }
 
-    private func formattedTimeRemaining() -> String {
-        guard let endDate = currentBuilding.productionEndsAt else { return "--:--" }
-
-        let remainingSeconds = max(0, Int(endDate.timeIntervalSince(now)))
+    private func formattedTimeRemaining(until endDate: Date, now: Date) -> String {
+        let remainingSeconds = max(0, Int(ceil(endDate.timeIntervalSince(now))))
         let minutes = remainingSeconds / 60
         let seconds = remainingSeconds % 60
         return String(format: "%02d:%02d", minutes, seconds)

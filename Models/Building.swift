@@ -23,4 +23,7 @@ struct Building: Identifiable {
     var productionStartedAt: Date?
     var productionEndsAt: Date?
     var pendingOutputQuantity: Double?
+
+    var isListedOnMarket: Bool?
+    var marketListingID: String?
 }

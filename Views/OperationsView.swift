@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import Combine
 
 struct OperationsView: View {
     let userID: String
@@ -19,7 +18,9 @@ struct OperationsView: View {
     @State private var purchaseErrorMessage: String?
     @State private var showPurchaseSheet = false
     @State private var isPurchasing = false
-    @State private var now = Date()
+
+    @State private var jobToList: ProspectingJob?
+    @State private var buyNowPriceText = ""
 
     private let buildingService = BuildingService()
     private let playerProfileService = PlayerProfileService()
@@ -59,11 +60,57 @@ struct OperationsView: View {
         .onAppear {
             loadData()
         }
-        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { currentTime in
-            now = currentTime
-        }
         .sheet(isPresented: $showPurchaseSheet) {
             purchaseSheetView
+        }
+        .sheet(item: $jobToList) { job in
+            NavigationStack {
+                Form {
+                    Section("Set Buy Now Price") {
+                        TextField("Enter buy now price", text: $buyNowPriceText)
+                            .keyboardType(.decimalPad)
+
+                        if let abundance = job.revealedAbundance,
+                           let stability = job.revealedStability {
+                            Text("Resource: \(prospectingLabel(for: job.resourceType))")
+                            Text("Abundance: \(abundance)")
+                            Text("Stability: \(stability)")
+                        }
+                    }
+
+                    if let purchaseErrorMessage {
+                        Section {
+                            Text(purchaseErrorMessage)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+                .navigationTitle("List Mine")
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Cancel") {
+                            jobToList = nil
+                            buyNowPriceText = ""
+                            purchaseErrorMessage = nil
+                        }
+                    }
+
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("List") {
+                            submitMineListing(job)
+                        }
+                        .disabled(isPurchasing)
+                    }
+                }
+                .overlay {
+                    if isPurchasing {
+                        ProgressView("Listing...")
+                            .padding()
+                            .background(.regularMaterial)
+                            .cornerRadius(12)
+                    }
+                }
+            }
         }
     }
 
@@ -84,6 +131,12 @@ struct OperationsView: View {
                 Text("Capacity: \(building.capacity)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if building.isListedOnMarket == true {
+                    Text("Listed on Market")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
             .padding(.vertical, 4)
         }
@@ -91,70 +144,74 @@ struct OperationsView: View {
 
     @ViewBuilder
     private func prospectingRow(for job: ProspectingJob) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Prospecting \(prospectingLabel(for: job.resourceType))")
-                .font(.headline)
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Prospecting \(prospectingLabel(for: job.resourceType))")
+                    .font(.headline)
 
-            if job.isRevealed {
-                Text("Prospecting Result Revealed")
-                    .font(.subheadline)
-                    .bold()
-
-                if let abundance = job.revealedAbundance,
-                   let stability = job.revealedStability {
-                    Text("Abundance: \(abundance)")
+                if job.isRevealed {
+                    Text("Prospecting Result Revealed")
                         .font(.subheadline)
+                        .bold()
 
-                    Text("Stability: \(stability)")
+                    if let abundance = job.revealedAbundance,
+                       let stability = job.revealedStability {
+                        Text("Abundance: \(abundance)")
+                            .font(.subheadline)
+
+                        Text("Stability: \(stability)")
+                            .font(.subheadline)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Button("Keep Mine") {
+                            keepProspectedMine(job)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isPurchasing)
+
+                        Button("Sell Prospect Result") {
+                            sellProspectedMine(job)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isPurchasing)
+
+                        Button("List on Marketplace") {
+                            purchaseErrorMessage = nil
+                            buyNowPriceText = ""
+                            jobToList = job
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isPurchasing)
+                    }
+                } else if job.endsAt <= context.date {
+                    Text("Ready to Reveal")
                         .font(.subheadline)
-                }
+                        .bold()
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Button("Keep Mine") {
-                        purchaseErrorMessage = "Keep Mine flow is next."
+                    Button("Reveal Prospecting Result") {
+                        revealProspectingJob(job)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(isPurchasing)
+                } else {
+                    Text("Time Remaining: \(formattedTimeRemaining(until: job.endsAt, now: context.date))")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
-                    Button("Sell Prospect Result") {
-                        purchaseErrorMessage = "Sell flow is next."
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(isPurchasing)
-
-                    Button("List on Marketplace") {
-                        purchaseErrorMessage = "Marketplace listing for prospected mines is coming next."
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(isPurchasing)
+                    Text("This slot is occupied by an active prospecting job.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-            } else if job.endsAt <= now {
-                Text("Ready to Reveal")
-                    .font(.subheadline)
-                    .bold()
 
-                Button("Reveal Prospecting Result") {
-                    revealProspectingJob(job)
+                if let purchaseErrorMessage, jobToList == nil {
+                    Text(purchaseErrorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(isPurchasing)
-            } else {
-                Text("Time Remaining: \(formattedTimeRemaining(until: job.endsAt))")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                Text("This slot is occupied by an active prospecting job.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
-
-            if let purchaseErrorMessage {
-                Text(purchaseErrorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
+            .padding(.vertical, 8)
         }
-        .padding(.vertical, 8)
     }
 
     private var emptySlotRow: some View {
@@ -411,8 +468,69 @@ struct OperationsView: View {
         }
     }
 
-    private func formattedTimeRemaining(until endDate: Date) -> String {
-        let remainingSeconds = max(0, Int(endDate.timeIntervalSince(now)))
+    private func keepProspectedMine(_ job: ProspectingJob) {
+        isPurchasing = true
+        purchaseErrorMessage = nil
+
+        prospectingService.keepProspectedMine(for: userID, job: job) { result in
+            DispatchQueue.main.async {
+                self.isPurchasing = false
+
+                switch result {
+                case .success:
+                    self.loadData()
+                case .failure(let error):
+                    self.purchaseErrorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func sellProspectedMine(_ job: ProspectingJob) {
+        isPurchasing = true
+        purchaseErrorMessage = nil
+
+        prospectingService.sellProspectedMine(for: userID, job: job) { result in
+            DispatchQueue.main.async {
+                self.isPurchasing = false
+
+                switch result {
+                case .success:
+                    self.loadData()
+                case .failure(let error):
+                    self.purchaseErrorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func submitMineListing(_ job: ProspectingJob) {
+        guard let buyNowPrice = Double(buyNowPriceText), buyNowPrice > 0 else {
+            purchaseErrorMessage = "Enter a valid buy now price."
+            return
+        }
+
+        isPurchasing = true
+        purchaseErrorMessage = nil
+
+        prospectingService.listProspectedMine(for: userID, job: job, buyNowPrice: buyNowPrice) { result in
+            DispatchQueue.main.async {
+                self.isPurchasing = false
+
+                switch result {
+                case .success:
+                    self.jobToList = nil
+                    self.buyNowPriceText = ""
+                    self.loadData()
+                case .failure(let error):
+                    self.purchaseErrorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func formattedTimeRemaining(until endDate: Date, now: Date) -> String {
+        let remainingSeconds = max(0, Int(ceil(endDate.timeIntervalSince(now))))
         let minutes = remainingSeconds / 60
         let seconds = remainingSeconds % 60
         return String(format: "%02d:%02d", minutes, seconds)

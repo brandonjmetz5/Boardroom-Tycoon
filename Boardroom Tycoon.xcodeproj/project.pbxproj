@@ -10,6 +10,7 @@
 		A865774A2F6319930029071D /* BuildingSlot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86577492F6319930029071D /* BuildingSlot.swift */; };
 		A865774E2F631D020029071D /* PurchasableBuilding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A865774D2F631D020029071D /* PurchasableBuilding.swift */; };
 		A86577502F631D340029071D /* BuildingCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A865774F2F631D340029071D /* BuildingCatalog.swift */; };
+		A86577522F634F0B0029071D /* MineMarketListing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86577512F634F0B0029071D /* MineMarketListing.swift */; };
 		A8AB73742F61B7D00012C9BC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */; };
 		A8AB73772F61B7F70012C9BC /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB73762F61B7F70012C9BC /* FirebaseAuth */; };
 		A8AB73792F61B7F70012C9BC /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB73782F61B7F70012C9BC /* FirebaseCore */; };
@@ -68,6 +69,7 @@
 		A86577492F6319930029071D /* BuildingSlot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingSlot.swift; sourceTree = "<group>"; };
 		A865774D2F631D020029071D /* PurchasableBuilding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurchasableBuilding.swift; sourceTree = "<group>"; };
 		A865774F2F631D340029071D /* BuildingCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingCatalog.swift; sourceTree = "<group>"; };
+		A86577512F634F0B0029071D /* MineMarketListing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MineMarketListing.swift; sourceTree = "<group>"; };
 		A8AB73652F61B7B20012C9BC /* Boardroom Tycoon.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Boardroom Tycoon.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A8AB73842F61D4CD0012C9BC /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -201,6 +203,7 @@
 				A8AB73DE2F62FD2A0012C9BC /* TransactionRecord.swift */,
 				A86577492F6319930029071D /* BuildingSlot.swift */,
 				A865774D2F631D020029071D /* PurchasableBuilding.swift */,
+				A86577512F634F0B0029071D /* MineMarketListing.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -348,6 +351,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A8AB73D32F62FC2E0012C9BC /* ItemService.swift in Sources */,
+				A86577522F634F0B0029071D /* MineMarketListing.swift in Sources */,
 				A8AB73B72F620B8A0012C9BC /* OwnedMineService.swift in Sources */,
 				A8AB73B12F61F20F0012C9BC /* ProspectingJob.swift in Sources */,
 				A8AB739D2F61E6EB0012C9BC /* InventoryItem.swift in Sources */,

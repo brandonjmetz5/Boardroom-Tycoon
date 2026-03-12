@@ -56,13 +56,11 @@ final class ProductionService {
     func collectProduction(for userID: String, buildingID: String, completion: @escaping (Result<Void, Error>) -> Void) {
         let profileRef = db.collection("playerProfiles").document(userID)
         let buildingRef = profileRef.collection("buildings").document(buildingID)
-        let inventoryRef = profileRef.collection("inventory").document("raw-gold")
 
         db.runTransaction({ transaction, errorPointer in
             do {
                 let profileSnapshot = try transaction.getDocument(profileRef)
                 let buildingSnapshot = try transaction.getDocument(buildingRef)
-                let inventorySnapshot = try transaction.getDocument(inventoryRef)
 
                 guard
                     let buildingData = buildingSnapshot.data(),
@@ -70,7 +68,9 @@ final class ProductionService {
                     let pendingOutputQuantity = buildingData["pendingOutputQuantity"] as? Double,
                     let isProducing = buildingData["isProducing"] as? Bool,
                     let productionEndsAtTimestamp = buildingData["productionEndsAt"] as? Timestamp,
-                    let currentXP = profileData["xp"] as? Int
+                    let currentXP = profileData["xp"] as? Int,
+                    let resourceTypeRawValue = buildingData["resourceType"] as? String,
+                    let resourceType = ResourceType(rawValue: resourceTypeRawValue)
                 else {
                     let error = NSError(
                         domain: "ProductionService",
@@ -101,6 +101,11 @@ final class ProductionService {
                     return nil
                 }
 
+                let inventoryDocID = self.inventoryDocumentID(for: resourceType)
+                let inventoryName = self.inventoryDisplayName(for: resourceType)
+                let inventoryRef = profileRef.collection("inventory").document(inventoryDocID)
+                let inventorySnapshot = try transaction.getDocument(inventoryRef)
+
                 let currentQuantity = inventorySnapshot.data()?["quantity"] as? Double ?? 0.0
                 let xpReward = 10
                 let updatedXP = currentXP + xpReward
@@ -108,8 +113,8 @@ final class ProductionService {
                 let updatedBuildingSlotCount = self.buildingSlotCount(for: updatedLevel)
 
                 let inventoryData: [String: Any] = [
-                    "id": "raw-gold",
-                    "name": "Raw Gold",
+                    "id": inventoryDocID,
+                    "name": inventoryName,
                     "category": "Raw Material",
                     "isFractional": false,
                     "quantity": currentQuantity + pendingOutputQuantity
@@ -153,6 +158,44 @@ final class ProductionService {
         let minOutput = max(1, Int(rawMinOutput.rounded(.down)))
 
         return Int.random(in: minOutput...maxOutput)
+    }
+
+    private func inventoryDocumentID(for resourceType: ResourceType) -> String {
+        switch resourceType {
+        case .gold:
+            return "raw-gold"
+        case .silver:
+            return "raw-silver"
+        case .diamond:
+            return "raw-diamonds"
+        case .oil:
+            return "crude-oil"
+        case .coal:
+            return "raw-coal"
+        case .iron:
+            return "raw-iron"
+        default:
+            return "raw-material"
+        }
+    }
+
+    private func inventoryDisplayName(for resourceType: ResourceType) -> String {
+        switch resourceType {
+        case .gold:
+            return "Raw Gold"
+        case .silver:
+            return "Raw Silver"
+        case .diamond:
+            return "Raw Diamonds"
+        case .oil:
+            return "Crude Oil"
+        case .coal:
+            return "Raw Coal"
+        case .iron:
+            return "Raw Iron"
+        default:
+            return resourceType.rawValue
+        }
     }
 
     private func xpNeededForNextLevel(from level: Int) -> Int {

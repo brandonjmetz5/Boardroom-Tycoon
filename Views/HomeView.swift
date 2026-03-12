@@ -166,7 +166,7 @@ struct HomeView: View {
     }
 
     private func formattedTimeRemaining(until endDate: Date) -> String {
-        let remainingSeconds = max(0, Int(endDate.timeIntervalSince(now)))
+        let remainingSeconds = max(0, Int(ceil(endDate.timeIntervalSince(now))))
         let minutes = remainingSeconds / 60
         let seconds = remainingSeconds % 60
         return String(format: "%02d:%02d", minutes, seconds)
