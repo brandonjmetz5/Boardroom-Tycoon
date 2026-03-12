@@ -34,17 +34,24 @@ final class ProspectingService {
                     let resourceType = ResourceType(rawValue: resourceTypeRawValue),
                     let startedAtTimestamp = data["startedAt"] as? Timestamp,
                     let endsAtTimestamp = data["endsAt"] as? Timestamp,
-                    let isComplete = data["isComplete"] as? Bool
+                    let isComplete = data["isComplete"] as? Bool,
+                    let isRevealed = data["isRevealed"] as? Bool
                 else {
                     return nil
                 }
+
+                let revealedAbundance = data["revealedAbundance"] as? Int
+                let revealedStability = data["revealedStability"] as? Int
 
                 return ProspectingJob(
                     id: id,
                     resourceType: resourceType,
                     startedAt: startedAtTimestamp.dateValue(),
                     endsAt: endsAtTimestamp.dateValue(),
-                    isComplete: isComplete
+                    isComplete: isComplete,
+                    isRevealed: isRevealed,
+                    revealedAbundance: revealedAbundance,
+                    revealedStability: revealedStability
                 )
             }
 
@@ -138,7 +145,8 @@ final class ProspectingService {
                             "resourceType": resourceType.rawValue,
                             "startedAt": Timestamp(date: startedAt),
                             "endsAt": Timestamp(date: endsAt),
-                            "isComplete": false
+                            "isComplete": false,
+                            "isRevealed": false
                         ]
 
                         transaction.setData(jobData, forDocument: jobRef)
@@ -158,6 +166,84 @@ final class ProspectingService {
                         completion(.success(()))
                     }
                 }
+            }
+        }
+    }
+    
+    func revealProspectingJob(for userID: String, jobID: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        let jobRef = db.collection("playerProfiles")
+            .document(userID)
+            .collection("prospectingJobs")
+            .document(jobID)
+
+        db.runTransaction({ transaction, errorPointer in
+            do {
+                let jobSnapshot = try transaction.getDocument(jobRef)
+
+                guard
+                    let jobData = jobSnapshot.data(),
+                    let endsAtTimestamp = jobData["endsAt"] as? Timestamp,
+                    let isComplete = jobData["isComplete"] as? Bool,
+                    let isRevealed = jobData["isRevealed"] as? Bool
+                else {
+                    let error = NSError(
+                        domain: "ProspectingService",
+                        code: 3010,
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid prospecting job data."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                if isComplete {
+                    let error = NSError(
+                        domain: "ProspectingService",
+                        code: 3011,
+                        userInfo: [NSLocalizedDescriptionKey: "This prospecting job is already completed."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                if isRevealed {
+                    let error = NSError(
+                        domain: "ProspectingService",
+                        code: 3012,
+                        userInfo: [NSLocalizedDescriptionKey: "This prospecting job has already been revealed."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                if endsAtTimestamp.dateValue() > Date() {
+                    let error = NSError(
+                        domain: "ProspectingService",
+                        code: 3013,
+                        userInfo: [NSLocalizedDescriptionKey: "Prospecting is not finished yet."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                let abundance = Int.random(in: 50...100)
+                let stability = Int.random(in: 50...100)
+
+                transaction.updateData([
+                    "isRevealed": true,
+                    "revealedAbundance": abundance,
+                    "revealedStability": stability
+                ], forDocument: jobRef)
+
+                return nil
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
+            }
+        }) { _, error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
             }
         }
     }

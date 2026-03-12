@@ -13,4 +13,7 @@ struct ProspectingJob: Identifiable {
     let startedAt: Date
     let endsAt: Date
     var isComplete: Bool
+    var isRevealed: Bool
+    var revealedAbundance: Int?
+    var revealedStability: Int?
 }

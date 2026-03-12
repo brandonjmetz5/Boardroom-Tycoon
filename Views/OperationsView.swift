@@ -89,24 +89,70 @@ struct OperationsView: View {
         }
     }
 
+    @ViewBuilder
     private func prospectingRow(for job: ProspectingJob) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Prospecting \(prospectingLabel(for: job.resourceType))")
                 .font(.headline)
 
-            if job.endsAt <= now {
+            if job.isRevealed {
+                Text("Prospecting Result Revealed")
+                    .font(.subheadline)
+                    .bold()
+
+                if let abundance = job.revealedAbundance,
+                   let stability = job.revealedStability {
+                    Text("Abundance: \(abundance)")
+                        .font(.subheadline)
+
+                    Text("Stability: \(stability)")
+                        .font(.subheadline)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Button("Keep Mine") {
+                        purchaseErrorMessage = "Keep Mine flow is next."
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isPurchasing)
+
+                    Button("Sell Prospect Result") {
+                        purchaseErrorMessage = "Sell flow is next."
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isPurchasing)
+
+                    Button("List on Marketplace") {
+                        purchaseErrorMessage = "Marketplace listing for prospected mines is coming next."
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isPurchasing)
+                }
+            } else if job.endsAt <= now {
                 Text("Ready to Reveal")
                     .font(.subheadline)
                     .bold()
+
+                Button("Reveal Prospecting Result") {
+                    revealProspectingJob(job)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isPurchasing)
             } else {
                 Text("Time Remaining: \(formattedTimeRemaining(until: job.endsAt))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+
+                Text("This slot is occupied by an active prospecting job.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-            Text("This slot is occupied by an active prospecting job.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if let purchaseErrorMessage {
+                Text(purchaseErrorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
         }
         .padding(.vertical, 8)
     }
@@ -198,7 +244,6 @@ struct OperationsView: View {
             prospectButton(title: "Prospect Oil Rig", resourceType: .oil)
             prospectButton(title: "Prospect Coal Mine", resourceType: .coal)
             prospectButton(title: "Prospect Iron Mine", resourceType: .iron)
-            // Add quarry later when ResourceType case is confirmed
         }
     }
 
@@ -340,6 +385,24 @@ struct OperationsView: View {
                 switch result {
                 case .success:
                     self.showPurchaseSheet = false
+                    self.loadData()
+                case .failure(let error):
+                    self.purchaseErrorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func revealProspectingJob(_ job: ProspectingJob) {
+        isPurchasing = true
+        purchaseErrorMessage = nil
+
+        prospectingService.revealProspectingJob(for: userID, jobID: job.id) { result in
+            DispatchQueue.main.async {
+                self.isPurchasing = false
+
+                switch result {
+                case .success:
                     self.loadData()
                 case .failure(let error):
                     self.purchaseErrorMessage = error.localizedDescription
