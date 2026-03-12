@@ -34,19 +34,23 @@ final class ProductionService {
     }
 
     func collectProduction(for userID: String, buildingID: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        let buildingRef = db.collection("playerProfiles").document(userID).collection("buildings").document(buildingID)
-        let inventoryRef = db.collection("playerProfiles").document(userID).collection("inventory").document("raw-gold")
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingRef = profileRef.collection("buildings").document(buildingID)
+        let inventoryRef = profileRef.collection("inventory").document("raw-gold")
 
         db.runTransaction({ transaction, errorPointer in
             do {
+                let profileSnapshot = try transaction.getDocument(profileRef)
                 let buildingSnapshot = try transaction.getDocument(buildingRef)
                 let inventorySnapshot = try transaction.getDocument(inventoryRef)
 
                 guard
                     let buildingData = buildingSnapshot.data(),
+                    let profileData = profileSnapshot.data(),
                     let pendingOutputQuantity = buildingData["pendingOutputQuantity"] as? Double,
                     let isProducing = buildingData["isProducing"] as? Bool,
-                    let productionEndsAtTimestamp = buildingData["productionEndsAt"] as? Timestamp
+                    let productionEndsAtTimestamp = buildingData["productionEndsAt"] as? Timestamp,
+                    let currentXP = profileData["xp"] as? Int
                 else {
                     let error = NSError(
                         domain: "ProductionService",
@@ -78,6 +82,8 @@ final class ProductionService {
                 }
 
                 let currentQuantity = inventorySnapshot.data()?["quantity"] as? Double ?? 0.0
+                let xpReward = 10
+                let updatedXP = currentXP + xpReward
 
                 let inventoryData: [String: Any] = [
                     "id": "raw-gold",
@@ -94,6 +100,10 @@ final class ProductionService {
                     "productionEndsAt": NSNull(),
                     "pendingOutputQuantity": 0.0
                 ], forDocument: buildingRef)
+
+                transaction.updateData([
+                    "xp": updatedXP
+                ], forDocument: profileRef)
 
                 return nil
             } catch let error as NSError {
