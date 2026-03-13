@@ -73,8 +73,10 @@ final class MineMarketService {
                                 status: status
                             )
                         }
+                        .filter { $0.endsAt > Date() }   // hides expired listings immediately
+                        .sorted { $0.endsAt < $1.endsAt }
 
-                        completion(.success(listings.sorted { $0.endsAt < $1.endsAt }))
+                        completion(.success(listings))
                     }
             }
         }
@@ -200,7 +202,6 @@ final class MineMarketService {
                             buyerFinalCash = buyerCash - buyNowPrice
                         }
 
-                        // Refund current highest bidder if one exists and it isn't the buyer.
                         if let currentBidderID, !currentBidderID.isEmpty, currentBidderID != buyerID {
                             let currentBidderProfileRef = self.db.collection("playerProfiles").document(currentBidderID)
                             let currentBidderSnapshot = try transaction.getDocument(currentBidderProfileRef)
@@ -320,7 +321,7 @@ final class MineMarketService {
                 let secondsRemaining = currentEndDate.timeIntervalSince(Date())
 
                 var updatedEndDate = currentEndDate
-                if secondsRemaining < 10{
+                if secondsRemaining < 30 {
                     updatedEndDate = currentEndDate.addingTimeInterval(10)
                 }
 

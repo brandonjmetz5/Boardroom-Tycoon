@@ -25,6 +25,7 @@ struct OperationsView: View {
     private let buildingService = BuildingService()
     private let playerProfileService = PlayerProfileService()
     private let prospectingService = ProspectingService()
+    private let mineMarketService = MineMarketService()
 
     var body: some View {
         Group {
@@ -58,6 +59,7 @@ struct OperationsView: View {
         }
         .navigationTitle("Buildings")
         .onAppear {
+            mineMarketService.settleExpiredMineListings { _ in }
             loadData()
         }
         .sheet(isPresented: $showPurchaseSheet) {

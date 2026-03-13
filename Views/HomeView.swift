@@ -14,9 +14,9 @@ struct HomeView: View {
     @State private var prospectingJobs: [ProspectingJob] = []
     @State private var isLoadingProspecting = true
     @State private var prospectingErrorMessage: String?
-    @State private var now = Date()
 
     private let prospectingService = ProspectingService()
+    private let mineMarketService = MineMarketService()
 
     private let columns = [
         GridItem(.flexible()),
@@ -75,20 +75,25 @@ struct HomeView: View {
                         .background(Color.gray.opacity(0.1))
                         .cornerRadius(12)
                     } else if let activeJob = prospectingJobs.first(where: { !$0.isComplete }) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Resource: \(prospectingLabel(for: activeJob.resourceType))")
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Resource: \(prospectingLabel(for: activeJob.resourceType))")
 
-                            if activeJob.endsAt <= now {
-                                Text("Status: Ready to Reveal")
-                                    .bold()
-                            } else {
-                                Text("Time Remaining: \(formattedTimeRemaining(until: activeJob.endsAt))")
+                                if activeJob.isRevealed {
+                                    Text("Status: Result Revealed")
+                                        .bold()
+                                } else if activeJob.endsAt <= context.date {
+                                    Text("Status: Ready to Reveal")
+                                        .bold()
+                                } else {
+                                    Text("Time Remaining: \(formattedTimeRemaining(until: activeJob.endsAt, now: context.date))")
+                                }
                             }
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(12)
                         }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(12)
                     } else {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("No Active Prospecting Job")
@@ -142,10 +147,8 @@ struct HomeView: View {
         }
         .navigationTitle("Home")
         .onAppear {
+            mineMarketService.settleExpiredMineListings { _ in }
             loadProspectingJobs()
-        }
-        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { currentTime in
-            now = currentTime
         }
     }
 
@@ -165,7 +168,7 @@ struct HomeView: View {
         }
     }
 
-    private func formattedTimeRemaining(until endDate: Date) -> String {
+    private func formattedTimeRemaining(until endDate: Date, now: Date) -> String {
         let remainingSeconds = max(0, Int(ceil(endDate.timeIntervalSince(now))))
         let minutes = remainingSeconds / 60
         let seconds = remainingSeconds % 60
