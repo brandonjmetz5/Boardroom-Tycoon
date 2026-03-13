@@ -87,20 +87,34 @@ struct MarketView: View {
                                             .foregroundStyle(.secondary)
                                     }
 
-                                    HStack {
-                                        Button("Buy Now") {
-                                            buyNow(listing)
+                                    if listing.sellerID == userID {
+                                        if listing.currentBidderID == nil || listing.currentBidderID?.isEmpty == true {
+                                            Button("Cancel Listing") {
+                                                cancelListing(listing)
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .disabled(isSubmitting)
+                                        } else {
+                                            Text("Listing has bids and cannot be cancelled.")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
                                         }
-                                        .buttonStyle(.borderedProminent)
-                                        .disabled(isSubmitting || listing.sellerID == userID || listing.endsAt <= context.date)
+                                    } else {
+                                        HStack {
+                                            Button("Buy Now") {
+                                                buyNow(listing)
+                                            }
+                                            .buttonStyle(.borderedProminent)
+                                            .disabled(isSubmitting || listing.endsAt <= context.date)
 
-                                        Button("Place Bid") {
-                                            actionErrorMessage = nil
-                                            bidAmountText = ""
-                                            selectedListingForBid = listing
+                                            Button("Place Bid") {
+                                                actionErrorMessage = nil
+                                                bidAmountText = ""
+                                                selectedListingForBid = listing
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .disabled(isSubmitting || listing.endsAt <= context.date)
                                         }
-                                        .buttonStyle(.bordered)
-                                        .disabled(isSubmitting || listing.sellerID == userID || listing.endsAt <= context.date)
                                     }
                                 }
                                 .padding(.vertical, 6)
@@ -216,6 +230,24 @@ struct MarketView: View {
                 case .success:
                     self.selectedListingForBid = nil
                     self.bidAmountText = ""
+                    self.loadListings()
+                case .failure(let error):
+                    self.actionErrorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func cancelListing(_ listing: MineMarketListing) {
+        isSubmitting = true
+        actionErrorMessage = nil
+
+        mineMarketService.cancelMineListing(for: userID, listing: listing) { result in
+            DispatchQueue.main.async {
+                self.isSubmitting = false
+
+                switch result {
+                case .success:
                     self.loadListings()
                 case .failure(let error):
                     self.actionErrorMessage = error.localizedDescription

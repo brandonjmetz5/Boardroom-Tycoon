@@ -193,6 +193,88 @@ final class MineMarketService {
         }
     }
 
+    func cancelMineListing(for userID: String, listing: MineMarketListing, completion: @escaping (Result<Void, Error>) -> Void) {
+        let listingRef = db.collection("marketListings").document(listing.id)
+        let sellerBuildingRef = db.collection("playerProfiles")
+            .document(userID)
+            .collection("buildings")
+            .document(listing.buildingID)
+
+        db.runTransaction({ transaction, errorPointer in
+            do {
+                let listingSnapshot = try transaction.getDocument(listingRef)
+                let buildingSnapshot = try transaction.getDocument(sellerBuildingRef)
+
+                guard
+                    let listingData = listingSnapshot.data(),
+                    let _ = buildingSnapshot.data(),
+                    let sellerID = listingData["sellerID"] as? String,
+                    let status = listingData["status"] as? String
+                else {
+                    let error = NSError(
+                        domain: "MineMarketService",
+                        code: 4040,
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid listing or building data."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                let currentBidderID = listingData["currentBidderID"] as? String
+
+                if sellerID != userID {
+                    let error = NSError(
+                        domain: "MineMarketService",
+                        code: 4041,
+                        userInfo: [NSLocalizedDescriptionKey: "Only the seller can cancel this listing."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                if status != "active" {
+                    let error = NSError(
+                        domain: "MineMarketService",
+                        code: 4042,
+                        userInfo: [NSLocalizedDescriptionKey: "Only active listings can be cancelled."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                if let currentBidderID, !currentBidderID.isEmpty {
+                    let error = NSError(
+                        domain: "MineMarketService",
+                        code: 4043,
+                        userInfo: [NSLocalizedDescriptionKey: "Listings with bids cannot be cancelled."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                transaction.updateData([
+                    "status": "cancelled"
+                ], forDocument: listingRef)
+
+                transaction.updateData([
+                    "isListedOnMarket": false,
+                    "marketListingID": NSNull()
+                ], forDocument: sellerBuildingRef)
+
+                return nil
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
+            }
+        }) { _, error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
+
     func buyNowMineListing(for buyerID: String, listing: MineMarketListing, completion: @escaping (Result<Void, Error>) -> Void) {
         let buyerProfileRef = db.collection("playerProfiles").document(buyerID)
         let sellerProfileRef = db.collection("playerProfiles").document(listing.sellerID)
@@ -700,16 +782,18 @@ final class MineMarketService {
                     transaction.updateData([
                         "status": "sold"
                     ], forDocument: listingRef)
-                } else {
-                    transaction.updateData([
-                        "status": "expired"
-                    ], forDocument: listingRef)
 
-                    transaction.updateData([
-                        "isListedOnMarket": false,
-                        "marketListingID": NSNull()
-                    ], forDocument: sellerBuildingRef)
+                    return nil
                 }
+
+                transaction.updateData([
+                    "status": "expired"
+                ], forDocument: listingRef)
+
+                transaction.updateData([
+                    "isListedOnMarket": false,
+                    "marketListingID": NSNull()
+                ], forDocument: sellerBuildingRef)
 
                 return nil
             } catch let error as NSError {
