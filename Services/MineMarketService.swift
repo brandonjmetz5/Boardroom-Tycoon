@@ -73,11 +73,122 @@ final class MineMarketService {
                                 status: status
                             )
                         }
-                        .filter { $0.endsAt > Date() }   // hides expired listings immediately
+                        .filter { $0.endsAt > Date() }
                         .sorted { $0.endsAt < $1.endsAt }
 
                         completion(.success(listings))
                     }
+            }
+        }
+    }
+
+    func listOwnedMineOnMarket(for userID: String, building: Building, buyNowPrice: Double, completion: @escaping (Result<Void, Error>) -> Void) {
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingRef = profileRef.collection("buildings").document(building.id)
+        let listingRef = db.collection("marketListings").document("mine-listing-\(UUID().uuidString)")
+
+        db.runTransaction({ transaction, errorPointer in
+            do {
+                let buildingSnapshot = try transaction.getDocument(buildingRef)
+
+                guard
+                    let buildingData = buildingSnapshot.data(),
+                    let resourceTypeRawValue = buildingData["resourceType"] as? String,
+                    let resourceType = ResourceType(rawValue: resourceTypeRawValue),
+                    let level = buildingData["level"] as? Int,
+                    let abundance = buildingData["abundance"] as? Int,
+                    let stability = buildingData["stability"] as? Int
+                else {
+                    let error = NSError(
+                        domain: "MineMarketService",
+                        code: 4030,
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid owned mine data."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                let isStarterMine = buildingData["isStarterMine"] as? Bool ?? false
+                let isListedOnMarket = buildingData["isListedOnMarket"] as? Bool ?? false
+                let isProducing = buildingData["isProducing"] as? Bool ?? false
+
+                if isStarterMine {
+                    let error = NSError(
+                        domain: "MineMarketService",
+                        code: 4031,
+                        userInfo: [NSLocalizedDescriptionKey: "Starter mine cannot be listed on the market."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                if isListedOnMarket {
+                    let error = NSError(
+                        domain: "MineMarketService",
+                        code: 4032,
+                        userInfo: [NSLocalizedDescriptionKey: "This mine is already listed on the market."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                if isProducing {
+                    let error = NSError(
+                        domain: "MineMarketService",
+                        code: 4033,
+                        userInfo: [NSLocalizedDescriptionKey: "Stop production before listing this mine."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                if buyNowPrice <= 0 {
+                    let error = NSError(
+                        domain: "MineMarketService",
+                        code: 4034,
+                        userInfo: [NSLocalizedDescriptionKey: "Buy now price must be greater than zero."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                let startingBid = self.startingBid(for: resourceType, level: level, abundance: abundance, stability: stability)
+                let createdAt = Date()
+                let endsAt = createdAt.addingTimeInterval(60 * 60 * 24)
+
+                let listingData: [String: Any] = [
+                    "id": listingRef.documentID,
+                    "listingType": "mine",
+                    "sellerID": userID,
+                    "buildingID": building.id,
+                    "resourceType": resourceType.rawValue,
+                    "level": level,
+                    "abundance": abundance,
+                    "stability": stability,
+                    "buyNowPrice": buyNowPrice,
+                    "startingBid": startingBid,
+                    "currentBid": startingBid,
+                    "createdAt": Timestamp(date: createdAt),
+                    "endsAt": Timestamp(date: endsAt),
+                    "status": "active"
+                ]
+
+                transaction.setData(listingData, forDocument: listingRef)
+                transaction.updateData([
+                    "isListedOnMarket": true,
+                    "marketListingID": listingRef.documentID
+                ], forDocument: buildingRef)
+
+                return nil
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
+            }
+        }) { _, error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
             }
         }
     }
@@ -612,5 +723,31 @@ final class MineMarketService {
                 completion(.success(()))
             }
         }
+    }
+
+    private func startingBid(for resourceType: ResourceType, level: Int, abundance: Int, stability: Int) -> Double {
+        let baseValue: Double
+
+        switch resourceType {
+        case .gold:
+            baseValue = 800
+        case .silver:
+            baseValue = 700
+        case .diamond:
+            baseValue = 1200
+        case .oil:
+            baseValue = 900
+        case .coal:
+            baseValue = 650
+        case .iron:
+            baseValue = 750
+        default:
+            baseValue = 700
+        }
+
+        let statBonus = Double((abundance - 50) + (stability - 50)) * 12.0
+        let levelBonus = Double(level - 1) * 150.0
+
+        return max(100, baseValue + statBonus + levelBonus)
     }
 }

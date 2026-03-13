@@ -160,7 +160,9 @@ final class BuildingService {
                     "resourceType": "Gold",
                     "abundance": 50,
                     "stability": 55,
-                    "isStarterMine": true
+                    "isStarterMine": true,
+                    "isListedOnMarket": false,
+                    "marketListingID": NSNull()
                 ]
 
                 transaction.setData(buildingData, forDocument: starterMineRef)
@@ -260,6 +262,71 @@ final class BuildingService {
                 } else {
                     completion(.success(()))
                 }
+            }
+        }
+    }
+
+    func sellBuildingToSystem(for userID: String, building: Building, sellValue: Double, completion: @escaping (Result<Void, Error>) -> Void) {
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingRef = profileRef.collection("buildings").document(building.id)
+
+        db.runTransaction({ transaction, errorPointer in
+            do {
+                let profileSnapshot = try transaction.getDocument(profileRef)
+                let buildingSnapshot = try transaction.getDocument(buildingRef)
+
+                guard
+                    let profileData = profileSnapshot.data(),
+                    let currentCash = profileData["cash"] as? Double,
+                    let buildingData = buildingSnapshot.data(),
+                    let isListedOnMarket = buildingData["isListedOnMarket"] as? Bool
+                else {
+                    let error = NSError(
+                        domain: "BuildingService",
+                        code: 1201,
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid building or profile data."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                if isListedOnMarket {
+                    let error = NSError(
+                        domain: "BuildingService",
+                        code: 1202,
+                        userInfo: [NSLocalizedDescriptionKey: "Listed buildings cannot be sold to the system."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                if building.id == "building-starter-gold-mine" {
+                    let error = NSError(
+                        domain: "BuildingService",
+                        code: 1203,
+                        userInfo: [NSLocalizedDescriptionKey: "Starter mine cannot be sold to the system."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                let updatedCash = currentCash + sellValue
+
+                transaction.deleteDocument(buildingRef)
+                transaction.updateData([
+                    "cash": updatedCash
+                ], forDocument: profileRef)
+
+                return nil
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
+            }
+        }) { _, error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
             }
         }
     }

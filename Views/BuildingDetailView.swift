@@ -11,12 +11,18 @@ struct BuildingDetailView: View {
     let userID: String
     let building: Building
 
+    @Environment(\.dismiss) private var dismiss
+
     @State private var currentBuilding: Building
     @State private var isWorking = false
     @State private var errorMessage: String?
 
+    @State private var showListingSheet = false
+    @State private var buyNowPriceText = ""
+
     private let productionService = ProductionService()
     private let buildingService = BuildingService()
+    private let mineMarketService = MineMarketService()
 
     init(userID: String, building: Building) {
         self.userID = userID
@@ -134,6 +140,39 @@ struct BuildingDetailView: View {
                             }
                         }
                     }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Management")
+                            .font(.headline)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("System Sell Value: $\(scrapValue(), specifier: "%.2f")")
+                                .font(.subheadline)
+
+                            if currentBuilding.isListedOnMarket == true {
+                                Text("This mine is already listed on the market.")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Button("List on Marketplace") {
+                                    errorMessage = nil
+                                    buyNowPriceText = ""
+                                    showListingSheet = true
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(isWorking || (currentBuilding.isProducing ?? false))
+
+                                Button("Sell to System") {
+                                    sellToSystem()
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(isWorking || (currentBuilding.isProducing ?? false))
+                            }
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(12)
+                    }
                 } else {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Machines")
@@ -162,6 +201,59 @@ struct BuildingDetailView: View {
         .navigationTitle(currentBuilding.name)
         .onAppear {
             refreshBuilding()
+        }
+        .sheet(isPresented: $showListingSheet) {
+            NavigationStack {
+                Form {
+                    Section("Set Buy Now Price") {
+                        TextField("Enter buy now price", text: $buyNowPriceText)
+                            .keyboardType(.decimalPad)
+
+                        Text("Resource: \(currentBuilding.resourceType?.rawValue ?? "Unknown")")
+                        Text("Abundance: \(currentBuilding.abundance ?? 0)")
+                        Text("Stability: \(currentBuilding.stability ?? 0)")
+                        Text("Level: \(currentBuilding.level)")
+
+                        if let pricing = suggestedPricing() {
+                            Text("Suggested Starting Bid: $\(pricing.startingBid, specifier: "%.2f")")
+                            Text("Suggested Buy Now Range: $\(pricing.suggestedBuyNowLow, specifier: "%.2f") - $\(pricing.suggestedBuyNowHigh, specifier: "%.2f")")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if let errorMessage {
+                        Section {
+                            Text(errorMessage)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+                .navigationTitle("List Mine")
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Cancel") {
+                            showListingSheet = false
+                            buyNowPriceText = ""
+                            errorMessage = nil
+                        }
+                    }
+
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("List") {
+                            listOwnedMine()
+                        }
+                        .disabled(isWorking)
+                    }
+                }
+                .overlay {
+                    if isWorking {
+                        ProgressView("Listing...")
+                            .padding()
+                            .background(.regularMaterial)
+                            .cornerRadius(12)
+                    }
+                }
+            }
         }
     }
 
@@ -221,6 +313,95 @@ struct BuildingDetailView: View {
         }
     }
 
+    private func sellToSystem() {
+        isWorking = true
+        errorMessage = nil
+
+        buildingService.sellBuildingToSystem(
+            for: userID,
+            building: currentBuilding,
+            sellValue: scrapValue()
+        ) { result in
+            DispatchQueue.main.async {
+                self.isWorking = false
+
+                switch result {
+                case .success:
+                    dismiss()
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func listOwnedMine() {
+        guard let buyNowPrice = Double(buyNowPriceText), buyNowPrice > 0 else {
+            errorMessage = "Enter a valid buy now price."
+            return
+        }
+
+        isWorking = true
+        errorMessage = nil
+
+        mineMarketService.listOwnedMineOnMarket(
+            for: userID,
+            building: currentBuilding,
+            buyNowPrice: buyNowPrice
+        ) { result in
+            DispatchQueue.main.async {
+                self.isWorking = false
+
+                switch result {
+                case .success:
+                    self.showListingSheet = false
+                    self.buyNowPriceText = ""
+                    dismiss()
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func suggestedPricing() -> (startingBid: Double, suggestedBuyNowLow: Double, suggestedBuyNowHigh: Double)? {
+        guard
+            let resourceType = currentBuilding.resourceType,
+            let abundance = currentBuilding.abundance,
+            let stability = currentBuilding.stability
+        else {
+            return nil
+        }
+
+        let baseValue: Double
+
+        switch resourceType {
+        case .gold:
+            baseValue = 800
+        case .silver:
+            baseValue = 700
+        case .diamond:
+            baseValue = 1200
+        case .oil:
+            baseValue = 900
+        case .coal:
+            baseValue = 650
+        case .iron:
+            baseValue = 750
+        default:
+            baseValue = 700
+        }
+
+        let statBonus = Double((abundance - 50) + (stability - 50)) * 12.0
+        let levelBonus = Double(currentBuilding.level - 1) * 150.0
+
+        let startingBid = max(100, baseValue + statBonus + levelBonus)
+        let suggestedBuyNowLow = startingBid * 1.35
+        let suggestedBuyNowHigh = startingBid * 1.75
+
+        return (startingBid, suggestedBuyNowLow, suggestedBuyNowHigh)
+    }
+
     private func formattedTimeRemaining(until endDate: Date, now: Date) -> String {
         let remainingSeconds = max(0, Int(ceil(endDate.timeIntervalSince(now))))
         let minutes = remainingSeconds / 60
@@ -242,6 +423,37 @@ struct BuildingDetailView: View {
         let minOutput = max(1, Int((Double(maxOutput) * stabilityMultiplier).rounded(.down)))
 
         return "\(minOutput)-\(maxOutput)"
+    }
+
+    private func scrapValue() -> Double {
+        guard let resourceType = currentBuilding.resourceType else {
+            return 250
+        }
+
+        let baseValue: Double
+
+        switch resourceType {
+        case .gold:
+            baseValue = 500
+        case .silver:
+            baseValue = 425
+        case .diamond:
+            baseValue = 700
+        case .oil:
+            baseValue = 550
+        case .coal:
+            baseValue = 400
+        case .iron:
+            baseValue = 450
+        default:
+            baseValue = 400
+        }
+
+        let abundanceBonus = Double((currentBuilding.abundance ?? 50) - 50) * 4.0
+        let stabilityBonus = Double((currentBuilding.stability ?? 50) - 50) * 4.0
+        let levelBonus = Double(currentBuilding.level - 1) * 100.0
+
+        return max(100, baseValue + abundanceBonus + stabilityBonus + levelBonus)
     }
 }
 
