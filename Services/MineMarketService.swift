@@ -82,6 +82,72 @@ final class MineMarketService {
         }
     }
 
+    func fetchMineListing(by listingID: String, completion: @escaping (Result<MineMarketListing?, Error>) -> Void) {
+        let listingRef = db.collection("marketListings").document(listingID)
+
+        listingRef.getDocument { snapshot, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+
+            guard
+                let snapshot,
+                snapshot.exists,
+                let data = snapshot.data()
+            else {
+                completion(.success(nil))
+                return
+            }
+
+            guard
+                let id = data["id"] as? String,
+                let sellerID = data["sellerID"] as? String,
+                let buildingID = data["buildingID"] as? String,
+                let resourceTypeRawValue = data["resourceType"] as? String,
+                let resourceType = ResourceType(rawValue: resourceTypeRawValue),
+                let level = data["level"] as? Int,
+                let abundance = data["abundance"] as? Int,
+                let stability = data["stability"] as? Int,
+                let buyNowPrice = data["buyNowPrice"] as? Double,
+                let startingBid = data["startingBid"] as? Double,
+                let currentBid = data["currentBid"] as? Double,
+                let createdAtTimestamp = data["createdAt"] as? Timestamp,
+                let endsAtTimestamp = data["endsAt"] as? Timestamp,
+                let status = data["status"] as? String
+            else {
+                let parseError = NSError(
+                    domain: "MineMarketService",
+                    code: 4050,
+                    userInfo: [NSLocalizedDescriptionKey: "Invalid mine listing data."]
+                )
+                completion(.failure(parseError))
+                return
+            }
+
+            let currentBidderID = data["currentBidderID"] as? String
+
+            let listing = MineMarketListing(
+                id: id,
+                sellerID: sellerID,
+                buildingID: buildingID,
+                resourceType: resourceType,
+                level: level,
+                abundance: abundance,
+                stability: stability,
+                buyNowPrice: buyNowPrice,
+                startingBid: startingBid,
+                currentBid: currentBid,
+                currentBidderID: currentBidderID,
+                createdAt: createdAtTimestamp.dateValue(),
+                endsAt: endsAtTimestamp.dateValue(),
+                status: status
+            )
+
+            completion(.success(listing))
+        }
+    }
+
     func listOwnedMineOnMarket(for userID: String, building: Building, buyNowPrice: Double, completion: @escaping (Result<Void, Error>) -> Void) {
         let profileRef = db.collection("playerProfiles").document(userID)
         let buildingRef = profileRef.collection("buildings").document(building.id)

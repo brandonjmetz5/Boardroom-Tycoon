@@ -14,6 +14,7 @@ struct BuildingDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var currentBuilding: Building
+    @State private var currentListing: MineMarketListing?
     @State private var isWorking = false
     @State private var errorMessage: String?
 
@@ -150,8 +151,27 @@ struct BuildingDetailView: View {
                                 .font(.subheadline)
 
                             if currentBuilding.isListedOnMarket == true {
-                                Text("This mine is already listed on the market.")
-                                    .foregroundStyle(.secondary)
+                                if let currentListing {
+                                    Text("Buy Now: $\(currentListing.buyNowPrice, specifier: "%.2f")")
+                                        .font(.subheadline)
+
+                                    Text("Current Bid: $\(currentListing.currentBid, specifier: "%.2f")")
+                                        .font(.subheadline)
+
+                                    if currentListing.currentBidderID == nil || currentListing.currentBidderID?.isEmpty == true {
+                                        Button("Cancel Listing") {
+                                            cancelListing()
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .disabled(isWorking)
+                                    } else {
+                                        Text("This listing has bids and cannot be cancelled.")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                } else {
+                                    Text("Loading listing details...")
+                                        .foregroundStyle(.secondary)
+                                }
                             } else {
                                 Button("List on Marketplace") {
                                     errorMessage = nil
@@ -269,9 +289,31 @@ struct BuildingDetailView: View {
                 case .success(let buildings):
                     if let updated = buildings.first(where: { $0.id == currentBuilding.id }) {
                         self.currentBuilding = updated
+                        self.refreshListingIfNeeded()
                     }
                 case .failure:
                     break
+                }
+            }
+        }
+    }
+
+    private func refreshListingIfNeeded() {
+        guard currentBuilding.isListedOnMarket == true,
+              let listingID = currentBuilding.marketListingID,
+              !listingID.isEmpty
+        else {
+            currentListing = nil
+            return
+        }
+
+        mineMarketService.fetchMineListing(by: listingID) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let listing):
+                    self.currentListing = listing
+                case .failure:
+                    self.currentListing = nil
                 }
             }
         }
@@ -356,6 +398,26 @@ struct BuildingDetailView: View {
                 case .success:
                     self.showListingSheet = false
                     self.buyNowPriceText = ""
+                    dismiss()
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func cancelListing() {
+        guard let currentListing else { return }
+
+        isWorking = true
+        errorMessage = nil
+
+        mineMarketService.cancelMineListing(for: userID, listing: currentListing) { result in
+            DispatchQueue.main.async {
+                self.isWorking = false
+
+                switch result {
+                case .success:
                     dismiss()
                 case .failure(let error):
                     self.errorMessage = error.localizedDescription
