@@ -78,6 +78,12 @@ struct OperationsView: View {
                             Text("Abundance: \(abundance)")
                             Text("Stability: \(stability)")
                         }
+
+                        if let pricing = suggestedPricing(for: job) {
+                            Text("Starting Bid: $\(pricing.startingBid, specifier: "%.2f")")
+                            Text("Suggested Buy Now Range: $\(pricing.suggestedBuyNowLow, specifier: "%.2f") - $\(pricing.suggestedBuyNowHigh, specifier: "%.2f")")
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     if let purchaseErrorMessage {
@@ -536,6 +542,22 @@ struct OperationsView: View {
         let minutes = remainingSeconds / 60
         let seconds = remainingSeconds % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
+    private func suggestedPricing(for job: ProspectingJob) -> (startingBid: Double, suggestedBuyNowLow: Double, suggestedBuyNowHigh: Double)? {
+        guard
+            let abundance = job.revealedAbundance,
+            let stability = job.revealedStability
+        else {
+            return nil
+        }
+
+        return prospectingService.suggestedMarketPricing(
+            for: job.resourceType,
+            level: 1,
+            abundance: abundance,
+            stability: stability
+        )
     }
 
     private func prospectingLabel(for resourceType: ResourceType) -> String {

@@ -517,6 +517,14 @@ final class ProspectingService {
         }
     }
     
+    func suggestedMarketPricing(for resourceType: ResourceType, level: Int, abundance: Int, stability: Int) -> (startingBid: Double, suggestedBuyNowLow: Double, suggestedBuyNowHigh: Double) {
+        let startingBid = self.startingBid(for: resourceType, level: level, abundance: abundance, stability: stability)
+        let suggestedBuyNowLow = startingBid * 1.35
+        let suggestedBuyNowHigh = startingBid * 1.75
+
+        return (startingBid, suggestedBuyNowLow, suggestedBuyNowHigh)
+    }
+    
     private func startingBid(for resourceType: ResourceType, level: Int, abundance: Int, stability: Int) -> Double {
         let baseValue: Double
 
