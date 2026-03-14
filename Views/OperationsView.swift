@@ -5,25 +5,24 @@
 //  Created by brandon metz on 3/11/26.
 //
 
+//
+//  OperationsView.swift
+//  Boardroom Tycoon
+//
+//  Created by brandon metz on 3/11/26.
+//
+
 import SwiftUI
 
 struct OperationsView: View {
     let userID: String
 
-    @State private var buildings: [Building] = []
-    @State private var profile: PlayerProfile?
-    @State private var prospectingJobs: [ProspectingJob] = []
-    @State private var isLoading = true
-    @State private var loadingErrorMessage: String?
-    @State private var purchaseErrorMessage: String?
-    @State private var showPurchaseSheet = false
-    @State private var isPurchasing = false
-    @State private var selectedEmptySlotIndex: Int?
+    @StateObject private var viewModel: OperationsViewModel
 
-    private let buildingService = BuildingService()
-    private let playerProfileService = PlayerProfileService()
-    private let prospectingService = ProspectingService()
-    private let mineMarketService = MineMarketService()
+    init(userID: String) {
+        self.userID = userID
+        _viewModel = StateObject(wrappedValue: OperationsViewModel(userID: userID))
+    }
 
     private let columns = [
         GridItem(.flexible(), spacing: 16)
@@ -35,12 +34,12 @@ struct OperationsView: View {
                 .ignoresSafeArea()
 
             Group {
-                if isLoading {
+                if viewModel.isLoading {
                     ProgressView("Loading operations...")
                         .controlSize(.large)
                         .tint(.white)
                         .foregroundStyle(.white)
-                } else if let loadingErrorMessage {
+                } else if let loadingErrorMessage = viewModel.loadingErrorMessage {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Failed to load operations")
                             .font(.headline)
@@ -74,10 +73,12 @@ struct OperationsView: View {
             }
         }
         .onAppear {
-            mineMarketService.settleExpiredMineListings { _ in }
-            loadData()
+            viewModel.loadData()
         }
-        .sheet(isPresented: $showPurchaseSheet) {
+        .sheet(isPresented: Binding(
+            get: { viewModel.showPurchaseSheet },
+            set: { viewModel.showPurchaseSheet = $0 }
+        )) {
             purchaseSheetView
         }
     }
@@ -96,7 +97,7 @@ struct OperationsView: View {
                 summaryRow
             }
 
-            if let purchaseErrorMessage {
+            if let purchaseErrorMessage = viewModel.purchaseErrorMessage {
                 Text(purchaseErrorMessage)
                     .font(.footnote)
                     .foregroundStyle(.red)
@@ -107,10 +108,10 @@ struct OperationsView: View {
 
     private var summaryRow: some View {
         HStack(spacing: 10) {
-            summaryPill(title: "Slots", value: "\(usedSlotsCount)/\(totalSlotsCount)")
-            summaryPill(title: "Producing", value: "\(producingCount)")
-            summaryPill(title: "Ready", value: "\(readyCount)")
-            summaryPill(title: "Listed", value: "\(listedCount)")
+            summaryPill(title: "Slots", value: "\(viewModel.usedSlotsCount)/\(viewModel.totalSlotsCount)")
+            summaryPill(title: "Producing", value: "\(viewModel.producingCount)")
+            summaryPill(title: "Ready", value: "\(viewModel.readyCount)")
+            summaryPill(title: "Listed", value: "\(viewModel.listedCount)")
         }
     }
 
@@ -139,7 +140,7 @@ struct OperationsView: View {
 
     private var slotsGridSection: some View {
         LazyVGrid(columns: columns, spacing: 16) {
-            ForEach(buildingSlots) { slot in
+            ForEach(viewModel.buildingSlots) { slot in
                 switch slot.content {
                 case .building(let building):
                     buildingCard(for: building)
@@ -158,7 +159,7 @@ struct OperationsView: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             NavigationLink(destination: BuildingDetailView(userID: userID, building: building)) {
                 ZStack(alignment: .leading) {
-                    Image(buildingAssetName(for: building))
+                    Image(viewModel.buildingAssetName(for: building))
                         .resizable()
                         .scaledToFill()
                         .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156)
@@ -173,8 +174,8 @@ struct OperationsView: View {
                             Spacer()
 
                             statusChip(
-                                title: buildingStatusText(for: building, now: context.date),
-                                color: buildingStatusColor(for: building, now: context.date)
+                                title: viewModel.buildingStatusText(for: building, now: context.date),
+                                color: statusColor(for: viewModel.buildingStatus(for: building, now: context.date))
                             )
                         }
 
@@ -187,12 +188,12 @@ struct OperationsView: View {
                                 .multilineTextAlignment(.leading)
                                 .lineLimit(2)
 
-                            Text(buildingFamilyLabel(for: building))
+                            Text(viewModel.buildingFamilyLabel(for: building))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(Color.white.opacity(0.68))
                                 .lineLimit(1)
 
-                            Text(buildingDetailText(for: building, now: context.date))
+                            Text(viewModel.buildingDetailText(for: building, now: context.date))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(Color.white.opacity(0.56))
                         }
@@ -218,10 +219,12 @@ struct OperationsView: View {
     private func prospectingCard(for job: ProspectingJob) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             Button {
-                handleProspectingTap(for: job, now: context.date)
+                if job.endsAt <= context.date {
+                    viewModel.revealProspectingJob(job)
+                }
             } label: {
                 ZStack(alignment: .leading) {
-                    Image(prospectingAssetName(for: job))
+                    Image(viewModel.prospectingAssetName(for: job))
                         .resizable()
                         .scaledToFill()
                         .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156)
@@ -246,7 +249,7 @@ struct OperationsView: View {
                         Spacer()
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(prospectingLabel(for: job.resourceType))
+                            Text(viewModel.prospectingLabel(for: job.resourceType))
                                 .font(.system(size: 20, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .multilineTextAlignment(.leading)
@@ -261,7 +264,7 @@ struct OperationsView: View {
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundStyle(Color.white.opacity(0.56))
                             } else {
-                                Text(formattedTimeRemaining(until: job.endsAt, now: context.date))
+                                Text(viewModel.formattedTimeRemaining(until: job.endsAt, now: context.date))
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundStyle(Color.white.opacity(0.56))
                             }
@@ -282,15 +285,13 @@ struct OperationsView: View {
                 .contentShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
             }
             .buttonStyle(.plain)
-            .disabled(isPurchasing)
+            .disabled(viewModel.isPurchasing)
         }
     }
 
     private func emptySlotCard(slotIndex: Int) -> some View {
         Button {
-            purchaseErrorMessage = nil
-            selectedEmptySlotIndex = slotIndex
-            showPurchaseSheet = true
+            viewModel.openPurchaseSheet(slotIndex: slotIndex)
         } label: {
             ZStack(alignment: .leading) {
                 Image("icon_blueprint")
@@ -354,6 +355,15 @@ struct OperationsView: View {
             )
     }
 
+    private func statusColor(for status: BuildingStatusDisplay) -> Color {
+        switch status {
+        case .listed: return Color(red: 0.42, green: 0.37, blue: 0.78)
+        case .ready: return Color(red: 0.24, green: 0.62, blue: 0.44)
+        case .producing: return Color(red: 0.76, green: 0.55, blue: 0.22)
+        case .idle: return Color(red: 0.34, green: 0.39, blue: 0.47)
+        }
+    }
+
     private var purchaseSheetView: some View {
         NavigationStack {
             List {
@@ -365,13 +375,12 @@ struct OperationsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Close") {
-                        showPurchaseSheet = false
-                        selectedEmptySlotIndex = nil
+                        viewModel.closePurchaseSheet()
                     }
                 }
             }
             .overlay {
-                if isPurchasing {
+                if viewModel.isPurchasing {
                     ProgressView("Processing...")
                         .padding()
                         .background(.regularMaterial)
@@ -383,7 +392,7 @@ struct OperationsView: View {
 
     @ViewBuilder
     private var purchaseErrorSection: some View {
-        if let purchaseErrorMessage {
+        if let purchaseErrorMessage = viewModel.purchaseErrorMessage {
             Section {
                 Text(purchaseErrorMessage)
                     .foregroundStyle(.red)
@@ -395,7 +404,7 @@ struct OperationsView: View {
         Section("Buy Building") {
             ForEach(BuildingCatalog.purchasableBuildings) { purchasableBuilding in
                 Button {
-                    purchaseBuilding(purchasableBuilding)
+                    viewModel.purchaseBuilding(purchasableBuilding)
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(purchasableBuilding.name)
@@ -411,7 +420,7 @@ struct OperationsView: View {
                     }
                     .padding(.vertical, 4)
                 }
-                .disabled(isPurchasing || selectedEmptySlotIndex == nil)
+                .disabled(viewModel.isPurchasing || viewModel.selectedEmptySlotIndex == nil)
             }
         }
     }
@@ -429,7 +438,7 @@ struct OperationsView: View {
 
     private func prospectButton(title: String, resourceType: ResourceType) -> some View {
         Button {
-            startProspecting(resourceType)
+            viewModel.startProspecting(resourceType)
         } label: {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
@@ -441,434 +450,10 @@ struct OperationsView: View {
             }
             .padding(.vertical, 4)
         }
-        .disabled(isPurchasing || selectedEmptySlotIndex == nil)
-    }
-
-    private var activeProspectingJobs: [ProspectingJob] {
-        prospectingJobs.filter { !$0.isComplete }
-    }
-
-    private var usedSlotsCount: Int {
-        buildings.count + activeProspectingJobs.count
-    }
-
-    private var totalSlotsCount: Int {
-        profile?.buildingSlotCount ?? usedSlotsCount
-    }
-
-    private var producingCount: Int {
-        buildings.filter { $0.isProducing == true && !isReadyToCollect(building: $0, now: Date()) }.count
-    }
-
-    private var readyCount: Int {
-        buildings.filter { isReadyToCollect(building: $0, now: Date()) }.count
-    }
-
-    private var listedCount: Int {
-        buildings.filter { $0.isListedOnMarket == true }.count
-    }
-
-    private var buildingSlots: [BuildingSlot] {
-        let totalSlots = profile?.buildingSlotCount ?? buildings.count
-        var slots: [BuildingSlot] = []
-
-        for slotIndex in 0..<totalSlots {
-            if let building = buildings.first(where: { $0.slotIndex == slotIndex }) {
-                slots.append(
-                    BuildingSlot(
-                        id: "slot-building-\(building.id)",
-                        slotIndex: slotIndex,
-                        content: .building(building)
-                    )
-                )
-            } else if let job = activeProspectingJobs.first(where: { $0.slotIndex == slotIndex }) {
-                slots.append(
-                    BuildingSlot(
-                        id: "slot-prospecting-\(job.id)",
-                        slotIndex: slotIndex,
-                        content: .prospecting(job)
-                    )
-                )
-            } else {
-                slots.append(
-                    BuildingSlot(
-                        id: "slot-empty-\(slotIndex)",
-                        slotIndex: slotIndex,
-                        content: .empty
-                    )
-                )
-            }
-        }
-
-        return slots
-    }
-
-    private func loadData() {
-        isLoading = true
-        loadingErrorMessage = nil
-
-        let group = DispatchGroup()
-
-        group.enter()
-        playerProfileService.fetchPlayerProfile(for: userID) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let loadedProfile):
-                    self.profile = loadedProfile
-                case .failure(let error):
-                    self.loadingErrorMessage = error.localizedDescription
-                }
-                group.leave()
-            }
-        }
-
-        group.enter()
-        buildingService.fetchBuildings(for: userID) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let loadedBuildings):
-                    self.buildings = loadedBuildings
-                case .failure(let error):
-                    self.loadingErrorMessage = error.localizedDescription
-                }
-                group.leave()
-            }
-        }
-
-        group.enter()
-        prospectingService.fetchProspectingJobs(for: userID) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let loadedJobs):
-                    self.prospectingJobs = loadedJobs
-                case .failure(let error):
-                    self.loadingErrorMessage = error.localizedDescription
-                }
-                group.leave()
-            }
-        }
-
-        group.notify(queue: .main) {
-            self.isLoading = false
-        }
-    }
-
-    private func purchaseBuilding(_ purchasableBuilding: PurchasableBuilding) {
-        guard let selectedEmptySlotIndex else {
-            purchaseErrorMessage = "Select an empty slot first."
-            return
-        }
-
-        isPurchasing = true
-        purchaseErrorMessage = nil
-
-        buildingService.purchaseBuilding(
-            for: userID,
-            purchasableBuilding: purchasableBuilding,
-            slotIndex: selectedEmptySlotIndex
-        ) { result in
-            DispatchQueue.main.async {
-                self.isPurchasing = false
-
-                switch result {
-                case .success:
-                    self.showPurchaseSheet = false
-                    self.selectedEmptySlotIndex = nil
-                    self.loadData()
-                case .failure(let error):
-                    self.purchaseErrorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func startProspecting(_ resourceType: ResourceType) {
-        guard let selectedEmptySlotIndex else {
-            purchaseErrorMessage = "Select an empty slot first."
-            return
-        }
-
-        isPurchasing = true
-        purchaseErrorMessage = nil
-
-        prospectingService.startProspecting(
-            for: userID,
-            resourceType: resourceType,
-            slotIndex: selectedEmptySlotIndex
-        ) { result in
-            DispatchQueue.main.async {
-                self.isPurchasing = false
-
-                switch result {
-                case .success:
-                    self.showPurchaseSheet = false
-                    self.selectedEmptySlotIndex = nil
-                    self.loadData()
-                case .failure(let error):
-                    self.purchaseErrorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func revealProspectingJob(_ job: ProspectingJob) {
-        isPurchasing = true
-        purchaseErrorMessage = nil
-
-        prospectingService.revealProspectingJob(for: userID, jobID: job.id) { result in
-            DispatchQueue.main.async {
-                self.isPurchasing = false
-
-                switch result {
-                case .success:
-                    self.loadData()
-                case .failure(let error):
-                    self.purchaseErrorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func handleProspectingTap(for job: ProspectingJob, now: Date) {
-        if job.endsAt <= now {
-            revealProspectingJob(job)
-        }
-    }
-
-    private func isReadyToCollect(building: Building, now: Date) -> Bool {
-        guard
-            building.isProducing == true,
-            let productionEndsAt = building.productionEndsAt
-        else {
-            return false
-        }
-
-        return productionEndsAt <= now
-    }
-
-    private func buildingStatusText(for building: Building, now: Date) -> String {
-        if building.isListedOnMarket == true {
-            return "Listed"
-        }
-
-        if isReadyToCollect(building: building, now: now) {
-            return "Ready"
-        }
-
-        if building.isProducing == true {
-            return "Producing"
-        }
-
-        return "Idle"
-    }
-
-    private func buildingStatusColor(for building: Building, now: Date) -> Color {
-        if building.isListedOnMarket == true {
-            return Color(red: 0.42, green: 0.37, blue: 0.78)
-        }
-
-        if isReadyToCollect(building: building, now: now) {
-            return Color(red: 0.24, green: 0.62, blue: 0.44)
-        }
-
-        if building.isProducing == true {
-            return Color(red: 0.76, green: 0.55, blue: 0.22)
-        }
-
-        return Color(red: 0.34, green: 0.39, blue: 0.47)
-    }
-
-    private func buildingDetailText(for building: Building, now: Date) -> String {
-        if building.isListedOnMarket == true {
-            return "Level \(building.level)"
-        }
-
-        if isReadyToCollect(building: building, now: now) {
-            return "Ready to collect"
-        }
-
-        if building.isProducing == true, let productionEndsAt = building.productionEndsAt {
-            return formattedTimeRemaining(until: productionEndsAt, now: now)
-        }
-
-        return "Level \(building.level)"
-    }
-
-    private func formattedTimeRemaining(until endDate: Date, now: Date) -> String {
-        let remainingSeconds = max(0, Int(ceil(endDate.timeIntervalSince(now))))
-        let minutes = remainingSeconds / 60
-        let seconds = remainingSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    private func prospectingLabel(for resourceType: ResourceType) -> String {
-        switch resourceType {
-        case .gold:
-            return "Gold Mine"
-        case .silver:
-            return "Silver Mine"
-        case .diamond:
-            return "Diamond Mine"
-        case .oil:
-            return "Oil Rig"
-        case .coal:
-            return "Coal Mine"
-        case .iron:
-            return "Iron Mine"
-        default:
-            return resourceType.rawValue
-        }
-    }
-
-    private func buildingFamilyLabel(for building: Building) -> String {
-        if let resourceType = building.resourceType {
-            switch resourceType {
-            case .gold:
-                return "Gold"
-            case .silver:
-                return "Silver"
-            case .diamond:
-                return "Diamond"
-            case .oil:
-                return "Oil"
-            case .coal:
-                return "Coal"
-            case .iron:
-                return "Iron"
-            default:
-                return building.type.rawValue
-            }
-        }
-
-        return building.type.rawValue
-    }
-
-    private func buildingAssetName(for building: Building) -> String {
-        let lowercasedName = building.name.lowercased()
-
-        if lowercasedName.contains("stone quarry") {
-            return "icon_stone_quarry"
-        }
-
-        if lowercasedName.contains("sand quarry") {
-            return "icon_sand_quarry"
-        }
-
-        if lowercasedName.contains("gravel quarry") {
-            return "icon_gravel_quarry"
-        }
-
-        if lowercasedName.contains("gold refinery") {
-            return "icon_gold_refinery"
-        }
-
-        if lowercasedName.contains("silver refinery") {
-            return "icon_silver_refinery"
-        }
-
-        if lowercasedName.contains("diamond refinery") {
-            return "icon_diamond_refinery"
-        }
-
-        if lowercasedName.contains("coal refinery") {
-            return "icon_coal_refinery"
-        }
-
-        if lowercasedName.contains("oil refinery") {
-            return "icon_oil_refinery"
-        }
-
-        if lowercasedName.contains("fuel processing plant") {
-            return "icon_fuel_processing_plant"
-        }
-
-        if lowercasedName.contains("construction materials") {
-            return "icon_construction_materials_factory"
-        }
-
-        if lowercasedName.contains("materials depot") {
-            return "icon_materials_depot"
-        }
-
-        if lowercasedName.contains("tech plant") {
-            return "icon_tech_plant"
-        }
-
-        if lowercasedName.contains("fabrication plant") {
-            return "icon_fabrication_plant"
-        }
-
-        if lowercasedName.contains("iron bar factory") {
-            return "icon_iron_bar_factory"
-        }
-
-        if lowercasedName.contains("diamond processing plant") {
-            return "icon_diamond_processing_plant"
-        }
-
-        if lowercasedName.contains("silver processing plant") {
-            return "icon_silver_processing_plant"
-        }
-
-        if lowercasedName.contains("oil rig") {
-            return "icon_oil_rig"
-        }
-
-        if lowercasedName.contains("coal mine") {
-            return "icon_raw_coal_mine"
-        }
-
-        if lowercasedName.contains("silver mine") {
-            return "icon_raw_silver_mine"
-        }
-
-        if lowercasedName.contains("diamond mine") {
-            return "icon_raw_diamond_mine"
-        }
-
-        if lowercasedName.contains("gold mine") {
-            return "icon_gold_refinery"
-        }
-
-        if lowercasedName.contains("iron mine") {
-            return "icon_iron_bar_factory"
-        }
-
-        return "icon_blueprint"
-    }
-
-    private func prospectingAssetName(for job: ProspectingJob) -> String {
-        switch job.resourceType {
-        case .gold:
-            return "icon_gold_refinery"
-        case .silver:
-            return "icon_raw_silver_mine"
-        case .diamond:
-            return "icon_raw_diamond_mine"
-        case .oil:
-            return "icon_oil_rig"
-        case .coal:
-            return "icon_raw_coal_mine"
-        case .iron:
-            return "icon_iron_bar_factory"
-        default:
-            return "icon_blueprint"
-        }
+        .disabled(viewModel.isPurchasing || viewModel.selectedEmptySlotIndex == nil)
     }
 }
 
-//private struct BuildingSlot: Identifiable {
-//    let id: String
-//    let slotIndex: Int
-//    let content: Content
-//
-//    enum Content {
-//        case building(Building)
-//        case prospecting(ProspectingJob)
-//        case empty
-//    }
-//}
-//
 #Preview {
     NavigationStack {
         OperationsView(userID: "demo-user-id-12345")

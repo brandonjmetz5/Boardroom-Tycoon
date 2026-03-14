@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A82036642F653B14009D14E3 /* OperationsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A82036632F653B14009D14E3 /* OperationsViewModel.swift */; };
 		A865774A2F6319930029071D /* BuildingSlot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86577492F6319930029071D /* BuildingSlot.swift */; };
 		A865774E2F631D020029071D /* PurchasableBuilding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A865774D2F631D020029071D /* PurchasableBuilding.swift */; };
 		A86577502F631D340029071D /* BuildingCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A865774F2F631D340029071D /* BuildingCatalog.swift */; };
@@ -67,6 +68,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A82036632F653B14009D14E3 /* OperationsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationsViewModel.swift; sourceTree = "<group>"; };
 		A86577492F6319930029071D /* BuildingSlot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingSlot.swift; sourceTree = "<group>"; };
 		A865774D2F631D020029071D /* PurchasableBuilding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurchasableBuilding.swift; sourceTree = "<group>"; };
 		A865774F2F631D340029071D /* BuildingCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingCatalog.swift; sourceTree = "<group>"; };
@@ -229,6 +231,7 @@
 		A8AB737F2F61D3760012C9BC /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				A82036632F653B14009D14E3 /* OperationsViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -395,6 +398,7 @@
 				A8AB73BD2F6277730012C9BC /* BuildingDetailView.swift in Sources */,
 				A8AB738D2F61D57F0012C9BC /* InventoryView.swift in Sources */,
 				A8AB73AF2F61F0C90012C9BC /* StockPricePoint.swift in Sources */,
+				A82036642F653B14009D14E3 /* OperationsViewModel.swift in Sources */,
 				A8AB73A32F61E88C0012C9BC /* OperationType.swift in Sources */,
 				A86577502F631D340029071D /* BuildingCatalog.swift in Sources */,
 				A8AB73B52F62075A0012C9BC /* InventoryService.swift in Sources */,
