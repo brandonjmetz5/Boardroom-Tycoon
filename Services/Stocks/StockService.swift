@@ -8,6 +8,20 @@
 import Foundation
 import FirebaseFirestore
 
+/// Chart timeframe for price history.
+enum ChartTimeFrame: String, CaseIterable, Identifiable {
+    case oneMin = "1m"
+    case fiveMin = "5m"
+    case fifteenMin = "15m"
+    case oneHour = "1H"
+    case oneDay = "1D"
+    case all = "All"
+
+    var id: String { rawValue }
+
+    var displayName: String { rawValue }
+}
+
 final class StockService {
     private let db = Firestore.firestore()
 
@@ -59,29 +73,56 @@ final class StockService {
         }
     }
 
-    /// Returns fake price history for a stock (last 30 days, random walk from current price).
-    func fetchPriceHistory(for stock: Stock, completion: @escaping ([StockPricePoint]) -> Void) {
-        let points = Self.generateFakeHistory(symbol: stock.symbol, currentPrice: stock.currentPrice, count: 31)
+    /// Returns fake price history for a stock for the given timeframe.
+    func fetchPriceHistory(for stock: Stock, timeFrame: ChartTimeFrame, completion: @escaping ([StockPricePoint]) -> Void) {
+        let points = Self.generateFakeHistory(symbol: stock.symbol, currentPrice: stock.currentPrice, timeFrame: timeFrame)
         completion(points)
     }
 
-    /// Generates fake daily closing prices going backward from current price.
-    static func generateFakeHistory(symbol: String, currentPrice: Double, count: Int = 31) -> [StockPricePoint] {
+    /// Generates fake price history for a timeframe (for testing).
+    static func generateFakeHistory(symbol: String, currentPrice: Double, timeFrame: ChartTimeFrame) -> [StockPricePoint] {
+        let (count, intervalSeconds) = timeFrame.pointCountAndInterval()
         var points: [StockPricePoint] = []
-        let calendar = Calendar.current
         var price = currentPrice
-        var date = calendar.startOfDay(for: Date())
+        var date = Date()
 
         for i in 0..<count {
-            let id = "\(symbol)-\(i)"
+            let id = "\(symbol)-\(timeFrame.rawValue)-\(i)"
             points.append(StockPricePoint(id: id, timestamp: date, price: price))
-            // Walk backward one day and adjust price with small random change
-            guard let prev = calendar.date(byAdding: .day, value: -1, to: date) else { break }
-            date = prev
-            let change = Double.random(in: -0.02...0.02)
+            date = date.addingTimeInterval(-intervalSeconds)
+            let change = Double.random(in: -0.015...0.015)
             price = max(0.01, price / (1 + change))
         }
 
         return points.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    /// Generates fake history with a fixed point count (e.g. sparklines). Uses daily spacing for count ≤ 31.
+    static func generateFakeHistory(symbol: String, currentPrice: Double, count: Int = 31) -> [StockPricePoint] {
+        let interval: TimeInterval = count <= 31 ? 24 * 3600 : 24 * 3600
+        var points: [StockPricePoint] = []
+        var price = currentPrice
+        var date = Date()
+        for i in 0..<count {
+            points.append(StockPricePoint(id: "\(symbol)-\(i)", timestamp: date, price: price))
+            date = date.addingTimeInterval(-interval)
+            let change = Double.random(in: -0.02...0.02)
+            price = max(0.01, price / (1 + change))
+        }
+        return points.sorted { $0.timestamp < $1.timestamp }
+    }
+}
+
+extension ChartTimeFrame {
+    /// (number of points, seconds between points)
+    fileprivate func pointCountAndInterval() -> (Int, TimeInterval) {
+        switch self {
+        case .oneMin: return (60, 1)
+        case .fiveMin: return (60, 5)
+        case .fifteenMin: return (60, 15)
+        case .oneHour: return (60, 60)
+        case .oneDay: return (24, 3600)
+        case .all: return (31, 24 * 3600)
+        }
     }
 }
