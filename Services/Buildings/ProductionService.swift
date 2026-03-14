@@ -239,6 +239,7 @@ final class ProductionService {
         db.runTransaction({ [weak self] transaction, errorPointer in
             guard let self else { return nil }
             do {
+                // All reads first (Firestore requirement)
                 let buildingSnapshot = try transaction.getDocument(buildingRef)
                 guard let buildingData = buildingSnapshot.data() else {
                     errorPointer?.pointee = NSError(domain: "ProductionService", code: 2000, userInfo: [NSLocalizedDescriptionKey: "Building not found."])
@@ -253,6 +254,7 @@ final class ProductionService {
                     return nil
                 }
 
+                var inventorySnaps: [(DocumentReference, DocumentSnapshot, RecipeIngredient)] = []
                 for input in recipe.inputItems {
                     let invRef = profileRef.collection("inventory").document(input.item.id)
                     let invSnap = try transaction.getDocument(invRef)
@@ -261,6 +263,12 @@ final class ProductionService {
                         errorPointer?.pointee = NSError(domain: "ProductionService", code: 2008, userInfo: [NSLocalizedDescriptionKey: "Not enough \(input.item.name). Need \(input.quantity), have \(qty)."])
                         return nil
                     }
+                    inventorySnaps.append((invRef, invSnap, input))
+                }
+
+                // All writes after all reads
+                for (invRef, invSnap, input) in inventorySnaps {
+                    let qty = invSnap.data()?["quantity"] as? Double ?? 0
                     var invData = invSnap.data() ?? ["id": input.item.id, "name": input.item.name, "category": input.item.category.rawValue, "isFractional": input.item.isFractional]
                     invData["quantity"] = qty - input.quantity
                     transaction.setData(invData, forDocument: invRef)
@@ -371,6 +379,7 @@ final class ProductionService {
         db.runTransaction({ [weak self] transaction, errorPointer in
             guard let self else { return nil }
             do {
+                // All reads first (Firestore requirement)
                 let buildingSnap = try transaction.getDocument(buildingRef)
                 let machineSnap = try transaction.getDocument(machineRef)
                 guard buildingSnap.data() != nil, var machineData = machineSnap.data() else {
@@ -385,6 +394,8 @@ final class ProductionService {
                     errorPointer?.pointee = NSError(domain: "ProductionService", code: 2007, userInfo: [NSLocalizedDescriptionKey: "This machine is already producing."])
                     return nil
                 }
+
+                var inventorySnaps: [(DocumentReference, DocumentSnapshot, Double)] = []
                 for input in recipe.inputItems {
                     let invRef = profileRef.collection("inventory").document(input.item.id)
                     let invSnap = try transaction.getDocument(invRef)
@@ -393,8 +404,14 @@ final class ProductionService {
                         errorPointer?.pointee = NSError(domain: "ProductionService", code: 2008, userInfo: [NSLocalizedDescriptionKey: "Not enough \(input.item.name). Need \(input.quantity), have \(qty)."])
                         return nil
                     }
+                    inventorySnaps.append((invRef, invSnap, input.quantity))
+                }
+
+                // All writes after all reads
+                for (invRef, invSnap, deductQty) in inventorySnaps {
+                    let qty = invSnap.data()?["quantity"] as? Double ?? 0
                     var invData = invSnap.data() ?? [:]
-                    invData["quantity"] = qty - input.quantity
+                    invData["quantity"] = qty - deductQty
                     transaction.setData(invData, forDocument: invRef)
                 }
                 let startedAt = Date()
@@ -426,6 +443,7 @@ final class ProductionService {
         db.runTransaction({ [weak self] transaction, errorPointer in
             guard let self else { return nil }
             do {
+                // All reads first (Firestore requirement)
                 let machineSnap = try transaction.getDocument(machineRef)
                 guard var machineData = machineSnap.data() else {
                     errorPointer?.pointee = NSError(domain: "ProductionService", code: 2001, userInfo: [NSLocalizedDescriptionKey: "Machine not found."])
@@ -437,35 +455,64 @@ final class ProductionService {
                     return nil
                 }
                 let qty = machineData["pendingOutputQuantity"] as? Double ?? 0
+
+                let invRef: DocumentReference?
+                let invDocID: String?
+                let invName: String?
+                let isExtractor: Bool
                 if let rt = resourceType {
-                    let invDocID = self.inventoryDocumentID(for: rt)
-                    let invName = self.inventoryDisplayName(for: rt)
-                    let invRef = profileRef.collection("inventory").document(invDocID)
-                    let invSnap = try transaction.getDocument(invRef)
-                    let current = invSnap.data()?["quantity"] as? Double ?? 0
-                    let invData: [String: Any] = [
-                        "id": invDocID, "name": invName, "category": "Raw Material", "isFractional": false,
-                        "quantity": current + qty
-                    ]
-                    transaction.setData(invData, forDocument: invRef)
-                    let profileSnap = try transaction.getDocument(profileRef)
-                    let profileData = profileSnap.data() ?? [:]
-                    let xp = profileData["xp"] as? Int ?? 0
-                    let level = self.levelForTotalXP(xp + 10)
-                    let slots = self.buildingSlotCount(for: level)
-                    transaction.updateData(["xp": xp + 10, "level": level, "buildingSlotCount": slots], forDocument: profileRef)
+                    invDocID = self.inventoryDocumentID(for: rt)
+                    invName = self.inventoryDisplayName(for: rt)
+                    invRef = profileRef.collection("inventory").document(invDocID!)
+                    isExtractor = true
                 } else if let outId = pendingOutputItemId, let outName = pendingOutputItemName {
-                    let invRef = profileRef.collection("inventory").document(outId)
-                    let invSnap = try transaction.getDocument(invRef)
-                    let existing = invSnap.data() ?? [:]
-                    let current = existing["quantity"] as? Double ?? 0
-                    var invData = existing
-                    invData["id"] = outId
-                    invData["name"] = outName
-                    invData["quantity"] = current + qty
-                    if invData["category"] == nil { invData["category"] = "Refined Material" }
-                    if invData["isFractional"] == nil { invData["isFractional"] = false }
-                    transaction.setData(invData, forDocument: invRef)
+                    invDocID = outId
+                    invName = outName
+                    invRef = profileRef.collection("inventory").document(outId)
+                    isExtractor = false
+                } else {
+                    invRef = nil
+                    invDocID = nil
+                    invName = nil
+                    isExtractor = false
+                }
+
+                let invSnap: DocumentSnapshot?
+                let profileSnap: DocumentSnapshot?
+                if let ref = invRef {
+                    invSnap = try transaction.getDocument(ref)
+                    profileSnap = isExtractor ? try transaction.getDocument(profileRef) : nil
+                } else {
+                    invSnap = nil
+                    profileSnap = nil
+                }
+
+                // All writes after all reads
+                if let ref = invRef, let snap = invSnap {
+                    if isExtractor, let invDocID = invDocID, let invName = invName {
+                        let current = snap.data()?["quantity"] as? Double ?? 0
+                        let invData: [String: Any] = [
+                            "id": invDocID, "name": invName, "category": "Raw Material", "isFractional": false,
+                            "quantity": current + qty
+                        ]
+                        transaction.setData(invData, forDocument: ref)
+                        if let profileData = profileSnap?.data() {
+                            let xp = profileData["xp"] as? Int ?? 0
+                            let level = self.levelForTotalXP(xp + 10)
+                            let slots = self.buildingSlotCount(for: level)
+                            transaction.updateData(["xp": xp + 10, "level": level, "buildingSlotCount": slots], forDocument: profileRef)
+                        }
+                    } else if let outId = pendingOutputItemId, let outName = pendingOutputItemName {
+                        let existing = snap.data() ?? [:]
+                        let current = existing["quantity"] as? Double ?? 0
+                        var invData = existing
+                        invData["id"] = outId
+                        invData["name"] = outName
+                        invData["quantity"] = current + qty
+                        if invData["category"] == nil { invData["category"] = "Refined Material" }
+                        if invData["isFractional"] == nil { invData["isFractional"] = false }
+                        transaction.setData(invData, forDocument: ref)
+                    }
                 }
                 machineData["isProducing"] = false
                 machineData["productionStartedAt"] = NSNull()
