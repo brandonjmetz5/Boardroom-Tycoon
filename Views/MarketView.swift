@@ -91,93 +91,98 @@ struct MarketView: View {
 
     private func listingCard(listing: MineMarketListing) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            VStack(alignment: .leading, spacing: 12) {
-                Text(viewModel.mineLabel(for: listing.resourceType))
-                    .font(.system(size: 18, weight: .semibold))
+            listingCardContent(listing: listing, now: context.date)
+        }
+    }
+
+    @ViewBuilder
+    private func listingCardContent(listing: MineMarketListing, now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(viewModel.mineLabel(for: listing.resourceType))
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppTheme.textPrimary)
+
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    row("Level", "\(listing.level)")
+                    row("Abundance", "\(listing.abundance)")
+                    row("Stability", "\(listing.stability)")
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    row("Current Bid", String(format: "$%.2f", listing.currentBid))
+                    row("Buy Now", String(format: "$%.2f", listing.buyNowPrice))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .fontWeight(.semibold)
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+            }
+
+            if listing.endsAt > now {
+                Text("Time Remaining: \(viewModel.formattedTimeRemaining(until: listing.endsAt, now: now))")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.textTertiary)
+            } else {
+                Text("Auction Ended")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.textTertiary)
+            }
+
+            if listing.sellerID == userID {
+                if listing.currentBidderID == nil || listing.currentBidderID?.isEmpty == true {
+                    Button("Cancel Listing") {
+                        viewModel.cancelListing(listing)
+                    }
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
-
-                HStack(alignment: .top, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        row("Level", "\(listing.level)")
-                        row("Abundance", "\(listing.abundance)")
-                        row("Stability", "\(listing.stability)")
-                    }
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.textSecondary)
-
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 4) {
-                        row("Current Bid", String(format: "$%.2f", listing.currentBid))
-                        row("Buy Now", String(format: "$%.2f", listing.buyNowPrice))
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .fontWeight(.semibold)
-                    }
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.textSecondary)
-                }
-
-                if listing.endsAt > context.date {
-                    Text("Time Remaining: \(viewModel.formattedTimeRemaining(until: listing.endsAt, now: context.date))")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppTheme.textTertiary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(AppTheme.cardBackgroundAlt)
+                    .clipShape(Capsule())
+                    .disabled(viewModel.isSubmitting)
                 } else {
-                    Text("Auction Ended")
-                        .font(.system(size: 12, weight: .medium))
+                    Text("Listing has bids and cannot be cancelled.")
+                        .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppTheme.textTertiary)
                 }
-
-                if listing.sellerID == userID {
-                    if listing.currentBidderID == nil || listing.currentBidderID?.isEmpty == true {
-                        Button("Cancel Listing") {
-                            viewModel.cancelListing(listing)
-                        }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(AppTheme.cardBackgroundAlt)
-                        .clipShape(Capsule())
-                        .disabled(viewModel.isSubmitting)
-                    } else {
-                        Text("Listing has bids and cannot be cancelled.")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(AppTheme.textTertiary)
+            } else {
+                HStack(spacing: 10) {
+                    Button("Buy Now") {
+                        viewModel.buyNow(listing)
                     }
-                } else {
-                    HStack(spacing: 10) {
-                        Button("Buy Now") {
-                            viewModel.buyNow(listing)
-                        }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(AppTheme.chipReady)
-                        .clipShape(Capsule())
-                        .disabled(viewModel.isSubmitting || listing.endsAt <= context.date)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(AppTheme.chipReady)
+                    .clipShape(Capsule())
+                    .disabled(viewModel.isSubmitting || listing.endsAt <= now)
 
-                        Button("Place Bid") {
-                            viewModel.openBidSheet(for: listing)
-                        }
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(AppTheme.cardBackgroundAlt)
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(AppTheme.cardBorder, lineWidth: 1)
-                        )
-                        .disabled(viewModel.isSubmitting || listing.endsAt <= context.date)
+                    Button("Place Bid") {
+                        viewModel.openBidSheet(for: listing)
                     }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(AppTheme.cardBackgroundAlt)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(AppTheme.cardBorder, lineWidth: 1)
+                    )
+                    .disabled(viewModel.isSubmitting || listing.endsAt <= now)
                 }
             }
-            .padding(AppTheme.cardPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .themedCard()
         }
+        .padding(AppTheme.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .themedCard()
     }
 
     private func row(_ label: String, _ value: String) -> some View {
