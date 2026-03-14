@@ -15,6 +15,7 @@ final class BuildingDetailViewModel: ObservableObject {
 
     @Published private(set) var currentBuilding: Building
     @Published private(set) var currentListing: MineMarketListing?
+    @Published private(set) var machines: [Machine] = []
     @Published private(set) var isWorking = false
     @Published var errorMessage: String?
     @Published private(set) var recipe: Recipe?
@@ -26,21 +27,6 @@ final class BuildingDetailViewModel: ObservableObject {
     private let buildingService = BuildingService()
     private let mineMarketService = MineMarketService()
     private let recipeService = RecipeService()
-
-    let mockMachines: [Machine] = [
-        Machine(
-            id: "machine-001",
-            name: "Refinery Machine",
-            level: 1,
-            efficiencyBonus: 0.0
-        ),
-        Machine(
-            id: "machine-002",
-            name: "Refinery Machine",
-            level: 2,
-            efficiencyBonus: 0.05
-        )
-    ]
 
     var onDismiss: (() -> Void)?
 
@@ -63,9 +49,41 @@ final class BuildingDetailViewModel: ObservableObject {
                         if !self.isExtractor {
                             self.loadRecipeIfNeeded()
                         }
+                        self.loadMachines()
                     }
                 case .failure:
                     break
+                }
+            }
+        }
+    }
+
+    private func loadMachines() {
+        buildingService.fetchMachines(for: userID, buildingID: currentBuilding.id) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(var list):
+                    if self.isExtractor, list.isEmpty, self.currentBuilding.abundance != nil, self.currentBuilding.stability != nil {
+                        self.buildingService.ensureFirstExtractorMachine(for: self.userID, building: self.currentBuilding) { [weak self] ensureResult in
+                            DispatchQueue.main.async {
+                                guard let self else { return }
+                                if case .success = ensureResult {
+                                    self.buildingService.fetchMachines(for: self.userID, buildingID: self.currentBuilding.id) { r in
+                                        DispatchQueue.main.async {
+                                            if case .success(let m) = r { self.machines = m }
+                                        }
+                                    }
+                                } else {
+                                    self.machines = list
+                                }
+                            }
+                        }
+                        return
+                    }
+                    self.machines = list
+                case .failure:
+                    self.machines = []
                 }
             }
         }
@@ -240,7 +258,74 @@ final class BuildingDetailViewModel: ObservableObject {
         errorMessage = nil
     }
 
+    func addMachine() {
+        isWorking = true
+        errorMessage = nil
+        buildingService.addMachine(for: userID, building: currentBuilding, isExtractor: isExtractor) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isWorking = false
+                switch result {
+                case .success: self.refreshBuilding()
+                case .failure(let error): self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func upgradeBuildingLevel() {
+        isWorking = true
+        errorMessage = nil
+        buildingService.upgradeBuildingLevel(for: userID, buildingID: currentBuilding.id) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isWorking = false
+                switch result {
+                case .success: self.refreshBuilding()
+                case .failure(let error): self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func upgradeMachine(_ machine: Machine) {
+        isWorking = true
+        errorMessage = nil
+        buildingService.upgradeMachine(for: userID, buildingID: currentBuilding.id, machineID: machine.id, isExtractor: isExtractor) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isWorking = false
+                switch result {
+                case .success: self.refreshBuilding()
+                case .failure(let error): self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
     // MARK: - Display helpers
+
+    var addMachineCost: Double {
+        BuildingService.addMachineCashCost(currentMachineCount: machines.count)
+    }
+
+    var canAddMachine: Bool {
+        machines.count < currentBuilding.capacity && (currentBuilding.isListedOnMarket ?? false) == false && (currentBuilding.isProducing ?? false) == false
+    }
+
+    var canUpgradeBuilding: Bool {
+        currentBuilding.level < BuildingService.maxBuildingLevel && (currentBuilding.isListedOnMarket ?? false) == false
+    }
+
+    func canUpgradeMachine(_ machine: Machine) -> Bool {
+        if isExtractor {
+            let a = machine.abundance ?? 0
+            let s = machine.stability ?? 0
+            return a < Machine.maxAbundanceStability || s < Machine.maxAbundanceStability
+        }
+        let out = machine.outputValuePerCycle ?? Machine.defaultOutputValuePerCycle
+        return out < Machine.maxOutputValuePerCycle
+    }
 
     func isReadyToCollect(at date: Date) -> Bool {
         guard let productionEndsAt = currentBuilding.productionEndsAt else { return false }

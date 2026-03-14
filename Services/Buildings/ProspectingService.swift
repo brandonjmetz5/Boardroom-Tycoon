@@ -346,6 +346,16 @@ final class ProspectingService {
                 ]
 
                 transaction.setData(buildingData, forDocument: newBuildingRef)
+                let firstMachineID = "machine-\(UUID().uuidString)"
+                let firstMachineData: [String: Any] = [
+                    "id": firstMachineID,
+                    "name": "Drill",
+                    "level": 0,
+                    "efficiencyBonus": 0,
+                    "abundance": abundance,
+                    "stability": stability
+                ]
+                transaction.setData(firstMachineData, forDocument: newBuildingRef.collection("machines").document(firstMachineID))
                 transaction.updateData([
                     "isComplete": true
                 ], forDocument: jobRef)

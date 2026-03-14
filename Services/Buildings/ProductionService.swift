@@ -20,12 +20,14 @@ final class ProductionService {
     func startProduction(for userID: String, buildingID: String, completion: @escaping (Result<Void, Error>) -> Void) {
         let profileRef = db.collection("playerProfiles").document(userID)
         let buildingRef = profileRef.collection("buildings").document(buildingID)
+        let machinesRef = buildingRef.collection("machines")
         let fuelRef = profileRef.collection("inventory").document(fuelInventoryDocID)
 
         db.runTransaction({ transaction, errorPointer in
             do {
                 let buildingSnapshot = try transaction.getDocument(buildingRef)
                 let fuelSnapshot = try transaction.getDocument(fuelRef)
+                let machinesSnapshot = try transaction.getDocuments(machinesRef)
 
                 guard let data = buildingSnapshot.data() else {
                     errorPointer?.pointee = NSError(
@@ -36,10 +38,21 @@ final class ProductionService {
                     return nil
                 }
 
-                guard
-                    let abundance = data["abundance"] as? Int,
-                    let stability = data["stability"] as? Int
-                else {
+                let buildingAbundance = data["abundance"] as? Int
+                let buildingStability = data["stability"] as? Int
+                let machines = machinesSnapshot.documents
+                var totalOutput: Int
+                if !machines.isEmpty {
+                    totalOutput = 0
+                    for doc in machines {
+                        let d = doc.data()
+                        let a = d["abundance"] as? Int ?? buildingAbundance ?? 50
+                        let s = d["stability"] as? Int ?? buildingStability ?? 50
+                        totalOutput += self.generateMineOutput(abundance: a, stability: s)
+                    }
+                } else if let a = buildingAbundance, let s = buildingStability {
+                    totalOutput = self.generateMineOutput(abundance: a, stability: s)
+                } else {
                     errorPointer?.pointee = NSError(
                         domain: "ProductionService",
                         code: 2000,
@@ -75,7 +88,7 @@ final class ProductionService {
                 let cycleSeconds: TimeInterval = 60 * 60
                 #endif
                 let endsAt = startedAt.addingTimeInterval(cycleSeconds)
-                let pendingOutputQuantity = Double(self.generateMineOutput(abundance: abundance, stability: stability))
+                let pendingOutputQuantity = Double(totalOutput)
 
                 transaction.updateData([
                     "isProducing": true,

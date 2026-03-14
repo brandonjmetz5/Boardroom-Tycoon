@@ -273,20 +273,96 @@ struct BuildingDetailView: View {
     private var machinesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("Machines")
+            Text("\(viewModel.machines.count) / \(viewModel.currentBuilding.capacity) installed")
+                .font(AppTheme.caption())
+                .foregroundStyle(AppTheme.textTertiary)
 
-            ForEach(viewModel.mockMachines.prefix(viewModel.currentBuilding.capacity)) { machine in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(machine.name)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    detailRow("Level", "\(machine.level)")
-                    detailRow("Efficiency Bonus", "\(Int(machine.efficiencyBonus * 100))%")
+            ForEach(viewModel.machines) { machine in
+                machineCard(machine)
+            }
+
+            if viewModel.canAddMachine {
+                Button {
+                    viewModel.addMachine()
+                } label: {
+                    HStack {
+                        Text("Add Machine")
+                        Spacer()
+                        Text(String(format: "$%.0f", viewModel.addMachineCost))
+                            .font(AppTheme.captionMedium())
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .padding(AppTheme.cardPadding)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .themedCard()
                 }
-                .padding(AppTheme.cardPadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .themedCard()
+                .buttonStyle(.plain)
+                .disabled(viewModel.isWorking)
+            }
+
+            if viewModel.canUpgradeBuilding {
+                VStack(alignment: .leading, spacing: 6) {
+                    Button {
+                        viewModel.upgradeBuildingLevel()
+                    } label: {
+                        Text("Upgrade Building (Level \(viewModel.currentBuilding.level) → \(viewModel.currentBuilding.level + 1))")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(AppTheme.accent.opacity(0.2))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.isWorking)
+                    Text("Requires: 1 Steel Beams, 1 Walls, 1 Foundation, 1 Window")
+                        .font(AppTheme.caption())
+                        .foregroundStyle(AppTheme.textTertiary)
+                }
             }
         }
+    }
+
+    private func machineCard(_ machine: Machine) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(machine.name)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Spacer()
+                if viewModel.isExtractor {
+                    if let a = machine.abundance, let s = machine.stability {
+                        Text("A:\(a) S:\(s)")
+                            .font(AppTheme.caption())
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                } else if let out = machine.outputValuePerCycle {
+                    Text(String(format: "%.1f/cycle", out))
+                        .font(AppTheme.caption())
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+            if viewModel.isExtractor {
+                detailRow("Abundance", "\(machine.abundance ?? 0)")
+                detailRow("Stability", "\(machine.stability ?? 0)")
+            } else {
+                detailRow("Output/cycle", String(format: "%.1f", machine.outputValuePerCycle ?? Machine.defaultOutputValuePerCycle))
+            }
+            detailRow("Upgrade level", "\(machine.level)")
+            if viewModel.canUpgradeMachine(machine) {
+                Button("Upgrade") {
+                    viewModel.upgradeMachine(machine)
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .disabled(viewModel.isWorking)
+            }
+        }
+        .padding(AppTheme.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .themedCard()
     }
 
     private var listingSheetView: some View {
