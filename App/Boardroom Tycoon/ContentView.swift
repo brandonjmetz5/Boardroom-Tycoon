@@ -11,29 +11,44 @@ struct ContentView: View {
     @StateObject private var viewModel = ContentViewModel()
 
     var body: some View {
-        Group {
-            if viewModel.isLoading {
-                ProgressView("Signing in...")
-                    .controlSize(.large)
-            } else if let errorMessage = viewModel.errorMessage {
-                VStack(spacing: 12) {
-                    Text("Authentication Failed")
-                        .font(.title2)
-                        .bold()
+        ZStack {
+            AppTheme.background
+                .ignoresSafeArea()
 
-                    Text(errorMessage)
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+            Group {
+                if viewModel.isLoading {
+                    VStack(spacing: 16) {
+                        ProgressView("Signing in...")
+                            .controlSize(.large)
+                            .tint(.white)
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text("Signing in...")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                } else if let errorMessage = viewModel.errorMessage {
+                    VStack(spacing: 12) {
+                        Text("Authentication Failed")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+
+                        Text(errorMessage)
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(AppTheme.textError)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                    }
+                    .padding(24)
+                } else if let userID = viewModel.userID {
+                    NavigationStack {
+                        HomeView(userID: userID)
+                    }
+                } else {
+                    Text("No user found.")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding()
                 }
-                .padding()
-            } else if let userID = viewModel.userID {
-                NavigationStack {
-                    HomeView(userID: userID)
-                }
-            } else {
-                Text("No user found.")
-                    .padding()
             }
         }
         .onAppear {

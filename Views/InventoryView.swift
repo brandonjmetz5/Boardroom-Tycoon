@@ -18,40 +18,93 @@ struct InventoryView: View {
     }
 
     var body: some View {
-        Group {
-            if viewModel.isLoading {
-                ProgressView("Loading inventory...")
-                    .controlSize(.large)
-            } else if let errorMessage = viewModel.errorMessage {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Failed to load inventory")
-                        .font(.headline)
+        ZStack {
+            AppTheme.background
+                .ignoresSafeArea()
 
-                    Text(errorMessage)
-                        .foregroundStyle(.red)
-                }
-                .padding()
-            } else {
-                List(viewModel.inventoryItems) { inventoryItem in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(inventoryItem.item.name)
-                            .font(.headline)
-
-                        Text("Quantity: \(viewModel.formattedQuantity(for: inventoryItem))")
-                            .font(.subheadline)
-
-                        Text("Category: \(inventoryItem.item.category.rawValue)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            Group {
+                if viewModel.isLoading {
+                    ProgressView("Loading inventory...")
+                        .controlSize(.large)
+                        .tint(.white)
+                        .foregroundStyle(AppTheme.textPrimary)
+                } else if let errorMessage = viewModel.errorMessage {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Failed to load inventory")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(errorMessage)
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(AppTheme.textError)
                     }
-                    .padding(.vertical, 4)
+                    .padding(AppTheme.horizontalPadding)
+                } else if viewModel.inventoryItems.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("No Items")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text("Your inventory will show here once you have items.")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .padding(AppTheme.cardPadding)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .themedCard()
+                    .padding(.horizontal, AppTheme.horizontalPadding)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(viewModel.inventoryItems) { inventoryItem in
+                                inventoryItemCard(inventoryItem: inventoryItem)
+                            }
+                        }
+                        .padding(.horizontal, AppTheme.horizontalPadding)
+                        .padding(.top, 12)
+                        .padding(.bottom, 24)
+                    }
                 }
-                .listStyle(.insetGrouped)
+            }
+        }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Inventory")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
             }
         }
         .onAppear {
             viewModel.loadInventory()
         }
+    }
+
+    private func inventoryItemCard(inventoryItem: InventoryItem) -> some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(inventoryItem.item.name)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+
+                Text("Quantity: \(viewModel.formattedQuantity(for: inventoryItem))")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+
+                Text(inventoryItem.item.category.rawValue)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.textTertiary)
+            }
+
+            Spacer()
+
+            Text(viewModel.formattedQuantity(for: inventoryItem))
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .monospacedDigit()
+        }
+        .padding(AppTheme.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .themedCard()
     }
 }
 

@@ -18,41 +18,89 @@ struct ProfileView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if viewModel.isLoading {
-                ProgressView("Loading profile...")
-                    .controlSize(.large)
-            } else if let errorMessage = viewModel.errorMessage {
-                Text("Failed to load profile")
-                    .font(.headline)
+        ZStack {
+            AppTheme.background
+                .ignoresSafeArea()
 
-                Text(errorMessage)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.leading)
-            } else if let profile = viewModel.profile {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Player ID: \(profile.id)")
-                    Text("Cash: $\(profile.cash, specifier: "%.2f")")
-                    Text("Level: \(profile.level)")
-                    Text("XP: \(profile.xp)")
-                    Text("Building Slots: \(profile.buildingSlotCount)")
-                    Text("Starter Mine Claimed: \(profile.starterMineClaimed ? "Yes" : "No")")
-                    Text("Created At: \(profile.createdAt.formatted(date: .abbreviated, time: .shortened))")
+            Group {
+                if viewModel.isLoading {
+                    ProgressView("Loading profile...")
+                        .controlSize(.large)
+                        .tint(.white)
+                        .foregroundStyle(AppTheme.textPrimary)
+                } else if let errorMessage = viewModel.errorMessage {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Failed to load profile")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(errorMessage)
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(AppTheme.textError)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .padding(AppTheme.horizontalPadding)
+                } else if let profile = viewModel.profile {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
+                            profileCard(profile: profile)
+                        }
+                        .padding(.horizontal, AppTheme.horizontalPadding)
+                        .padding(.top, 12)
+                        .padding(.bottom, 24)
+                    }
+                } else {
+                    Text("No profile found.")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding()
                 }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(12)
-
-                Spacer()
-            } else {
-                Text("No profile found.")
             }
         }
-        .padding()
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Profile")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+            }
+        }
         .onAppear {
             viewModel.loadProfile()
         }
+    }
+
+    private func profileCard(profile: PlayerProfile) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Player")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AppTheme.textMuted)
+
+            profileRow("Player ID", profile.id)
+            profileRow("Cash", "$\(profile.cash, specifier: "%.2f")")
+            profileRow("Level", "\(profile.level)")
+            profileRow("XP", "\(profile.xp)")
+            profileRow("Building Slots", "\(profile.buildingSlotCount)")
+            profileRow("Starter Mine Claimed", profile.starterMineClaimed ? "Yes" : "No")
+            profileRow("Created", profile.createdAt.formatted(date: .abbreviated, time: .shortened))
+        }
+        .padding(AppTheme.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .themedCard()
+    }
+
+    private func profileRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .top) {
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppTheme.textTertiary)
+                .frame(width: 140, alignment: .leading)
+            Text(value)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(2)
+        }
+        .padding(.vertical, 4)
     }
 }
 

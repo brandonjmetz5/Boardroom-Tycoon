@@ -14,18 +14,28 @@ struct DashboardCard<Destination: View>: View {
 
     var body: some View {
         NavigationLink(destination: destination.navigationTitle(title)) {
-            VStack(spacing: 12) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 28))
+            ZStack(alignment: .center) {
+                RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
+                    .fill(AppTheme.cardBackground)
 
-                Text(title)
-                    .font(.headline)
-                    .multilineTextAlignment(.center)
+                VStack(spacing: 12) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+
+                    Text(title)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 120)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 120)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
+                    .stroke(AppTheme.cardBorder, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -33,11 +43,16 @@ struct DashboardCard<Destination: View>: View {
 
 #Preview {
     NavigationStack {
-        DashboardCard(
-            title: "Operations",
-            systemImage: "gearshape",
-            destination: OperationsView(userID: "1625")
-        )
-        .padding()
+        ZStack {
+            AppTheme.background.ignoresSafeArea()
+        }
+        .overlay {
+            DashboardCard(
+                title: "Operations",
+                systemImage: "gearshape",
+                destination: Text("Destination")
+            )
+            .padding()
+        }
     }
 }
