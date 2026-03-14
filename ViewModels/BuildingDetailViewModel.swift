@@ -81,6 +81,23 @@ final class BuildingDetailViewModel: ObservableObject {
                         }
                         return
                     }
+                    if !self.isExtractor, list.isEmpty, self.currentBuilding.capacity >= 1 {
+                        self.buildingService.ensureFirstNonExtractorMachine(for: self.userID, building: self.currentBuilding) { [weak self] ensureResult in
+                            DispatchQueue.main.async {
+                                guard let self else { return }
+                                if case .success = ensureResult {
+                                    self.buildingService.fetchMachines(for: self.userID, buildingID: self.currentBuilding.id) { r in
+                                        DispatchQueue.main.async {
+                                            if case .success(let m) = r { self.machines = m }
+                                        }
+                                    }
+                                } else {
+                                    self.machines = list
+                                }
+                            }
+                        }
+                        return
+                    }
                     self.machines = list
                 case .failure:
                     self.machines = []
@@ -98,7 +115,12 @@ final class BuildingDetailViewModel: ObservableObject {
         }
         recipeService.fetchRecipe(byId: recipeId) { [weak self] result in
             DispatchQueue.main.async {
-                self?.recipe = (try? result.get()) ?? nil
+                guard let self else { return }
+                if let fromFirestore = try? result.get(), let r = fromFirestore {
+                    self.recipe = r
+                    return
+                }
+                self.recipe = RecipeCatalog.recipe(forId: recipeId)
             }
         }
     }

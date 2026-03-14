@@ -284,6 +284,17 @@ final class BuildingService {
                         ]
 
                         transaction.setData(buildingData, forDocument: newBuildingRef)
+
+                        let firstMachineID = "machine-\(UUID().uuidString)"
+                        let firstMachineData: [String: Any] = [
+                            "id": firstMachineID,
+                            "name": "Machine",
+                            "level": 0,
+                            "efficiencyBonus": 0,
+                            "outputValuePerCycle": Machine.defaultOutputValuePerCycle
+                        ]
+                        transaction.setData(firstMachineData, forDocument: newBuildingRef.collection("machines").document(firstMachineID))
+
                         transaction.updateData([
                             "cash": updatedCash
                         ], forDocument: profileRef)
@@ -316,8 +327,7 @@ final class BuildingService {
                 guard
                     let profileData = profileSnapshot.data(),
                     let currentCash = profileData["cash"] as? Double,
-                    let buildingData = buildingSnapshot.data(),
-                    let isListedOnMarket = buildingData["isListedOnMarket"] as? Bool
+                    let buildingData = buildingSnapshot.data()
                 else {
                     let error = NSError(
                         domain: "BuildingService",
@@ -328,6 +338,7 @@ final class BuildingService {
                     return nil
                 }
 
+                let isListedOnMarket = (buildingData["isListedOnMarket"] as? Bool) ?? false
                 if isListedOnMarket {
                     let error = NSError(
                         domain: "BuildingService",
@@ -401,6 +412,38 @@ final class BuildingService {
                 )
             }
             completion(.success(machines.sorted { $0.id < $1.id }))
+        }
+    }
+
+    /// Ensures a non-extractor building has at least one machine when empty (e.g. bought before we created first machine).
+    func ensureFirstNonExtractorMachine(for userID: String, building: Building, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard building.type != .mine && building.type != .rig && building.type != .quarry else {
+            completion(.success(()))
+            return
+        }
+        let machinesRef = db.collection("playerProfiles").document(userID).collection("buildings").document(building.id).collection("machines")
+        machinesRef.getDocuments { [weak self] snapshot, error in
+            guard self != nil else { return }
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            if let snapshot = snapshot, !snapshot.documents.isEmpty {
+                completion(.success(()))
+                return
+            }
+            let machineID = "machine-\(UUID().uuidString)"
+            let machineData: [String: Any] = [
+                "id": machineID,
+                "name": "Machine",
+                "level": 0,
+                "efficiencyBonus": 0,
+                "outputValuePerCycle": Machine.defaultOutputValuePerCycle
+            ]
+            machinesRef.document(machineID).setData(machineData) { err in
+                if let err = err { completion(.failure(err)) }
+                else { completion(.success(())) }
+            }
         }
     }
 

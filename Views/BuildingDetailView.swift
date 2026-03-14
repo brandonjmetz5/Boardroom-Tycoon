@@ -32,6 +32,7 @@ struct BuildingDetailView: View {
                         mineDetailsSection
                         productionSection
                         managementSection
+                        machinesSection
                     } else {
                         productionSectionNonExtractor
                         managementSectionNonExtractor
