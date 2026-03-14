@@ -116,8 +116,8 @@ final class BuildingDetailViewModel: ObservableObject {
         recipeService.fetchRecipe(byId: recipeId) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
-                if let fromFirestore = try? result.get(), let r = fromFirestore {
-                    self.recipe = r
+                if let fromFirestore = try? result.get() {
+                    self.recipe = fromFirestore
                     return
                 }
                 self.recipe = RecipeCatalog.recipe(forId: recipeId)
