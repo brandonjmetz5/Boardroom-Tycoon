@@ -18,46 +18,61 @@ struct OperationsView: View {
     @State private var purchaseErrorMessage: String?
     @State private var showPurchaseSheet = false
     @State private var isPurchasing = false
-
-    @State private var jobToList: ProspectingJob?
-    @State private var buyNowPriceText = ""
+    @State private var selectedEmptySlotIndex: Int?
 
     private let buildingService = BuildingService()
     private let playerProfileService = PlayerProfileService()
     private let prospectingService = ProspectingService()
     private let mineMarketService = MineMarketService()
 
+    private let columns = [
+        GridItem(.flexible(), spacing: 16)
+    ]
+
     var body: some View {
-        Group {
-            if isLoading {
-                ProgressView("Loading buildings...")
-                    .controlSize(.large)
-            } else if let loadingErrorMessage {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Failed to load buildings")
-                        .font(.headline)
+        ZStack {
+            Color(red: 0.03, green: 0.05, blue: 0.07)
+                .ignoresSafeArea()
 
-                    Text(loadingErrorMessage)
-                        .foregroundStyle(.red)
-                }
-                .padding()
-            } else {
-                List(buildingSlots) { slot in
-                    switch slot.content {
-                    case .building(let building):
-                        buildingRow(for: building)
+            Group {
+                if isLoading {
+                    ProgressView("Loading operations...")
+                        .controlSize(.large)
+                        .tint(.white)
+                        .foregroundStyle(.white)
+                } else if let loadingErrorMessage {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Failed to load operations")
+                            .font(.headline)
+                            .foregroundStyle(.white)
 
-                    case .prospecting(let job):
-                        prospectingRow(for: job)
-
-                    case .empty:
-                        emptySlotRow
+                        Text(loadingErrorMessage)
+                            .foregroundStyle(.red)
+                    }
+                    .padding()
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            headerSection
+                            summarySection
+                            slotsGridSection
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 24)
                     }
                 }
-                .listStyle(.insetGrouped)
             }
         }
-        .navigationTitle("Buildings")
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Operations")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+        }
         .onAppear {
             mineMarketService.settleExpiredMineListings { _ in }
             loadData()
@@ -65,179 +80,278 @@ struct OperationsView: View {
         .sheet(isPresented: $showPurchaseSheet) {
             purchaseSheetView
         }
-        .sheet(item: $jobToList) { job in
-            NavigationStack {
-                Form {
-                    Section("Set Buy Now Price") {
-                        TextField("Enter buy now price", text: $buyNowPriceText)
-                            .keyboardType(.decimalPad)
+    }
 
-                        if let abundance = job.revealedAbundance,
-                           let stability = job.revealedStability {
-                            Text("Resource: \(prospectingLabel(for: job.resourceType))")
-                            Text("Abundance: \(abundance)")
-                            Text("Stability: \(stability)")
-                        }
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Manage your buildings, slots, and production.")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.68))
+        }
+    }
 
-                        if let pricing = suggestedPricing(for: job) {
-                            Text("Starting Bid: $\(pricing.startingBid, specifier: "%.2f")")
-                            Text("Suggested Buy Now Range: $\(pricing.suggestedBuyNowLow, specifier: "%.2f") - $\(pricing.suggestedBuyNowHigh, specifier: "%.2f")")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+    private var summarySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 12) {
+                summaryRow
+            }
 
-                    if let purchaseErrorMessage {
-                        Section {
-                            Text(purchaseErrorMessage)
-                                .foregroundStyle(.red)
-                        }
-                    }
-                }
-                .navigationTitle("List Mine")
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Cancel") {
-                            jobToList = nil
-                            buyNowPriceText = ""
-                            purchaseErrorMessage = nil
-                        }
-                    }
+            if let purchaseErrorMessage {
+                Text(purchaseErrorMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 4)
+            }
+        }
+    }
 
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("List") {
-                            submitMineListing(job)
-                        }
-                        .disabled(isPurchasing)
-                    }
-                }
-                .overlay {
-                    if isPurchasing {
-                        ProgressView("Listing...")
-                            .padding()
-                            .background(.regularMaterial)
-                            .cornerRadius(12)
-                    }
+    private var summaryRow: some View {
+        HStack(spacing: 10) {
+            summaryPill(title: "Slots", value: "\(usedSlotsCount)/\(totalSlotsCount)")
+            summaryPill(title: "Producing", value: "\(producingCount)")
+            summaryPill(title: "Ready", value: "\(readyCount)")
+            summaryPill(title: "Listed", value: "\(listedCount)")
+        }
+    }
+
+    private func summaryPill(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.58))
+
+            Text(value)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color(red: 0.08, green: 0.11, blue: 0.15))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(0.04), lineWidth: 1)
+        )
+    }
+
+    private var slotsGridSection: some View {
+        LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(buildingSlots) { slot in
+                switch slot.content {
+                case .building(let building):
+                    buildingCard(for: building)
+
+                case .prospecting(let job):
+                    prospectingCard(for: job)
+
+                case .empty:
+                    emptySlotCard(slotIndex: slot.slotIndex)
                 }
             }
         }
     }
 
-    private func buildingRow(for building: Building) -> some View {
-        NavigationLink(destination: BuildingDetailView(userID: userID, building: building)) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(building.name)
-                    .font(.headline)
-
-                Text("Type: \(building.type.rawValue)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                Text("Level: \(building.level)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Text("Capacity: \(building.capacity)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if building.isListedOnMarket == true {
-                    Text("Listed on Market")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-            }
-            .padding(.vertical, 4)
-        }
-    }
-
-    @ViewBuilder
-    private func prospectingRow(for job: ProspectingJob) -> some View {
+    private func buildingCard(for building: Building) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Prospecting \(prospectingLabel(for: job.resourceType))")
-                    .font(.headline)
+            NavigationLink(destination: BuildingDetailView(userID: userID, building: building)) {
+                ZStack(alignment: .leading) {
+                    Image(buildingAssetName(for: building))
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156)
+                        .clipped()
+                        .opacity(0.34)
 
-                if job.isRevealed {
-                    Text("Prospecting Result Revealed")
-                        .font(.subheadline)
-                        .bold()
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(Color(red: 0.07, green: 0.10, blue: 0.13).opacity(0.76))
 
-                    if let abundance = job.revealedAbundance,
-                       let stability = job.revealedStability {
-                        Text("Abundance: \(abundance)")
-                            .font(.subheadline)
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack {
+                            Spacer()
 
-                        Text("Stability: \(stability)")
-                            .font(.subheadline)
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Button("Keep Mine") {
-                            keepProspectedMine(job)
+                            statusChip(
+                                title: buildingStatusText(for: building, now: context.date),
+                                color: buildingStatusColor(for: building, now: context.date)
+                            )
                         }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(isPurchasing)
 
-                        Button("Sell Prospect Result") {
-                            sellProspectedMine(job)
+                        Spacer()
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(building.name)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(2)
+
+                            Text(buildingFamilyLabel(for: building))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color.white.opacity(0.68))
+                                .lineLimit(1)
+
+                            Text(buildingDetailText(for: building, now: context.date))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color.white.opacity(0.56))
                         }
-                        .buttonStyle(.bordered)
-                        .disabled(isPurchasing)
-
-                        Button("List on Marketplace") {
-                            purchaseErrorMessage = nil
-                            buyNowPriceText = ""
-                            jobToList = job
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(isPurchasing)
                     }
-                } else if job.endsAt <= context.date {
-                    Text("Ready to Reveal")
-                        .font(.subheadline)
-                        .bold()
-
-                    Button("Reveal Prospecting Result") {
-                        revealProspectingJob(job)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isPurchasing)
-                } else {
-                    Text("Time Remaining: \(formattedTimeRemaining(until: job.endsAt, now: context.date))")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    Text("This slot is occupied by an active prospecting job.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    .padding(18)
                 }
-
-                if let purchaseErrorMessage, jobToList == nil {
-                    Text(purchaseErrorMessage)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
+                .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156)
+                .background(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(Color(red: 0.07, green: 0.10, blue: 0.13))
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(Color.white.opacity(0.04), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
             }
-            .padding(.vertical, 8)
+            .buttonStyle(.plain)
         }
     }
 
-    private var emptySlotRow: some View {
+    private func prospectingCard(for job: ProspectingJob) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Button {
+                handleProspectingTap(for: job, now: context.date)
+            } label: {
+                ZStack(alignment: .leading) {
+                    Image(prospectingAssetName(for: job))
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156)
+                        .clipped()
+                        .opacity(0.34)
+
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(Color(red: 0.08, green: 0.11, blue: 0.14).opacity(0.78))
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack {
+                            Spacer()
+
+                            statusChip(
+                                title: job.endsAt <= context.date ? "Ready" : "Prospecting",
+                                color: job.endsAt <= context.date
+                                    ? Color(red: 0.24, green: 0.62, blue: 0.44)
+                                    : Color(red: 0.30, green: 0.53, blue: 0.78)
+                            )
+                        }
+
+                        Spacer()
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(prospectingLabel(for: job.resourceType))
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(2)
+
+                            Text("Prospecting")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color.white.opacity(0.68))
+
+                            if job.endsAt <= context.date {
+                                Text("Tap to reveal")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(Color.white.opacity(0.56))
+                            } else {
+                                Text(formattedTimeRemaining(until: job.endsAt, now: context.date))
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(Color.white.opacity(0.56))
+                            }
+                        }
+                    }
+                    .padding(18)
+                }
+                .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156)
+                .background(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(Color(red: 0.08, green: 0.11, blue: 0.14))
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(Color.white.opacity(0.04), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(isPurchasing)
+        }
+    }
+
+    private func emptySlotCard(slotIndex: Int) -> some View {
         Button {
             purchaseErrorMessage = nil
+            selectedEmptySlotIndex = slotIndex
             showPurchaseSheet = true
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Empty Slot")
-                    .font(.headline)
+            ZStack(alignment: .leading) {
+                Image("icon_blueprint")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156)
+                    .clipped()
+                    .opacity(0.34)
 
-                Text("Tap to use this slot")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(Color(red: 0.07, green: 0.10, blue: 0.13).opacity(0.74))
+
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Spacer()
+
+                        statusChip(
+                            title: "Available",
+                            color: Color(red: 0.37, green: 0.49, blue: 0.78)
+                        )
+                    }
+
+                    Spacer()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Open Slot")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white)
+
+                        Text("Build or Prospect")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.68))
+                    }
+                }
+                .padding(18)
             }
-            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156)
+            .background(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(Color(red: 0.07, green: 0.10, blue: 0.13))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .stroke(Color.white.opacity(0.04), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    private func statusChip(title: String, color: Color) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(color.opacity(0.92))
+            )
     }
 
     private var purchaseSheetView: some View {
@@ -252,6 +366,7 @@ struct OperationsView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Close") {
                         showPurchaseSheet = false
+                        selectedEmptySlotIndex = nil
                     }
                 }
             }
@@ -296,7 +411,7 @@ struct OperationsView: View {
                     }
                     .padding(.vertical, 4)
                 }
-                .disabled(isPurchasing)
+                .disabled(isPurchasing || selectedEmptySlotIndex == nil)
             }
         }
     }
@@ -326,45 +441,63 @@ struct OperationsView: View {
             }
             .padding(.vertical, 4)
         }
-        .disabled(isPurchasing)
+        .disabled(isPurchasing || selectedEmptySlotIndex == nil)
     }
 
     private var activeProspectingJobs: [ProspectingJob] {
         prospectingJobs.filter { !$0.isComplete }
     }
 
+    private var usedSlotsCount: Int {
+        buildings.count + activeProspectingJobs.count
+    }
+
+    private var totalSlotsCount: Int {
+        profile?.buildingSlotCount ?? usedSlotsCount
+    }
+
+    private var producingCount: Int {
+        buildings.filter { $0.isProducing == true && !isReadyToCollect(building: $0, now: Date()) }.count
+    }
+
+    private var readyCount: Int {
+        buildings.filter { isReadyToCollect(building: $0, now: Date()) }.count
+    }
+
+    private var listedCount: Int {
+        buildings.filter { $0.isListedOnMarket == true }.count
+    }
+
     private var buildingSlots: [BuildingSlot] {
         let totalSlots = profile?.buildingSlotCount ?? buildings.count
         var slots: [BuildingSlot] = []
 
-        for building in buildings {
-            slots.append(
-                BuildingSlot(
-                    id: "slot-building-\(building.id)",
-                    content: .building(building)
+        for slotIndex in 0..<totalSlots {
+            if let building = buildings.first(where: { $0.slotIndex == slotIndex }) {
+                slots.append(
+                    BuildingSlot(
+                        id: "slot-building-\(building.id)",
+                        slotIndex: slotIndex,
+                        content: .building(building)
+                    )
                 )
-            )
-        }
-
-        for job in activeProspectingJobs {
-            slots.append(
-                BuildingSlot(
-                    id: "slot-prospecting-\(job.id)",
-                    content: .prospecting(job)
+            } else if let job = activeProspectingJobs.first(where: { $0.slotIndex == slotIndex }) {
+                slots.append(
+                    BuildingSlot(
+                        id: "slot-prospecting-\(job.id)",
+                        slotIndex: slotIndex,
+                        content: .prospecting(job)
+                    )
                 )
-            )
-        }
-
-        let usedSlots = buildings.count + activeProspectingJobs.count
-        let emptySlotCount = max(0, totalSlots - usedSlots)
-
-        for index in 0..<emptySlotCount {
-            slots.append(
-                BuildingSlot(
-                    id: "slot-empty-\(index)",
-                    content: .empty
+            } else {
+                slots.append(
+                    BuildingSlot(
+                        id: "slot-empty-\(slotIndex)",
+                        slotIndex: slotIndex,
+                        content: .empty
+                    )
                 )
-            )
+            }
         }
 
         return slots
@@ -421,16 +554,26 @@ struct OperationsView: View {
     }
 
     private func purchaseBuilding(_ purchasableBuilding: PurchasableBuilding) {
+        guard let selectedEmptySlotIndex else {
+            purchaseErrorMessage = "Select an empty slot first."
+            return
+        }
+
         isPurchasing = true
         purchaseErrorMessage = nil
 
-        buildingService.purchaseBuilding(for: userID, purchasableBuilding: purchasableBuilding) { result in
+        buildingService.purchaseBuilding(
+            for: userID,
+            purchasableBuilding: purchasableBuilding,
+            slotIndex: selectedEmptySlotIndex
+        ) { result in
             DispatchQueue.main.async {
                 self.isPurchasing = false
 
                 switch result {
                 case .success:
                     self.showPurchaseSheet = false
+                    self.selectedEmptySlotIndex = nil
                     self.loadData()
                 case .failure(let error):
                     self.purchaseErrorMessage = error.localizedDescription
@@ -440,16 +583,26 @@ struct OperationsView: View {
     }
 
     private func startProspecting(_ resourceType: ResourceType) {
+        guard let selectedEmptySlotIndex else {
+            purchaseErrorMessage = "Select an empty slot first."
+            return
+        }
+
         isPurchasing = true
         purchaseErrorMessage = nil
 
-        prospectingService.startProspecting(for: userID, resourceType: resourceType) { result in
+        prospectingService.startProspecting(
+            for: userID,
+            resourceType: resourceType,
+            slotIndex: selectedEmptySlotIndex
+        ) { result in
             DispatchQueue.main.async {
                 self.isPurchasing = false
 
                 switch result {
                 case .success:
                     self.showPurchaseSheet = false
+                    self.selectedEmptySlotIndex = nil
                     self.loadData()
                 case .failure(let error):
                     self.purchaseErrorMessage = error.localizedDescription
@@ -476,65 +629,69 @@ struct OperationsView: View {
         }
     }
 
-    private func keepProspectedMine(_ job: ProspectingJob) {
-        isPurchasing = true
-        purchaseErrorMessage = nil
-
-        prospectingService.keepProspectedMine(for: userID, job: job) { result in
-            DispatchQueue.main.async {
-                self.isPurchasing = false
-
-                switch result {
-                case .success:
-                    self.loadData()
-                case .failure(let error):
-                    self.purchaseErrorMessage = error.localizedDescription
-                }
-            }
+    private func handleProspectingTap(for job: ProspectingJob, now: Date) {
+        if job.endsAt <= now {
+            revealProspectingJob(job)
         }
     }
 
-    private func sellProspectedMine(_ job: ProspectingJob) {
-        isPurchasing = true
-        purchaseErrorMessage = nil
-
-        prospectingService.sellProspectedMine(for: userID, job: job) { result in
-            DispatchQueue.main.async {
-                self.isPurchasing = false
-
-                switch result {
-                case .success:
-                    self.loadData()
-                case .failure(let error):
-                    self.purchaseErrorMessage = error.localizedDescription
-                }
-            }
+    private func isReadyToCollect(building: Building, now: Date) -> Bool {
+        guard
+            building.isProducing == true,
+            let productionEndsAt = building.productionEndsAt
+        else {
+            return false
         }
+
+        return productionEndsAt <= now
     }
 
-    private func submitMineListing(_ job: ProspectingJob) {
-        guard let buyNowPrice = Double(buyNowPriceText), buyNowPrice > 0 else {
-            purchaseErrorMessage = "Enter a valid buy now price."
-            return
+    private func buildingStatusText(for building: Building, now: Date) -> String {
+        if building.isListedOnMarket == true {
+            return "Listed"
         }
 
-        isPurchasing = true
-        purchaseErrorMessage = nil
-
-        prospectingService.listProspectedMine(for: userID, job: job, buyNowPrice: buyNowPrice) { result in
-            DispatchQueue.main.async {
-                self.isPurchasing = false
-
-                switch result {
-                case .success:
-                    self.jobToList = nil
-                    self.buyNowPriceText = ""
-                    self.loadData()
-                case .failure(let error):
-                    self.purchaseErrorMessage = error.localizedDescription
-                }
-            }
+        if isReadyToCollect(building: building, now: now) {
+            return "Ready"
         }
+
+        if building.isProducing == true {
+            return "Producing"
+        }
+
+        return "Idle"
+    }
+
+    private func buildingStatusColor(for building: Building, now: Date) -> Color {
+        if building.isListedOnMarket == true {
+            return Color(red: 0.42, green: 0.37, blue: 0.78)
+        }
+
+        if isReadyToCollect(building: building, now: now) {
+            return Color(red: 0.24, green: 0.62, blue: 0.44)
+        }
+
+        if building.isProducing == true {
+            return Color(red: 0.76, green: 0.55, blue: 0.22)
+        }
+
+        return Color(red: 0.34, green: 0.39, blue: 0.47)
+    }
+
+    private func buildingDetailText(for building: Building, now: Date) -> String {
+        if building.isListedOnMarket == true {
+            return "Level \(building.level)"
+        }
+
+        if isReadyToCollect(building: building, now: now) {
+            return "Ready to collect"
+        }
+
+        if building.isProducing == true, let productionEndsAt = building.productionEndsAt {
+            return formattedTimeRemaining(until: productionEndsAt, now: now)
+        }
+
+        return "Level \(building.level)"
     }
 
     private func formattedTimeRemaining(until endDate: Date, now: Date) -> String {
@@ -542,22 +699,6 @@ struct OperationsView: View {
         let minutes = remainingSeconds / 60
         let seconds = remainingSeconds % 60
         return String(format: "%02d:%02d", minutes, seconds)
-    }
-    
-    private func suggestedPricing(for job: ProspectingJob) -> (startingBid: Double, suggestedBuyNowLow: Double, suggestedBuyNowHigh: Double)? {
-        guard
-            let abundance = job.revealedAbundance,
-            let stability = job.revealedStability
-        else {
-            return nil
-        }
-
-        return prospectingService.suggestedMarketPricing(
-            for: job.resourceType,
-            level: 1,
-            abundance: abundance,
-            stability: stability
-        )
     }
 
     private func prospectingLabel(for resourceType: ResourceType) -> String {
@@ -578,8 +719,156 @@ struct OperationsView: View {
             return resourceType.rawValue
         }
     }
+
+    private func buildingFamilyLabel(for building: Building) -> String {
+        if let resourceType = building.resourceType {
+            switch resourceType {
+            case .gold:
+                return "Gold"
+            case .silver:
+                return "Silver"
+            case .diamond:
+                return "Diamond"
+            case .oil:
+                return "Oil"
+            case .coal:
+                return "Coal"
+            case .iron:
+                return "Iron"
+            default:
+                return building.type.rawValue
+            }
+        }
+
+        return building.type.rawValue
+    }
+
+    private func buildingAssetName(for building: Building) -> String {
+        let lowercasedName = building.name.lowercased()
+
+        if lowercasedName.contains("stone quarry") {
+            return "icon_stone_quarry"
+        }
+
+        if lowercasedName.contains("sand quarry") {
+            return "icon_sand_quarry"
+        }
+
+        if lowercasedName.contains("gravel quarry") {
+            return "icon_gravel_quarry"
+        }
+
+        if lowercasedName.contains("gold refinery") {
+            return "icon_gold_refinery"
+        }
+
+        if lowercasedName.contains("silver refinery") {
+            return "icon_silver_refinery"
+        }
+
+        if lowercasedName.contains("diamond refinery") {
+            return "icon_diamond_refinery"
+        }
+
+        if lowercasedName.contains("coal refinery") {
+            return "icon_coal_refinery"
+        }
+
+        if lowercasedName.contains("oil refinery") {
+            return "icon_oil_refinery"
+        }
+
+        if lowercasedName.contains("fuel processing plant") {
+            return "icon_fuel_processing_plant"
+        }
+
+        if lowercasedName.contains("construction materials") {
+            return "icon_construction_materials_factory"
+        }
+
+        if lowercasedName.contains("materials depot") {
+            return "icon_materials_depot"
+        }
+
+        if lowercasedName.contains("tech plant") {
+            return "icon_tech_plant"
+        }
+
+        if lowercasedName.contains("fabrication plant") {
+            return "icon_fabrication_plant"
+        }
+
+        if lowercasedName.contains("iron bar factory") {
+            return "icon_iron_bar_factory"
+        }
+
+        if lowercasedName.contains("diamond processing plant") {
+            return "icon_diamond_processing_plant"
+        }
+
+        if lowercasedName.contains("silver processing plant") {
+            return "icon_silver_processing_plant"
+        }
+
+        if lowercasedName.contains("oil rig") {
+            return "icon_oil_rig"
+        }
+
+        if lowercasedName.contains("coal mine") {
+            return "icon_raw_coal_mine"
+        }
+
+        if lowercasedName.contains("silver mine") {
+            return "icon_raw_silver_mine"
+        }
+
+        if lowercasedName.contains("diamond mine") {
+            return "icon_raw_diamond_mine"
+        }
+
+        if lowercasedName.contains("gold mine") {
+            return "icon_gold_refinery"
+        }
+
+        if lowercasedName.contains("iron mine") {
+            return "icon_iron_bar_factory"
+        }
+
+        return "icon_blueprint"
+    }
+
+    private func prospectingAssetName(for job: ProspectingJob) -> String {
+        switch job.resourceType {
+        case .gold:
+            return "icon_gold_refinery"
+        case .silver:
+            return "icon_raw_silver_mine"
+        case .diamond:
+            return "icon_raw_diamond_mine"
+        case .oil:
+            return "icon_oil_rig"
+        case .coal:
+            return "icon_raw_coal_mine"
+        case .iron:
+            return "icon_iron_bar_factory"
+        default:
+            return "icon_blueprint"
+        }
+    }
 }
 
+//private struct BuildingSlot: Identifiable {
+//    let id: String
+//    let slotIndex: Int
+//    let content: Content
+//
+//    enum Content {
+//        case building(Building)
+//        case prospecting(ProspectingJob)
+//        case empty
+//    }
+//}
+//
 #Preview {
     NavigationStack {
         OperationsView(userID: "demo-user-id-12345")

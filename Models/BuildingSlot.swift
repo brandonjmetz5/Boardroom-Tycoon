@@ -15,5 +15,6 @@ enum BuildingSlotContent {
 
 struct BuildingSlot: Identifiable {
     let id: String
+    let slotIndex: Int
     let content: BuildingSlotContent
 }

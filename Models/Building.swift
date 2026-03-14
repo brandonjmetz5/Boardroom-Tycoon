@@ -13,6 +13,7 @@ struct Building: Identifiable {
     let type: BuildingType
     var level: Int
     var capacity: Int
+    var slotIndex: Int
 
     var resourceType: ResourceType?
     var abundance: Int?

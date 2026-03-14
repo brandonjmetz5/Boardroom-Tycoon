@@ -40,6 +40,7 @@ final class ProspectingService {
                     return nil
                 }
 
+                let slotIndex = data["slotIndex"] as? Int ?? Int.max
                 let revealedAbundance = data["revealedAbundance"] as? Int
                 let revealedStability = data["revealedStability"] as? Int
 
@@ -48,6 +49,7 @@ final class ProspectingService {
                     resourceType: resourceType,
                     startedAt: startedAtTimestamp.dateValue(),
                     endsAt: endsAtTimestamp.dateValue(),
+                    slotIndex: slotIndex,
                     isComplete: isComplete,
                     isRevealed: isRevealed,
                     revealedAbundance: revealedAbundance,
@@ -55,11 +57,16 @@ final class ProspectingService {
                 )
             }
 
-            completion(.success(jobs))
+            completion(.success(jobs.sorted { $0.slotIndex < $1.slotIndex }))
         }
     }
 
-    func startProspecting(for userID: String, resourceType: ResourceType, completion: @escaping (Result<Void, Error>) -> Void) {
+    func startProspecting(
+        for userID: String,
+        resourceType: ResourceType,
+        slotIndex: Int,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
         let profileRef = db.collection("playerProfiles").document(userID)
         let buildingsRef = profileRef.collection("buildings")
         let jobsRef = profileRef.collection("prospectingJobs")
@@ -137,7 +144,7 @@ final class ProspectingService {
 
                         let jobRef = jobsRef.document("prospecting-\(UUID().uuidString)")
                         let startedAt = Date()
-                        let endsAt = startedAt.addingTimeInterval(10) // temporary 10 seconds for testing
+                        let endsAt = startedAt.addingTimeInterval(10)
                         // let endsAt = startedAt.addingTimeInterval(60 * 60 * 4)
 
                         let jobData: [String: Any] = [
@@ -145,6 +152,7 @@ final class ProspectingService {
                             "resourceType": resourceType.rawValue,
                             "startedAt": Timestamp(date: startedAt),
                             "endsAt": Timestamp(date: endsAt),
+                            "slotIndex": slotIndex,
                             "isComplete": false,
                             "isRevealed": false
                         ]
@@ -171,10 +179,10 @@ final class ProspectingService {
     }
 
     func revealProspectingJob(for userID: String, jobID: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        let jobRef = db.collection("playerProfiles")
-            .document(userID)
-            .collection("prospectingJobs")
-            .document(jobID)
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let jobRef = profileRef.collection("prospectingJobs").document(jobID)
+        let buildingsRef = profileRef.collection("buildings")
+        let newBuildingRef = buildingsRef.document("building-\(UUID().uuidString)")
 
         db.runTransaction({ transaction, errorPointer in
             do {
@@ -182,7 +190,10 @@ final class ProspectingService {
 
                 guard
                     let jobData = jobSnapshot.data(),
+                    let resourceTypeRawValue = jobData["resourceType"] as? String,
+                    let resourceType = ResourceType(rawValue: resourceTypeRawValue),
                     let endsAtTimestamp = jobData["endsAt"] as? Timestamp,
+                    let slotIndex = jobData["slotIndex"] as? Int,
                     let isComplete = jobData["isComplete"] as? Bool,
                     let isRevealed = jobData["isRevealed"] as? Bool
                 else {
@@ -205,16 +216,6 @@ final class ProspectingService {
                     return nil
                 }
 
-                if isRevealed {
-                    let error = NSError(
-                        domain: "ProspectingService",
-                        code: 3012,
-                        userInfo: [NSLocalizedDescriptionKey: "This prospecting job has already been revealed."]
-                    )
-                    errorPointer?.pointee = error
-                    return nil
-                }
-
                 if endsAtTimestamp.dateValue() > Date() {
                     let error = NSError(
                         domain: "ProspectingService",
@@ -225,13 +226,42 @@ final class ProspectingService {
                     return nil
                 }
 
-                let abundance = Int.random(in: 50...100)
-                let stability = Int.random(in: 50...100)
+                let abundance: Int
+                let stability: Int
 
+                if isRevealed,
+                   let existingAbundance = jobData["revealedAbundance"] as? Int,
+                   let existingStability = jobData["revealedStability"] as? Int {
+                    abundance = existingAbundance
+                    stability = existingStability
+                } else {
+                    abundance = Int.random(in: 50...100)
+                    stability = Int.random(in: 50...100)
+                }
+
+                let buildingName = self.buildingName(for: resourceType)
+
+                let buildingData: [String: Any] = [
+                    "id": newBuildingRef.documentID,
+                    "name": buildingName,
+                    "type": self.buildingType(for: resourceType).rawValue,
+                    "level": 1,
+                    "capacity": 1,
+                    "slotIndex": slotIndex,
+                    "resourceType": resourceType.rawValue,
+                    "abundance": abundance,
+                    "stability": stability,
+                    "isStarterMine": false,
+                    "isListedOnMarket": false,
+                    "marketListingID": NSNull()
+                ]
+
+                transaction.setData(buildingData, forDocument: newBuildingRef)
                 transaction.updateData([
                     "isRevealed": true,
                     "revealedAbundance": abundance,
-                    "revealedStability": stability
+                    "revealedStability": stability,
+                    "isComplete": true
                 ], forDocument: jobRef)
 
                 return nil
@@ -263,6 +293,7 @@ final class ProspectingService {
                     let jobData = jobSnapshot.data(),
                     let resourceTypeRawValue = jobData["resourceType"] as? String,
                     let resourceType = ResourceType(rawValue: resourceTypeRawValue),
+                    let slotIndex = jobData["slotIndex"] as? Int,
                     let isComplete = jobData["isComplete"] as? Bool,
                     let isRevealed = jobData["isRevealed"] as? Bool,
                     let abundance = jobData["revealedAbundance"] as? Int,
@@ -305,6 +336,7 @@ final class ProspectingService {
                     "type": self.buildingType(for: resourceType).rawValue,
                     "level": 1,
                     "capacity": 1,
+                    "slotIndex": slotIndex,
                     "resourceType": resourceType.rawValue,
                     "abundance": abundance,
                     "stability": stability,
@@ -331,7 +363,7 @@ final class ProspectingService {
             }
         }
     }
-    
+
     func listProspectedMine(for userID: String, job: ProspectingJob, buyNowPrice: Double, completion: @escaping (Result<Void, Error>) -> Void) {
         let profileRef = db.collection("playerProfiles").document(userID)
         let jobRef = profileRef.collection("prospectingJobs").document(job.id)
@@ -347,6 +379,7 @@ final class ProspectingService {
                     let jobData = jobSnapshot.data(),
                     let resourceTypeRawValue = jobData["resourceType"] as? String,
                     let resourceType = ResourceType(rawValue: resourceTypeRawValue),
+                    let slotIndex = jobData["slotIndex"] as? Int,
                     let isComplete = jobData["isComplete"] as? Bool,
                     let isRevealed = jobData["isRevealed"] as? Bool,
                     let abundance = jobData["revealedAbundance"] as? Int,
@@ -394,7 +427,7 @@ final class ProspectingService {
                 let buildingName = self.buildingName(for: resourceType)
                 let startingBid = self.startingBid(for: resourceType, level: 1, abundance: abundance, stability: stability)
                 let createdAt = Date()
-                //let endsAt = createdAt.addingTimeInterval(60 * 60 * 24)
+                // let endsAt = createdAt.addingTimeInterval(60 * 60 * 24)
                 let endsAt = createdAt.addingTimeInterval(60)
 
                 let buildingData: [String: Any] = [
@@ -403,6 +436,7 @@ final class ProspectingService {
                     "type": self.buildingType(for: resourceType).rawValue,
                     "level": 1,
                     "capacity": 1,
+                    "slotIndex": slotIndex,
                     "resourceType": resourceType.rawValue,
                     "abundance": abundance,
                     "stability": stability,
@@ -516,7 +550,7 @@ final class ProspectingService {
             }
         }
     }
-    
+
     func suggestedMarketPricing(for resourceType: ResourceType, level: Int, abundance: Int, stability: Int) -> (startingBid: Double, suggestedBuyNowLow: Double, suggestedBuyNowHigh: Double) {
         let startingBid = self.startingBid(for: resourceType, level: level, abundance: abundance, stability: stability)
         let suggestedBuyNowLow = startingBid * 1.35
@@ -524,7 +558,7 @@ final class ProspectingService {
 
         return (startingBid, suggestedBuyNowLow, suggestedBuyNowHigh)
     }
-    
+
     private func startingBid(for resourceType: ResourceType, level: Int, abundance: Int, stability: Int) -> Double {
         let baseValue: Double
 

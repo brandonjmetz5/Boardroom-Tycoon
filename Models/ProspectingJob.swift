@@ -12,6 +12,7 @@ struct ProspectingJob: Identifiable {
     let resourceType: ResourceType
     let startedAt: Date
     let endsAt: Date
+    let slotIndex: Int
     var isComplete: Bool
     var isRevealed: Bool
     var revealedAbundance: Int?

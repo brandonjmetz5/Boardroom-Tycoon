@@ -529,6 +529,7 @@ struct BuildingDetailView: View {
                 type: .mine,
                 level: 1,
                 capacity: 1,
+                slotIndex: 1,
                 resourceType: .gold,
                 abundance: 50,
                 stability: 55,
@@ -539,6 +540,7 @@ struct BuildingDetailView: View {
                 pendingOutputQuantity: nil,
                 isListedOnMarket: false,
                 marketListingID: nil
+                
             )
         )
     }
