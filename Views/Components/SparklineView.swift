@@ -43,7 +43,6 @@ struct SparklineView: View {
                     }
                 }
                 .stroke(lineColor.opacity(0.9), lineWidth: 1.5)
-                .antialiased(true)
             }
         }
         .frame(height: height)
