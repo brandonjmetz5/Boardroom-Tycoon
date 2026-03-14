@@ -23,101 +23,110 @@ final class ProductionService {
         let machinesRef = buildingRef.collection("machines")
         let fuelRef = profileRef.collection("inventory").document(fuelInventoryDocID)
 
-        db.runTransaction({ transaction, errorPointer in
-            do {
-                let buildingSnapshot = try transaction.getDocument(buildingRef)
-                let fuelSnapshot = try transaction.getDocument(fuelRef)
-                let machinesSnapshot = try transaction.getDocuments(machinesRef)
+        // Transaction cannot query collections; fetch building + machines first, compute output, then run transaction.
+        buildingRef.getDocument { [weak self] buildingSnapshot, buildingError in
+            guard let self else { return }
+            if let buildingError = buildingError {
+                completion(.failure(buildingError))
+                return
+            }
+            guard let buildingData = buildingSnapshot?.data() else {
+                completion(.failure(NSError(domain: "ProductionService", code: 2000, userInfo: [NSLocalizedDescriptionKey: "Building not found."])))
+                return
+            }
+            let buildingAbundance = buildingData["abundance"] as? Int
+            let buildingStability = buildingData["stability"] as? Int
 
-                guard let data = buildingSnapshot.data() else {
-                    errorPointer?.pointee = NSError(
-                        domain: "ProductionService",
-                        code: 2000,
-                        userInfo: [NSLocalizedDescriptionKey: "Building not found."]
-                    )
-                    return nil
+            machinesRef.getDocuments { [weak self] machinesSnapshot, machinesError in
+                guard let self else { return }
+                if let machinesError = machinesError {
+                    completion(.failure(machinesError))
+                    return
                 }
-
-                let buildingAbundance = data["abundance"] as? Int
-                let buildingStability = data["stability"] as? Int
-                let machines = machinesSnapshot.documents
-                var totalOutput: Int
-                if !machines.isEmpty {
-                    totalOutput = 0
-                    for doc in machines {
+                let machineDocs = machinesSnapshot?.documents ?? []
+                let totalOutput: Int
+                if !machineDocs.isEmpty {
+                    totalOutput = machineDocs.reduce(0) { sum, doc in
                         let d = doc.data()
                         let a = d["abundance"] as? Int ?? buildingAbundance ?? 50
                         let s = d["stability"] as? Int ?? buildingStability ?? 50
-                        totalOutput += self.generateMineOutput(abundance: a, stability: s)
+                        return sum + self.generateMineOutput(abundance: a, stability: s)
                     }
                 } else if let a = buildingAbundance, let s = buildingStability {
                     totalOutput = self.generateMineOutput(abundance: a, stability: s)
                 } else {
-                    errorPointer?.pointee = NSError(
-                        domain: "ProductionService",
-                        code: 2000,
-                        userInfo: [NSLocalizedDescriptionKey: "Missing mine stat data."]
-                    )
-                    return nil
+                    completion(.failure(NSError(domain: "ProductionService", code: 2000, userInfo: [NSLocalizedDescriptionKey: "Missing mine stat data."])))
+                    return
                 }
 
-                let isListedOnMarket = data["isListedOnMarket"] as? Bool ?? false
-                if isListedOnMarket {
-                    errorPointer?.pointee = NSError(
-                        domain: "ProductionService",
-                        code: 2004,
-                        userInfo: [NSLocalizedDescriptionKey: "This mine is listed on the market and cannot produce right now."]
-                    )
-                    return nil
+                self.db.runTransaction({ transaction, errorPointer in
+                    do {
+                        let buildingSnap = try transaction.getDocument(buildingRef)
+                        let fuelSnapshot = try transaction.getDocument(fuelRef)
+
+                        guard let data = buildingSnap.data() else {
+                            errorPointer?.pointee = NSError(domain: "ProductionService", code: 2000, userInfo: [NSLocalizedDescriptionKey: "Building not found."])
+                            return nil
+                        }
+
+                        let isListedOnMarket = data["isListedOnMarket"] as? Bool ?? false
+                        if isListedOnMarket {
+                            errorPointer?.pointee = NSError(
+                                domain: "ProductionService",
+                                code: 2004,
+                                userInfo: [NSLocalizedDescriptionKey: "This mine is listed on the market and cannot produce right now."]
+                            )
+                            return nil
+                        }
+
+                        let fuelQuantity = fuelSnapshot.data()?["quantity"] as? Double ?? 0
+                        if fuelQuantity < Self.fuelRequiredPerCycle {
+                            errorPointer?.pointee = NSError(
+                                domain: "ProductionService",
+                                code: 2006,
+                                userInfo: [NSLocalizedDescriptionKey: "Not enough fuel. Each production cycle costs \(Int(Self.fuelRequiredPerCycle)) Fuel Cells."]
+                            )
+                            return nil
+                        }
+
+                        let startedAt = Date()
+                        #if DEBUG
+                        let cycleSeconds: TimeInterval = 10
+                        #else
+                        let cycleSeconds: TimeInterval = 60 * 60
+                        #endif
+                        let endsAt = startedAt.addingTimeInterval(cycleSeconds)
+
+                        transaction.updateData([
+                            "isProducing": true,
+                            "productionStartedAt": Timestamp(date: startedAt),
+                            "productionEndsAt": Timestamp(date: endsAt),
+                            "pendingOutputQuantity": Double(totalOutput)
+                        ], forDocument: buildingRef)
+
+                        let newFuelQuantity = fuelQuantity - Self.fuelRequiredPerCycle
+                        let fuelData: [String: Any] = fuelSnapshot.data() ?? [
+                            "id": self.fuelInventoryDocID,
+                            "name": "Fuel Cell",
+                            "category": "Fuel",
+                            "isFractional": false
+                        ]
+                        var updatedFuel = fuelData
+                        updatedFuel["quantity"] = newFuelQuantity
+                        transaction.setData(updatedFuel, forDocument: fuelRef)
+
+                        return nil
+                    } catch let error as NSError {
+                        errorPointer?.pointee = error
+                        return nil
+                    }
+                }) { _, error in
+                    if let error = error {
+                        completion(.failure(error))
+                    } else {
+                        completion(.success(()))
+                    }
                 }
-
-                let fuelQuantity = fuelSnapshot.data()?["quantity"] as? Double ?? 0
-                if fuelQuantity < Self.fuelRequiredPerCycle {
-                    errorPointer?.pointee = NSError(
-                        domain: "ProductionService",
-                        code: 2006,
-                        userInfo: [NSLocalizedDescriptionKey: "Not enough fuel. Each production cycle costs \(Int(Self.fuelRequiredPerCycle)) Fuel Cells."]
-                    )
-                    return nil
-                }
-
-                let startedAt = Date()
-                #if DEBUG
-                let cycleSeconds: TimeInterval = 10
-                #else
-                let cycleSeconds: TimeInterval = 60 * 60
-                #endif
-                let endsAt = startedAt.addingTimeInterval(cycleSeconds)
-                let pendingOutputQuantity = Double(totalOutput)
-
-                transaction.updateData([
-                    "isProducing": true,
-                    "productionStartedAt": Timestamp(date: startedAt),
-                    "productionEndsAt": Timestamp(date: endsAt),
-                    "pendingOutputQuantity": pendingOutputQuantity
-                ], forDocument: buildingRef)
-
-                let newFuelQuantity = fuelQuantity - Self.fuelRequiredPerCycle
-                let fuelData: [String: Any] = fuelSnapshot.data() ?? [
-                    "id": self.fuelInventoryDocID,
-                    "name": "Fuel Cell",
-                    "category": "Fuel",
-                    "isFractional": false
-                ]
-                var updatedFuel = fuelData
-                updatedFuel["quantity"] = newFuelQuantity
-                transaction.setData(updatedFuel, forDocument: fuelRef)
-
-                return nil
-            } catch let error as NSError {
-                errorPointer?.pointee = error
-                return nil
-            }
-        }) { _, error in
-            if let error = error {
-                completion(.failure(error))
-            } else {
-                completion(.success(()))
             }
         }
     }
