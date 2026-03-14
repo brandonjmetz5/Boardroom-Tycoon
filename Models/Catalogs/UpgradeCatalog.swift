@@ -107,6 +107,7 @@ enum UpgradeCatalog {
         SeedItem(id: "machine-gear", name: "Machine Gear", category: "Component", isFractional: false),
         SeedItem(id: "robotic-machine-arms", name: "Robotic Machine Arms", category: "Component", isFractional: false),
         SeedItem(id: "fuel-cell", name: "Fuel Cell", category: "Fuel", isFractional: false),
+        SeedItem(id: "machinery-fuel-pack", name: "Machinery Fuel Pack", category: "Fuel", isFractional: false),
         SeedItem(id: "raw-gold", name: "Raw Gold", category: "Raw Material", isFractional: false),
         SeedItem(id: "raw-silver", name: "Raw Silver", category: "Raw Material", isFractional: false),
         SeedItem(id: "raw-diamonds", name: "Raw Diamonds", category: "Raw Material", isFractional: false),
@@ -114,8 +115,11 @@ enum UpgradeCatalog {
         SeedItem(id: "raw-coal", name: "Raw Coal", category: "Raw Material", isFractional: false),
         SeedItem(id: "raw-iron", name: "Raw Iron", category: "Raw Material", isFractional: false),
         SeedItem(id: "raw-stone", name: "Raw Stone", category: "Raw Material", isFractional: false),
+        SeedItem(id: "raw-sand", name: "Raw Sand", category: "Raw Material", isFractional: false),
+        SeedItem(id: "raw-gravel", name: "Raw Gravel", category: "Raw Material", isFractional: false),
         SeedItem(id: "gold-bar", name: "Gold Bar", category: "Refined Material", isFractional: true),
         SeedItem(id: "cut-diamond", name: "Cut Diamond", category: "Refined Material", isFractional: false),
         SeedItem(id: "steel", name: "Steel", category: "Building Material", isFractional: false),
+        SeedItem(id: "industrial-heat-blocks", name: "Industrial Heat Blocks", category: "Refined Material", isFractional: false),
     ]
 }

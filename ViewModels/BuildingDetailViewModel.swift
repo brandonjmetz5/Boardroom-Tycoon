@@ -18,7 +18,10 @@ final class BuildingDetailViewModel: ObservableObject {
     @Published private(set) var machines: [Machine] = []
     @Published private(set) var isWorking = false
     @Published var errorMessage: String?
-    @Published private(set) var recipe: Recipe?
+    /// All recipes for this building (one for refineries, three for Fabrication Plant, etc.).
+    @Published private(set) var recipes: [Recipe] = []
+    /// Single recipe when building has only one (convenience for UI).
+    var recipe: Recipe? { recipes.first }
 
     @Published var showListingSheet = false
     @Published var buyNowPriceText = ""
@@ -47,9 +50,7 @@ final class BuildingDetailViewModel: ObservableObject {
                     if let updated = buildings.first(where: { $0.id == self.currentBuilding.id }) {
                         self.currentBuilding = updated
                         self.refreshListingIfNeeded()
-                        if !self.isExtractor {
-                            self.loadRecipeIfNeeded()
-                        }
+                        self.loadRecipesIfNeeded()
                         self.loadMachines()
                     }
                 case .failure:
@@ -107,23 +108,10 @@ final class BuildingDetailViewModel: ObservableObject {
         }
     }
 
-    private func loadRecipeIfNeeded() {
-        let recipeId = BuildingRecipeCatalog.recipeId(forBuildingId: currentBuilding.id)
-            ?? BuildingRecipeCatalog.recipeId(forBuildingName: currentBuilding.name)
-        guard let recipeId else {
-            recipe = nil
-            return
-        }
-        recipeService.fetchRecipe(byId: recipeId) { [weak self] result in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if let fromFirestore = try? result.get() {
-                    self.recipe = fromFirestore
-                    return
-                }
-                self.recipe = RecipeCatalog.recipe(forId: recipeId)
-            }
-        }
+    private func loadRecipesIfNeeded() {
+        var list = RecipeCatalog.recipes(forBuildingName: currentBuilding.name)
+        if list.isEmpty { list = RecipeCatalog.recipes(forBuildingId: currentBuilding.id) }
+        recipes = list
     }
 
     private func refreshListingIfNeeded() {
@@ -148,23 +136,19 @@ final class BuildingDetailViewModel: ObservableObject {
         }
     }
 
-    func startProduction() {
+    /// Start production on a single machine. For extractors pass nil for recipe; for recipe buildings pass the chosen recipe.
+    func startProductionForMachine(_ machine: Machine, recipe: Recipe?) {
         isWorking = true
         errorMessage = nil
-
         if isExtractor {
-            productionService.startProduction(for: userID, buildingID: currentBuilding.id) { [weak self] result in
-                DispatchQueue.main.async {
-                    guard let self else { return }
-                    self.isWorking = false
-                    switch result {
-                    case .success: self.refreshBuilding()
-                    case .failure(let error): self.errorMessage = error.localizedDescription
-                    }
-                }
+            guard let rt = currentBuilding.resourceType,
+                  let a = machine.abundance ?? currentBuilding.abundance,
+                  let s = machine.stability ?? currentBuilding.stability else {
+                isWorking = false
+                errorMessage = "Missing mine stats."
+                return
             }
-        } else if let recipe = recipe {
-            productionService.startRecipeProduction(for: userID, building: currentBuilding, recipe: recipe) { [weak self] result in
+            productionService.startProductionForMachine(for: userID, buildingID: currentBuilding.id, machineID: machine.id, resourceType: rt, abundance: a, stability: s) { [weak self] result in
                 DispatchQueue.main.async {
                     guard let self else { return }
                     self.isWorking = false
@@ -175,24 +159,37 @@ final class BuildingDetailViewModel: ObservableObject {
                 }
             }
         } else {
-            isWorking = false
-            errorMessage = "No recipe configured for this building."
+            guard let r = recipe ?? recipes.first else {
+                isWorking = false
+                errorMessage = "No recipe configured for this building."
+                return
+            }
+            productionService.startRecipeProductionForMachine(for: userID, buildingID: currentBuilding.id, machineID: machine.id, building: currentBuilding, recipe: r) { [weak self] result in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.isWorking = false
+                    switch result {
+                    case .success: self.refreshBuilding()
+                    case .failure(let error): self.errorMessage = error.localizedDescription
+                    }
+                }
+            }
         }
     }
 
-    func collectProduction() {
+    func collectProductionForMachine(_ machine: Machine) {
         isWorking = true
         errorMessage = nil
-
-        productionService.collectProduction(for: userID, buildingID: currentBuilding.id) { [weak self] result in
+        let qty = machine.pendingOutputQuantity ?? 0
+        let outId = machine.pendingOutputItemId
+        let outName = machine.pendingOutputItemName
+        productionService.collectProductionForMachine(for: userID, buildingID: currentBuilding.id, machineID: machine.id, resourceType: isExtractor ? currentBuilding.resourceType : nil, pendingOutputQuantity: qty, pendingOutputItemId: outId, pendingOutputItemName: outName) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.isWorking = false
                 switch result {
-                case .success:
-                    self.refreshBuilding()
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
+                case .success: self.refreshBuilding()
+                case .failure(let error): self.errorMessage = error.localizedDescription
                 }
             }
         }
@@ -350,7 +347,7 @@ final class BuildingDetailViewModel: ObservableObject {
     }
 
     var canAddMachine: Bool {
-        machines.count < currentBuilding.capacity && (currentBuilding.isListedOnMarket ?? false) == false && (currentBuilding.isProducing ?? false) == false
+        machines.count < currentBuilding.capacity && (currentBuilding.isListedOnMarket ?? false) == false
     }
 
     var canUpgradeBuilding: Bool {
@@ -372,6 +369,19 @@ final class BuildingDetailViewModel: ObservableObject {
         return currentBuilding.isProducing == true && productionEndsAt <= date
     }
 
+    func isMachineProducing(_ machine: Machine) -> Bool {
+        (machine.isProducing ?? false)
+    }
+
+    func isMachineReadyToCollect(_ machine: Machine, at date: Date) -> Bool {
+        guard (machine.isProducing ?? false), let endsAt = machine.productionEndsAt else { return false }
+        return endsAt <= date
+    }
+
+    var hasAnyMachineProducing: Bool {
+        machines.contains { $0.isProducing == true }
+    }
+
     func suggestedPricing() -> (startingBid: Double, suggestedBuyNowLow: Double, suggestedBuyNowHigh: Double)? {
         guard
             let resourceType = currentBuilding.resourceType,
@@ -389,7 +399,7 @@ final class BuildingDetailViewModel: ObservableObject {
         case .oil: baseValue = 900
         case .coal: baseValue = 650
         case .iron: baseValue = 750
-        case .quarry: baseValue = 700
+        case .quarry, .sandQuarry, .stoneQuarry, .gravelQuarry: baseValue = 700
         default: baseValue = 700
         }
 
@@ -433,7 +443,7 @@ final class BuildingDetailViewModel: ObservableObject {
             case .oil: baseValue = 550
             case .coal: baseValue = 400
             case .iron: baseValue = 450
-            case .quarry: baseValue = 400
+            case .quarry, .sandQuarry, .stoneQuarry, .gravelQuarry: baseValue = 400
             default: baseValue = 400
             }
             let abundanceBonus = Double((currentBuilding.abundance ?? 50) - 50) * 4.0
@@ -463,6 +473,11 @@ final class BuildingDetailViewModel: ObservableObject {
         guard let recipe = recipe, !recipe.inputItems.isEmpty else {
             return "Recipe inputs"
         }
+        return recipe.inputItems.map { "\(Int($0.quantity)) \($0.item.name)" }.joined(separator: ", ")
+    }
+
+    func productionInputSummary(for recipe: Recipe) -> String {
+        if recipe.inputItems.isEmpty { return "—" }
         return recipe.inputItems.map { "\(Int($0.quantity)) \($0.item.name)" }.joined(separator: ", ")
     }
 }

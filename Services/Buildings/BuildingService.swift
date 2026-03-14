@@ -401,6 +401,12 @@ final class BuildingService {
                 let abundance = data["abundance"] as? Int
                 let stability = data["stability"] as? Int
                 let outputValuePerCycle = data["outputValuePerCycle"] as? Double
+                let isProducing = data["isProducing"] as? Bool
+                let productionStartedAt: Date? = (data["productionStartedAt"] as? Timestamp)?.dateValue()
+                let productionEndsAt: Date? = (data["productionEndsAt"] as? Timestamp)?.dateValue()
+                let pendingOutputQuantity = data["pendingOutputQuantity"] as? Double
+                let pendingOutputItemId = data["pendingOutputItemId"] as? String
+                let pendingOutputItemName = data["pendingOutputItemName"] as? String
                 return Machine(
                     id: id,
                     name: name,
@@ -408,7 +414,13 @@ final class BuildingService {
                     efficiencyBonus: efficiencyBonus,
                     abundance: abundance,
                     stability: stability,
-                    outputValuePerCycle: outputValuePerCycle
+                    outputValuePerCycle: outputValuePerCycle,
+                    isProducing: isProducing,
+                    productionStartedAt: productionStartedAt,
+                    productionEndsAt: productionEndsAt,
+                    pendingOutputQuantity: pendingOutputQuantity,
+                    pendingOutputItemId: pendingOutputItemId,
+                    pendingOutputItemName: pendingOutputItemName
                 )
             }
             completion(.success(machines.sorted { $0.id < $1.id }))

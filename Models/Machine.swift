@@ -28,6 +28,14 @@ struct Machine: Identifiable {
     /// Output units per cycle. Upgrading increases this (cap TBD).
     var outputValuePerCycle: Double?
 
+    // MARK: - Per-machine production state
+    var isProducing: Bool?
+    var productionStartedAt: Date?
+    var productionEndsAt: Date?
+    var pendingOutputQuantity: Double?
+    var pendingOutputItemId: String?
+    var pendingOutputItemName: String?
+
     /// Display name for extractor machines (e.g. "Drill").
     static let extractorMachineName = "Drill"
     /// Default output value per cycle for new non-extractor machines.
@@ -37,7 +45,7 @@ struct Machine: Identifiable {
     /// Cap for extractor abundance and stability.
     static let maxAbundanceStability = 100
 
-    init(id: String, name: String, level: Int, efficiencyBonus: Double, abundance: Int? = nil, stability: Int? = nil, outputValuePerCycle: Double? = nil) {
+    init(id: String, name: String, level: Int, efficiencyBonus: Double, abundance: Int? = nil, stability: Int? = nil, outputValuePerCycle: Double? = nil, isProducing: Bool? = nil, productionStartedAt: Date? = nil, productionEndsAt: Date? = nil, pendingOutputQuantity: Double? = nil, pendingOutputItemId: String? = nil, pendingOutputItemName: String? = nil) {
         self.id = id
         self.name = name
         self.level = level
@@ -45,5 +53,11 @@ struct Machine: Identifiable {
         self.abundance = abundance
         self.stability = stability
         self.outputValuePerCycle = outputValuePerCycle
+        self.isProducing = isProducing
+        self.productionStartedAt = productionStartedAt
+        self.productionEndsAt = productionEndsAt
+        self.pendingOutputQuantity = pendingOutputQuantity
+        self.pendingOutputItemId = pendingOutputItemId
+        self.pendingOutputItemName = pendingOutputItemName
     }
 }

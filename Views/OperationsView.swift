@@ -423,7 +423,9 @@ struct OperationsView: View {
             prospectButton(title: "Prospect Oil Rig", resourceType: .oil)
             prospectButton(title: "Prospect Coal Mine", resourceType: .coal)
             prospectButton(title: "Prospect Iron Mine", resourceType: .iron)
-            prospectButton(title: "Prospect Stone Quarry", resourceType: .quarry)
+            prospectButton(title: "Prospect Sand Quarry", resourceType: .sandQuarry)
+            prospectButton(title: "Prospect Stone Quarry", resourceType: .stoneQuarry)
+            prospectButton(title: "Prospect Gravel Quarry", resourceType: .gravelQuarry)
         }
     }
 

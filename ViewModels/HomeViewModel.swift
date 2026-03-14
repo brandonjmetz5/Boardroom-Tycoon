@@ -152,7 +152,9 @@ final class HomeViewModel: ObservableObject {
         case .oil: return "Oil Rig"
         case .coal: return "Coal Mine"
         case .iron: return "Iron Mine"
-        case .quarry: return "Stone Quarry"
+        case .quarry, .stoneQuarry: return "Stone Quarry"
+        case .sandQuarry: return "Sand Quarry"
+        case .gravelQuarry: return "Gravel Quarry"
         default: return resourceType.rawValue
         }
     }

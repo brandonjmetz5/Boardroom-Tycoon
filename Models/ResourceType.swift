@@ -14,7 +14,10 @@ enum ResourceType: String, CaseIterable, Identifiable {
     case oil = "Oil"
     case coal = "Coal"
     case iron = "Iron"
-    case quarry = "Quarry"
+    case quarry = "Quarry"           // legacy; treated as Stone Quarry
+    case sandQuarry = "Sand Quarry"
+    case stoneQuarry = "Stone Quarry"
+    case gravelQuarry = "Gravel Quarry"
 
     var id: String { rawValue }
 }

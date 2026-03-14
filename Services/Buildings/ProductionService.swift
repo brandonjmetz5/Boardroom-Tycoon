@@ -287,6 +287,204 @@ final class ProductionService {
         }
     }
 
+    // MARK: - Per-machine production (each machine runs its own cycle)
+
+    /// Start production on a single extractor machine. Consumes 2 fuel, sets machine's production state.
+    func startProductionForMachine(for userID: String, buildingID: String, machineID: String, resourceType: ResourceType, abundance: Int, stability: Int, completion: @escaping (Result<Void, Error>) -> Void) {
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingRef = profileRef.collection("buildings").document(buildingID)
+        let machineRef = buildingRef.collection("machines").document(machineID)
+        let fuelRef = profileRef.collection("inventory").document(fuelInventoryDocID)
+
+        db.runTransaction({ [weak self] transaction, errorPointer in
+            guard let self else { return nil }
+            do {
+                let buildingSnap = try transaction.getDocument(buildingRef)
+                let machineSnap = try transaction.getDocument(machineRef)
+                let fuelSnap = try transaction.getDocument(fuelRef)
+                guard let buildingData = buildingSnap.data() else {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2000, userInfo: [NSLocalizedDescriptionKey: "Building not found."])
+                    return nil
+                }
+                guard let machineData = machineSnap.data() else {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2000, userInfo: [NSLocalizedDescriptionKey: "Machine not found."])
+                    return nil
+                }
+                if (buildingData["isListedOnMarket"] as? Bool) ?? false {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2004, userInfo: [NSLocalizedDescriptionKey: "Building is listed; cannot produce."])
+                    return nil
+                }
+                if (machineData["isProducing"] as? Bool) == true {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2007, userInfo: [NSLocalizedDescriptionKey: "This machine is already producing."])
+                    return nil
+                }
+                let fuelQty = fuelSnap.data()?["quantity"] as? Double ?? 0
+                if fuelQty < Self.fuelRequiredPerCycle {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2006, userInfo: [NSLocalizedDescriptionKey: "Not enough fuel. Need \(Int(Self.fuelRequiredPerCycle)) Fuel Cells."])
+                    return nil
+                }
+                let output = self.generateMineOutput(abundance: abundance, stability: stability)
+                let startedAt = Date()
+                #if DEBUG
+                let cycleSeconds: TimeInterval = 10
+                #else
+                let cycleSeconds: TimeInterval = 60 * 60
+                #endif
+                let endsAt = startedAt.addingTimeInterval(cycleSeconds)
+                var updatedMachine = machineData
+                updatedMachine["isProducing"] = true
+                updatedMachine["productionStartedAt"] = Timestamp(date: startedAt)
+                updatedMachine["productionEndsAt"] = Timestamp(date: endsAt)
+                updatedMachine["pendingOutputQuantity"] = Double(output)
+                updatedMachine["pendingOutputItemId"] = NSNull()
+                updatedMachine["pendingOutputItemName"] = NSNull()
+                transaction.setData(updatedMachine, forDocument: machineRef)
+                var fuelData = fuelSnap.data() ?? [:]
+                fuelData["quantity"] = fuelQty - Self.fuelRequiredPerCycle
+                transaction.setData(fuelData, forDocument: fuelRef)
+                return nil
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
+            }
+        }) { _, error in
+            if let error = error { completion(.failure(error)) }
+            else { completion(.success(())) }
+        }
+    }
+
+    /// Start recipe production on a single machine. Consumes recipe inputs, sets machine's production state.
+    func startRecipeProductionForMachine(for userID: String, buildingID: String, machineID: String, building: Building, recipe: Recipe, completion: @escaping (Result<Void, Error>) -> Void) {
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingRef = profileRef.collection("buildings").document(buildingID)
+        let machineRef = buildingRef.collection("machines").document(machineID)
+        guard let firstOutput = recipe.outputItems.first else {
+            completion(.failure(NSError(domain: "ProductionService", code: 2010, userInfo: [NSLocalizedDescriptionKey: "Recipe has no output."])))
+            return
+        }
+        #if DEBUG
+        let cycleSeconds: TimeInterval = 10
+        #else
+        let cycleSeconds = TimeInterval(recipe.cycleTimeInMinutes * 60)
+        #endif
+
+        db.runTransaction({ [weak self] transaction, errorPointer in
+            guard let self else { return nil }
+            do {
+                let buildingSnap = try transaction.getDocument(buildingRef)
+                let machineSnap = try transaction.getDocument(machineRef)
+                guard buildingSnap.data() != nil, var machineData = machineSnap.data() else {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2000, userInfo: [NSLocalizedDescriptionKey: "Building or machine not found."])
+                    return nil
+                }
+                if (buildingSnap.data()?["isListedOnMarket"] as? Bool) == true {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2004, userInfo: [NSLocalizedDescriptionKey: "Building cannot produce while listed."])
+                    return nil
+                }
+                if (machineData["isProducing"] as? Bool) == true {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2007, userInfo: [NSLocalizedDescriptionKey: "This machine is already producing."])
+                    return nil
+                }
+                for input in recipe.inputItems {
+                    let invRef = profileRef.collection("inventory").document(input.item.id)
+                    let invSnap = try transaction.getDocument(invRef)
+                    let qty = invSnap.data()?["quantity"] as? Double ?? 0
+                    if qty < input.quantity {
+                        errorPointer?.pointee = NSError(domain: "ProductionService", code: 2008, userInfo: [NSLocalizedDescriptionKey: "Not enough \(input.item.name). Need \(input.quantity), have \(qty)."])
+                        return nil
+                    }
+                    var invData = invSnap.data() ?? [:]
+                    invData["quantity"] = qty - input.quantity
+                    transaction.setData(invData, forDocument: invRef)
+                }
+                let startedAt = Date()
+                let endsAt = startedAt.addingTimeInterval(cycleSeconds)
+                machineData["isProducing"] = true
+                machineData["productionStartedAt"] = Timestamp(date: startedAt)
+                machineData["productionEndsAt"] = Timestamp(date: endsAt)
+                machineData["pendingOutputQuantity"] = firstOutput.quantity
+                machineData["pendingOutputItemId"] = firstOutput.item.id
+                machineData["pendingOutputItemName"] = firstOutput.item.name
+                transaction.setData(machineData, forDocument: machineRef)
+                return nil
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
+            }
+        }) { _, error in
+            if let error = error { completion(.failure(error)) }
+            else { completion(.success(())) }
+        }
+    }
+
+    /// Collect output from a single machine (extractor or recipe). Adds to inventory, clears machine production state.
+    func collectProductionForMachine(for userID: String, buildingID: String, machineID: String, resourceType: ResourceType?, pendingOutputQuantity: Double, pendingOutputItemId: String?, pendingOutputItemName: String?, completion: @escaping (Result<Void, Error>) -> Void) {
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingRef = profileRef.collection("buildings").document(buildingID)
+        let machineRef = buildingRef.collection("machines").document(machineID)
+
+        db.runTransaction({ [weak self] transaction, errorPointer in
+            guard let self else { return nil }
+            do {
+                let machineSnap = try transaction.getDocument(machineRef)
+                guard var machineData = machineSnap.data() else {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2001, userInfo: [NSLocalizedDescriptionKey: "Machine not found."])
+                    return nil
+                }
+                guard (machineData["isProducing"] as? Bool) == true,
+                      let endsAt = (machineData["productionEndsAt"] as? Timestamp)?.dateValue(), endsAt <= Date() else {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2003, userInfo: [NSLocalizedDescriptionKey: "Production not finished yet."])
+                    return nil
+                }
+                let qty = machineData["pendingOutputQuantity"] as? Double ?? 0
+                if let rt = resourceType {
+                    let invDocID = self.inventoryDocumentID(for: rt)
+                    let invName = self.inventoryDisplayName(for: rt)
+                    let invRef = profileRef.collection("inventory").document(invDocID)
+                    let invSnap = try transaction.getDocument(invRef)
+                    let current = invSnap.data()?["quantity"] as? Double ?? 0
+                    let invData: [String: Any] = [
+                        "id": invDocID, "name": invName, "category": "Raw Material", "isFractional": false,
+                        "quantity": current + qty
+                    ]
+                    transaction.setData(invData, forDocument: invRef)
+                    let profileSnap = try transaction.getDocument(profileRef)
+                    let profileData = profileSnap.data() ?? [:]
+                    let xp = profileData["xp"] as? Int ?? 0
+                    let level = self.levelForTotalXP(xp + 10)
+                    let slots = self.buildingSlotCount(for: level)
+                    transaction.updateData(["xp": xp + 10, "level": level, "buildingSlotCount": slots], forDocument: profileRef)
+                } else if let outId = pendingOutputItemId, let outName = pendingOutputItemName {
+                    let invRef = profileRef.collection("inventory").document(outId)
+                    let invSnap = try transaction.getDocument(invRef)
+                    let existing = invSnap.data() ?? [:]
+                    let current = existing["quantity"] as? Double ?? 0
+                    var invData = existing
+                    invData["id"] = outId
+                    invData["name"] = outName
+                    invData["quantity"] = current + qty
+                    if invData["category"] == nil { invData["category"] = "Refined Material" }
+                    if invData["isFractional"] == nil { invData["isFractional"] = false }
+                    transaction.setData(invData, forDocument: invRef)
+                }
+                machineData["isProducing"] = false
+                machineData["productionStartedAt"] = NSNull()
+                machineData["productionEndsAt"] = NSNull()
+                machineData["pendingOutputQuantity"] = NSNull()
+                machineData["pendingOutputItemId"] = NSNull()
+                machineData["pendingOutputItemName"] = NSNull()
+                transaction.setData(machineData, forDocument: machineRef)
+                return nil
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
+            }
+        }) { _, error in
+            if let error = error { completion(.failure(error)) }
+            else { completion(.success(())) }
+        }
+    }
+
     private func generateMineOutput(abundance: Int, stability: Int) -> Int {
         let maxOutput = max(1, abundance - 40)
 
@@ -313,8 +511,12 @@ final class ProductionService {
             return "raw-coal"
         case .iron:
             return "raw-iron"
-        case .quarry:
+        case .quarry, .stoneQuarry:
             return "raw-stone"
+        case .sandQuarry:
+            return "raw-sand"
+        case .gravelQuarry:
+            return "raw-gravel"
         default:
             return "raw-material"
         }
@@ -334,8 +536,12 @@ final class ProductionService {
             return "Raw Coal"
         case .iron:
             return "Raw Iron"
-        case .quarry:
+        case .quarry, .stoneQuarry:
             return "Raw Stone"
+        case .sandQuarry:
+            return "Raw Sand"
+        case .gravelQuarry:
+            return "Raw Gravel"
         default:
             return resourceType.rawValue
         }

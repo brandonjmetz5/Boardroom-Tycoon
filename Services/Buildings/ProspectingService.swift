@@ -585,7 +585,7 @@ final class ProspectingService {
             baseValue = 650
         case .iron:
             baseValue = 750
-        case .quarry:
+        case .quarry, .sandQuarry, .stoneQuarry, .gravelQuarry:
             baseValue = 700
         default:
             baseValue = 700
@@ -611,8 +611,12 @@ final class ProspectingService {
             return "Coal Mine"
         case .iron:
             return "Iron Mine"
-        case .quarry:
+        case .quarry, .stoneQuarry:
             return "Stone Quarry"
+        case .sandQuarry:
+            return "Sand Quarry"
+        case .gravelQuarry:
+            return "Gravel Quarry"
         default:
             return resourceType.rawValue
         }
@@ -622,7 +626,7 @@ final class ProspectingService {
         switch resourceType {
         case .oil:
             return .rig
-        case .quarry:
+        case .quarry, .sandQuarry, .stoneQuarry, .gravelQuarry:
             return .quarry
         case .gold, .silver, .diamond, .coal, .iron:
             return .mine

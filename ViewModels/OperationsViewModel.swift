@@ -327,7 +327,9 @@ final class OperationsViewModel: ObservableObject {
         case .oil: return "Oil Rig"
         case .coal: return "Coal Mine"
         case .iron: return "Iron Mine"
-        case .quarry: return "Stone Quarry"
+        case .quarry, .stoneQuarry: return "Stone Quarry"
+        case .sandQuarry: return "Sand Quarry"
+        case .gravelQuarry: return "Gravel Quarry"
         default: return resourceType.rawValue
         }
     }
@@ -341,7 +343,7 @@ final class OperationsViewModel: ObservableObject {
             case .oil: return "Oil"
             case .coal: return "Coal"
             case .iron: return "Iron"
-            case .quarry: return "Quarry"
+            case .quarry, .sandQuarry, .stoneQuarry, .gravelQuarry: return "Quarry"
             default: return building.type.rawValue
             }
         }
@@ -385,7 +387,9 @@ final class OperationsViewModel: ObservableObject {
         case .oil: return "icon_oil_rig"
         case .coal: return "icon_raw_coal_mine"
         case .iron: return "icon_iron_bar_factory"
-        case .quarry: return "icon_stone_quarry"
+        case .quarry, .stoneQuarry: return "icon_stone_quarry"
+        case .sandQuarry: return "icon_sand_quarry"
+        case .gravelQuarry: return "icon_gravel_quarry"
         default: return "icon_blueprint"
         }
     }
