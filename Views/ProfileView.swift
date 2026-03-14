@@ -77,7 +77,7 @@ struct ProfileView: View {
                 .foregroundStyle(AppTheme.textMuted)
 
             profileRow("Player ID", profile.id)
-            profileRow("Cash", "$\(profile.cash, specifier: "%.2f")")
+            profileRow("Cash", String(format: "$%.2f", profile.cash))
             profileRow("Level", "\(profile.level)")
             profileRow("XP", "\(profile.xp)")
             profileRow("Building Slots", "\(profile.buildingSlotCount)")

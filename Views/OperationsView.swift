@@ -414,7 +414,7 @@ struct OperationsView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
-                        Text("Cost: $\(purchasableBuilding.cost, specifier: "%.2f")")
+                        Text(String(format: "Cost: $%.2f", purchasableBuilding.cost))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

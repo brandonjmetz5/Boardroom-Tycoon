@@ -166,14 +166,14 @@ struct BuildingDetailView: View {
             sectionTitle("Management")
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("System Sell Value: $\(viewModel.scrapValue(), specifier: "%.2f")")
+                Text(String(format: "System Sell Value: $%.2f", viewModel.scrapValue()))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
 
                 if viewModel.currentBuilding.isListedOnMarket == true {
                     if let currentListing = viewModel.currentListing {
-                        detailRow("Buy Now", "$\(currentListing.buyNowPrice, specifier: "%.2f")")
-                        detailRow("Current Bid", "$\(currentListing.currentBid, specifier: "%.2f")")
+                        detailRow("Buy Now", String(format: "$%.2f", currentListing.buyNowPrice))
+                        detailRow("Current Bid", String(format: "$%.2f", currentListing.currentBid))
                         if currentListing.currentBidderID == nil || currentListing.currentBidderID?.isEmpty == true {
                             secondaryButton("Cancel Listing") {
                                 viewModel.cancelListing()
@@ -239,8 +239,8 @@ struct BuildingDetailView: View {
                         Text("Stability: \(viewModel.currentBuilding.stability ?? 0)")
                         Text("Level: \(viewModel.currentBuilding.level)")
                         if let pricing = viewModel.suggestedPricing() {
-                            Text("Suggested Starting Bid: $\(pricing.startingBid, specifier: "%.2f")")
-                            Text("Suggested Buy Now Range: $\(pricing.suggestedBuyNowLow, specifier: "%.2f") - $\(pricing.suggestedBuyNowHigh, specifier: "%.2f")")
+                            Text(String(format: "Suggested Starting Bid: $%.2f", pricing.startingBid))
+                            Text(String(format: "Suggested Buy Now Range: $%.2f - $%.2f", pricing.suggestedBuyNowLow, pricing.suggestedBuyNowHigh))
                                 .foregroundStyle(.secondary)
                         }
                     }

@@ -108,8 +108,8 @@ struct MarketView: View {
                     Spacer()
 
                     VStack(alignment: .trailing, spacing: 4) {
-                        row("Current Bid", "$\(listing.currentBid, specifier: "%.2f")")
-                        row("Buy Now", "$\(listing.buyNowPrice, specifier: "%.2f")")
+                        row("Current Bid", String(format: "$%.2f", listing.currentBid))
+                        row("Buy Now", String(format: "$%.2f", listing.buyNowPrice))
                             .foregroundStyle(AppTheme.textPrimary)
                             .fontWeight(.semibold)
                     }
@@ -196,8 +196,8 @@ struct MarketView: View {
                 Form {
                     Section("Place Bid") {
                         Text(viewModel.mineLabel(for: listing.resourceType))
-                        Text("Current Bid: $\(listing.currentBid, specifier: "%.2f")")
-                        Text("Buy Now: $\(listing.buyNowPrice, specifier: "%.2f")")
+                        Text(String(format: "Current Bid: $%.2f", listing.currentBid))
+                        Text(String(format: "Buy Now: $%.2f", listing.buyNowPrice))
                         TextField("Enter bid amount", text: $viewModel.bidAmountText)
                             .keyboardType(.decimalPad)
                     }
