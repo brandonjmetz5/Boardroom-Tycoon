@@ -27,6 +27,7 @@ enum AppTheme {
 
     /// Backward compatibility.
     static let cardBackground = surface
+    static let cardBackgroundAlt = surfaceAlt
     static let cardBorder = border
 
     // MARK: - Text
