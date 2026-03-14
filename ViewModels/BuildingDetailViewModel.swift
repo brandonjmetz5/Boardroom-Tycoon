@@ -22,6 +22,10 @@ final class BuildingDetailViewModel: ObservableObject {
     @Published private(set) var recipes: [Recipe] = []
     /// Single recipe when building has only one (convenience for UI).
     var recipe: Recipe? { recipes.first }
+    /// For multi-recipe buildings, the one recipe used when starting all machines.
+    @Published var selectedRecipeForBuilding: Recipe?
+
+    @Published private(set) var inventoryItems: [InventoryItem] = []
 
     @Published var showListingSheet = false
     @Published var buyNowPriceText = ""
@@ -52,6 +56,7 @@ final class BuildingDetailViewModel: ObservableObject {
                         self.refreshListingIfNeeded()
                         self.loadRecipesIfNeeded()
                         self.loadMachines()
+                        self.loadInventory()
                     }
                 case .failure:
                     break
@@ -112,6 +117,18 @@ final class BuildingDetailViewModel: ObservableObject {
         var list = RecipeCatalog.recipes(forBuildingName: currentBuilding.name)
         if list.isEmpty { list = RecipeCatalog.recipes(forBuildingId: currentBuilding.id) }
         recipes = list
+        if selectedRecipeForBuilding == nil, let first = list.first {
+            selectedRecipeForBuilding = first
+        }
+    }
+
+    private func loadInventory() {
+        inventoryService.fetchInventory(for: userID) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if case .success(let items) = result { self.inventoryItems = items }
+            }
+        }
     }
 
     private func refreshListingIfNeeded() {
@@ -184,6 +201,40 @@ final class BuildingDetailViewModel: ObservableObject {
         let outId = machine.pendingOutputItemId
         let outName = machine.pendingOutputItemName
         productionService.collectProductionForMachine(for: userID, buildingID: currentBuilding.id, machineID: machine.id, resourceType: isExtractor ? currentBuilding.resourceType : nil, pendingOutputQuantity: qty, pendingOutputItemId: outId, pendingOutputItemName: outName) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isWorking = false
+                switch result {
+                case .success: self.refreshBuilding()
+                case .failure(let error): self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    /// Start production on all machines (all-or-nothing). Uses selectedRecipeForBuilding for recipe buildings.
+    func startProductionForAllMachines() {
+        guard canStartAllMachines else { return }
+        isWorking = true
+        errorMessage = nil
+        let recipeToUse = selectedRecipeForBuilding ?? recipe
+        productionService.startProductionForAllMachines(for: userID, building: currentBuilding, machines: machines, recipe: isExtractor ? nil : recipeToUse) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isWorking = false
+                switch result {
+                case .success: self.refreshBuilding()
+                case .failure(let error): self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    /// Collect from every machine that is ready.
+    func collectAllProduction() {
+        isWorking = true
+        errorMessage = nil
+        productionService.collectProductionForAllMachines(for: userID, building: currentBuilding, machines: machines) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.isWorking = false
@@ -380,6 +431,60 @@ final class BuildingDetailViewModel: ObservableObject {
 
     var hasAnyMachineProducing: Bool {
         machines.contains { $0.isProducing == true }
+    }
+
+    /// At least one machine has finished and can be collected.
+    var hasAnyMachineReadyToCollect: Bool {
+        let now = Date()
+        return machines.contains { isMachineReadyToCollect($0, at: now) }
+    }
+
+    /// Can start production on all machines (none producing, enough resources for every machine).
+    var canStartAllMachines: Bool {
+        guard !machines.isEmpty, (currentBuilding.isListedOnMarket ?? false) == false else { return false }
+        if hasAnyMachineProducing { return false }
+        if isExtractor {
+            let fuelNeed = ProductionService.fuelRequiredPerCycle * Double(machines.count)
+            return inventoryQuantity(for: "fuel-cell") >= fuelNeed
+        }
+        guard let r = selectedRecipeForBuilding ?? recipe else { return false }
+        for input in r.inputItems {
+            let need = input.quantity * Double(machines.count)
+            if inventoryQuantity(for: input.item.id) < need { return false }
+        }
+        return true
+    }
+
+    func inventoryQuantity(for itemId: String) -> Double {
+        inventoryItems.first(where: { $0.item.id == itemId })?.quantity ?? 0
+    }
+
+    /// Total input required to start all machines (e.g. "10 Fuel Cells" for 5 extractors).
+    func totalInputSummaryForAllMachines() -> String {
+        if isExtractor {
+            let n = Int(ProductionService.fuelRequiredPerCycle * Double(machines.count))
+            return "\(n) Fuel Cells"
+        }
+        guard let r = selectedRecipeForBuilding ?? recipe else { return "—" }
+        return r.inputItems.map { "\(Int($0.quantity * Double(machines.count))) \($0.item.name)" }.joined(separator: ", ")
+    }
+
+    /// Total output per cycle when all machines run (e.g. "5 Gold Bar" for 1 machine, "25 Gold Bar" for 5).
+    func totalOutputSummaryForAllMachines() -> String {
+        if isExtractor {
+            return "Raw \(currentBuilding.resourceType?.rawValue ?? "resource") (varies by machine)"
+        }
+        guard let r = selectedRecipeForBuilding ?? recipe, let out = r.outputItems.first else { return "—" }
+        let total = out.quantity * Double(machines.count)
+        return (out.item.isFractional ? String(format: "%.1f", total) : "\(Int(total))") + " \(out.item.name)"
+    }
+
+    /// Next production end time among producing machines (for countdown).
+    func nextProductionEndTime() -> Date? {
+        machines.compactMap { m -> Date? in
+            guard m.isProducing == true, let end = m.productionEndsAt, end > Date() else { return nil }
+            return end
+        }.min()
     }
 
     func suggestedPricing() -> (startingBid: Double, suggestedBuyNowLow: Double, suggestedBuyNowHigh: Double)? {

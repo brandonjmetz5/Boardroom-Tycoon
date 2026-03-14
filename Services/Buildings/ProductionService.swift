@@ -532,6 +532,181 @@ final class ProductionService {
         }
     }
 
+    // MARK: - All-or-nothing: start all machines / collect all
+
+    /// Start production on every machine in the building. Fails if any machine is already producing or if resources are insufficient for all.
+    func startProductionForAllMachines(for userID: String, building: Building, machines: [Machine], recipe: Recipe?, completion: @escaping (Result<Void, Error>) -> Void) {
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingRef = profileRef.collection("buildings").document(building.id)
+        let fuelRef = profileRef.collection("inventory").document(fuelInventoryDocID)
+        let isExtractor = building.type == .mine || building.type == .rig || building.type == .quarry
+
+        if isExtractor {
+            guard let rt = building.resourceType else {
+                completion(.failure(NSError(domain: "ProductionService", code: 2000, userInfo: [NSLocalizedDescriptionKey: "Missing resource type."])))
+                return
+            }
+            let requiredFuel = Self.fuelRequiredPerCycle * Double(machines.count)
+            db.runTransaction({ [weak self] transaction, errorPointer in
+                guard let self else { return nil }
+                do {
+                    let buildingSnap = try transaction.getDocument(buildingRef)
+                    let fuelSnap = try transaction.getDocument(fuelRef)
+                    guard (buildingSnap.data()?["isListedOnMarket"] as? Bool) != true else {
+                        errorPointer?.pointee = NSError(domain: "ProductionService", code: 2004, userInfo: [NSLocalizedDescriptionKey: "Building is listed."])
+                        return nil
+                    }
+                    let fuelQty = fuelSnap.data()?["quantity"] as? Double ?? 0
+                    if fuelQty < requiredFuel {
+                        errorPointer?.pointee = NSError(domain: "ProductionService", code: 2006, userInfo: [NSLocalizedDescriptionKey: "Need \(Int(requiredFuel)) Fuel Cells for \(machines.count) machine(s)."])
+                        return nil
+                    }
+                    var machineSnaps: [(DocumentReference, DocumentSnapshot)] = []
+                    for m in machines {
+                        let ref = buildingRef.collection("machines").document(m.id)
+                        let snap = try transaction.getDocument(ref)
+                        machineSnaps.append((ref, snap))
+                    }
+                    for (_, snap) in machineSnaps {
+                        if (snap.data()?["isProducing"] as? Bool) == true {
+                            errorPointer?.pointee = NSError(domain: "ProductionService", code: 2007, userInfo: [NSLocalizedDescriptionKey: "A machine is already producing. Collect first or wait."])
+                            return nil
+                        }
+                    }
+                    let startedAt = Date()
+                    #if DEBUG
+                    let cycleSeconds: TimeInterval = 10
+                    #else
+                    let cycleSeconds: TimeInterval = 60 * 60
+                    #endif
+                    let endsAt = startedAt.addingTimeInterval(cycleSeconds)
+                    for (idx, (ref, snap)) in machineSnaps.enumerated() {
+                        let m = machines[idx]
+                        let a = m.abundance ?? building.abundance ?? 50
+                        let s = m.stability ?? building.stability ?? 50
+                        let output = self.generateMineOutput(abundance: a, stability: s)
+                        var data = snap.data() ?? [:]
+                        data["isProducing"] = true
+                        data["productionStartedAt"] = Timestamp(date: startedAt)
+                        data["productionEndsAt"] = Timestamp(date: endsAt)
+                        data["pendingOutputQuantity"] = Double(output)
+                        data["pendingOutputItemId"] = NSNull()
+                        data["pendingOutputItemName"] = NSNull()
+                        transaction.setData(data, forDocument: ref)
+                    }
+                    var fuelData = fuelSnap.data() ?? [:]
+                    fuelData["quantity"] = fuelQty - requiredFuel
+                    transaction.setData(fuelData, forDocument: fuelRef)
+                    return nil
+                } catch let error as NSError {
+                    errorPointer?.pointee = error
+                    return nil
+                }
+            }) { _, error in
+                if let error = error { completion(.failure(error)) }
+                else { completion(.success(())) }
+            }
+            return
+        }
+
+        guard let r = recipe, let firstOutput = r.outputItems.first else {
+            completion(.failure(NSError(domain: "ProductionService", code: 2010, userInfo: [NSLocalizedDescriptionKey: "Recipe required."])))
+            return
+        }
+        #if DEBUG
+        let cycleSeconds: TimeInterval = 10
+        #else
+        let cycleSeconds = TimeInterval(r.cycleTimeInMinutes * 60)
+        #endif
+        let startedAt = Date()
+        let endsAt = startedAt.addingTimeInterval(cycleSeconds)
+        let multiplier = Double(machines.count)
+
+        db.runTransaction({ [weak self] transaction, errorPointer in
+            guard let self else { return nil }
+            do {
+                let buildingSnap = try transaction.getDocument(buildingRef)
+                guard (buildingSnap.data()?["isListedOnMarket"] as? Bool) != true else {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2004, userInfo: [NSLocalizedDescriptionKey: "Building is listed."])
+                    return nil
+                }
+                var machineRefs: [(DocumentReference, DocumentSnapshot)] = []
+                for m in machines {
+                    let ref = buildingRef.collection("machines").document(m.id)
+                    let snap = try transaction.getDocument(ref)
+                    machineRefs.append((ref, snap))
+                    if (snap.data()?["isProducing"] as? Bool) == true {
+                        errorPointer?.pointee = NSError(domain: "ProductionService", code: 2007, userInfo: [NSLocalizedDescriptionKey: "A machine is already producing."])
+                        return nil
+                    }
+                }
+                var inputSnaps: [(DocumentReference, DocumentSnapshot, Double)] = []
+                for input in r.inputItems {
+                    let ref = profileRef.collection("inventory").document(input.item.id)
+                    let snap = try transaction.getDocument(ref)
+                    let qty = snap.data()?["quantity"] as? Double ?? 0
+                    let need = input.quantity * multiplier
+                    if qty < need {
+                        errorPointer?.pointee = NSError(domain: "ProductionService", code: 2008, userInfo: [NSLocalizedDescriptionKey: "Not enough \(input.item.name). Need \(Int(need)), have \(Int(qty))."])
+                        return nil
+                    }
+                    inputSnaps.append((ref, snap, input.quantity))
+                }
+                for (ref, snap, deductPerUnit) in inputSnaps {
+                    let qty = snap.data()?["quantity"] as? Double ?? 0
+                    var data = snap.data() ?? [:]
+                    data["quantity"] = qty - (deductPerUnit * multiplier)
+                    transaction.setData(data, forDocument: ref)
+                }
+                for (ref, snap) in machineRefs {
+                    var data = snap.data() ?? [:]
+                    data["isProducing"] = true
+                    data["productionStartedAt"] = Timestamp(date: startedAt)
+                    data["productionEndsAt"] = Timestamp(date: endsAt)
+                    data["pendingOutputQuantity"] = firstOutput.quantity
+                    data["pendingOutputItemId"] = firstOutput.item.id
+                    data["pendingOutputItemName"] = firstOutput.item.name
+                    transaction.setData(data, forDocument: ref)
+                }
+                return nil
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
+            }
+        }) { _, error in
+            if let error = error { completion(.failure(error)) }
+            else { completion(.success(())) }
+        }
+    }
+
+    /// Collect from every machine that is ready. Returns count of machines collected.
+    func collectProductionForAllMachines(for userID: String, building: Building, machines: [Machine], completion: @escaping (Result<Int, Error>) -> Void) {
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingRef = profileRef.collection("buildings").document(building.id)
+        let now = Date()
+        let ready = machines.filter { m in (m.isProducing ?? false) && (m.productionEndsAt ?? .distantFuture) <= now }
+        if ready.isEmpty {
+            completion(.success(0))
+            return
+        }
+        var collected = 0
+        let group = DispatchGroup()
+        for m in ready {
+            group.enter()
+            let qty = m.pendingOutputQuantity ?? 0
+            let outId = m.pendingOutputItemId
+            let outName = m.pendingOutputItemName
+            let rt = building.resourceType
+            collectProductionForMachine(for: userID, buildingID: building.id, machineID: m.id, resourceType: rt, pendingOutputQuantity: qty, pendingOutputItemId: outId, pendingOutputItemName: outName) { result in
+                if case .success = result { collected += 1 }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) {
+            completion(.success(collected))
+        }
+    }
+
     private func generateMineOutput(abundance: Int, stability: Int) -> Int {
         let maxOutput = max(1, abundance - 40)
 

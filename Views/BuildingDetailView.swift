@@ -13,8 +13,6 @@ struct BuildingDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: BuildingDetailViewModel
-    /// For multi-recipe buildings, selected recipe id per machine (machine.id -> recipe.id).
-    @State private var selectedRecipeIdForMachine: [String: String] = [:]
 
     init(userID: String, building: Building) {
         self.userID = userID
@@ -29,15 +27,15 @@ struct BuildingDetailView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
-                    overviewCard
+                    heroSection
                     if viewModel.isExtractor {
-                        mineDetailsSection
-                        managementSection
-                        machinesSection
-                    } else {
-                        managementSectionNonExtractor
-                        machinesSection
+                        mineStatsSection
                     }
+                    buildingUpgradeSection
+                    productionSection
+                    machinesSection
+                    addMachineSection
+                    managementSection
                     seedFirestoreSection
                 }
                 .padding(.horizontal, AppTheme.horizontalPadding)
@@ -65,32 +63,66 @@ struct BuildingDetailView: View {
         }
     }
 
-    private var overviewCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            detailRow("Type", viewModel.currentBuilding.type.rawValue)
-            detailRow("Level", "\(viewModel.currentBuilding.level)")
-            detailRow("Capacity", "\(viewModel.currentBuilding.capacity)")
+    // MARK: - Hero
+
+    private var heroSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(viewModel.currentBuilding.type.rawValue)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                        .textCase(.uppercase)
+                    HStack(spacing: 16) {
+                        labelValue("Level", "\(viewModel.currentBuilding.level)")
+                        labelValue("Capacity", "\(viewModel.machines.count)/\(viewModel.currentBuilding.capacity)")
+                    }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+                }
+                Spacer()
+            }
+            .padding(AppTheme.cardPadding)
         }
-        .padding(AppTheme.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .themedCard()
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
+                .fill(AppTheme.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
+                        .stroke(
+                            LinearGradient(colors: [AppTheme.accent.opacity(0.4), AppTheme.accent.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                            lineWidth: 1
+                        )
+                )
     }
 
-    private var mineDetailsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Mine Details")
+    private func labelValue(_ label: String, _ value: String) -> some View {
+        HStack(spacing: 4) {
+            Text("\(label):")
+                .foregroundStyle(AppTheme.textTertiary)
+            Text(value)
+                .foregroundStyle(AppTheme.textPrimary)
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 8) {
-                detailRow("Resource", viewModel.currentBuilding.resourceType?.rawValue ?? "Unknown")
+    // MARK: - Mine stats (extractors only)
+
+    private var mineStatsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader("Resource", icon: "cube.fill")
+            VStack(alignment: .leading, spacing: 10) {
+                detailRow("Resource", viewModel.currentBuilding.resourceType?.rawValue ?? "—")
                 detailRow("Abundance", "\(viewModel.currentBuilding.abundance ?? 0)")
                 detailRow("Stability", "\(viewModel.currentBuilding.stability ?? 0)")
-                detailRow("Starter Mine", (viewModel.currentBuilding.isStarterMine ?? false) ? "Yes" : "No")
-                detailRow("Output Range", viewModel.formattedOutputRange())
-
+                detailRow("Output range", viewModel.formattedOutputRange())
                 if viewModel.currentBuilding.isListedOnMarket == true {
-                    Text("Market Status: Listed on Market")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppTheme.chipListed)
+                    HStack(spacing: 6) {
+                        Circle().fill(AppTheme.chipListed).frame(width: 8, height: 8)
+                        Text("Listed on market")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.chipListed)
+                    }
                 }
             }
             .padding(AppTheme.cardPadding)
@@ -99,44 +131,178 @@ struct BuildingDetailView: View {
         }
     }
 
-    private var managementSection: some View {
+    // MARK: - Building upgrade (level + capacity)
+
+    private var buildingUpgradeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Management")
-
-            VStack(alignment: .leading, spacing: 12) {
-                Text(String(format: "System Sell Value: $%.2f", viewModel.scrapValue()))
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppTheme.textSecondary)
-
-                if viewModel.currentBuilding.isListedOnMarket == true {
-                    if let currentListing = viewModel.currentListing {
-                        detailRow("Buy Now", String(format: "$%.2f", currentListing.buyNowPrice))
-                        detailRow("Current Bid", String(format: "$%.2f", currentListing.currentBid))
-                        if currentListing.currentBidderID == nil || currentListing.currentBidderID?.isEmpty == true {
-                            secondaryButton("Cancel Listing") {
-                                viewModel.cancelListing()
-                            }
-                            .disabled(viewModel.isWorking)
-                        } else {
-                            Text("This listing has bids and cannot be cancelled.")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(AppTheme.textTertiary)
+            sectionHeader("Building upgrade", icon: "building.2.fill")
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("Level \(viewModel.currentBuilding.level)")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    if viewModel.currentBuilding.level < BuildingService.maxBuildingLevel {
+                        Text("→")
+                            .foregroundStyle(AppTheme.textTertiary)
+                        Text("Level \(viewModel.currentBuilding.level + 1)")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                    Spacer()
+                }
+                if viewModel.canUpgradeBuilding {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Requires: \(UpgradeCatalog.buildingUpgradeRequirementLabel(forLevel: viewModel.currentBuilding.level))")
+                            .font(AppTheme.caption())
+                            .foregroundStyle(AppTheme.textTertiary)
+                        Button {
+                            viewModel.upgradeBuildingLevel()
+                        } label: {
+                            Text("Upgrade building")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(AppTheme.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                    } else {
-                        Text("Loading listing details...")
+                        .buttonStyle(.plain)
+                        .disabled(viewModel.isWorking)
+                    }
+                } else if viewModel.currentBuilding.level >= BuildingService.maxBuildingLevel {
+                    Text("Max level")
+                        .font(AppTheme.caption())
+                        .foregroundStyle(AppTheme.chipReady)
+                }
+            }
+            .padding(AppTheme.cardPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .themedCard()
+        }
+    }
+
+    // MARK: - Production (one Start all / Collect all)
+
+    private var productionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader("Production", icon: "gearshape.2.fill")
+            VStack(alignment: .leading, spacing: 16) {
+                if viewModel.currentBuilding.isListedOnMarket == true {
+                    Text("Unavailable while listed on market.")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(AppTheme.textTertiary)
+                        .padding(.vertical, 8)
+                } else {
+                    if viewModel.recipes.count > 1 {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Recipe")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AppTheme.textTertiary)
+                            Picker("Recipe", selection: Binding(
+                                get: { viewModel.selectedRecipeForBuilding?.id ?? "" },
+                                set: { newId in viewModel.selectedRecipeForBuilding = viewModel.recipes.first(where: { $0.id == newId }) ?? viewModel.recipes.first }
+                            )) {
+                                ForEach(viewModel.recipes) { r in
+                                    Text(r.name).tag(r.id)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .tint(AppTheme.accent)
+                        }
+                    }
+
+                    if let recipe = viewModel.selectedRecipeForBuilding ?? viewModel.recipe {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Inputs needed (\(viewModel.machines.count) machine\(viewModel.machines.count == 1 ? "" : "s"))")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppTheme.textTertiary)
+                            ForEach(recipe.inputItems, id: \.item.id) { input in
+                                inputOutputRow(
+                                    name: input.item.name,
+                                    needed: input.quantity * Double(viewModel.machines.count),
+                                    have: viewModel.inventoryQuantity(for: input.item.id),
+                                    isInput: true
+                                )
+                            }
+                            Text("Output per cycle")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppTheme.textTertiary)
+                                .padding(.top, 4)
+                            if let out = recipe.outputItems.first {
+                                inputOutputRow(
+                                    name: out.item.name,
+                                    needed: nil,
+                                    have: out.quantity * Double(viewModel.machines.count),
+                                    isInput: false
+                                )
+                            }
+                        }
+                    } else if viewModel.isExtractor {
+                        inputOutputRow(
+                            name: "Fuel Cells",
+                            needed: ProductionService.fuelRequiredPerCycle * Double(viewModel.machines.count),
+                            have: viewModel.inventoryQuantity(for: "fuel-cell"),
+                            isInput: true
+                        )
+                        Text("Output: Raw \(viewModel.currentBuilding.resourceType?.rawValue ?? "resource") (varies by machine)")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+
+                    if let errorMessage = viewModel.errorMessage {
+                        Text(errorMessage)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textError)
+                    }
+
+                    if viewModel.isWorking {
+                        ProgressView()
+                            .tint(AppTheme.accent)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    } else if viewModel.hasAnyMachineReadyToCollect {
+                        Button {
+                            viewModel.collectAllProduction()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Collect all")
+                            }
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(AppTheme.chipReady)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    } else if viewModel.hasAnyMachineProducing, let nextEnd = viewModel.nextProductionEndTime() {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            Text("Next ready: \(viewModel.formattedTimeRemaining(until: nextEnd, now: context.date))")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(AppTheme.chipProducing)
+                        }
+                    } else if viewModel.canStartAllMachines {
+                        Button {
+                            viewModel.startProductionForAllMachines()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "play.fill")
+                                Text("Start production (all \(viewModel.machines.count) machine\(viewModel.machines.count == 1 ? "" : "s"))")
+                            }
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(AppTheme.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    } else if !viewModel.machines.isEmpty && !viewModel.canStartAllMachines && !viewModel.hasAnyMachineProducing {
+                        Text("Need more resources to start all machines.")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppTheme.textTertiary)
                     }
-                } else {
-                    primaryButton("List on Marketplace") {
-                        viewModel.openListingSheet()
-                    }
-                    .disabled(viewModel.isWorking || viewModel.hasAnyMachineProducing)
-
-                    secondaryButton("Sell to System") {
-                        viewModel.sellToSystem()
-                    }
-                    .disabled(viewModel.isWorking || viewModel.hasAnyMachineProducing)
                 }
             }
             .padding(AppTheme.cardPadding)
@@ -145,48 +311,112 @@ struct BuildingDetailView: View {
         }
     }
 
-    private var managementSectionNonExtractor: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Management")
-            Text(String(format: "System Sell Value: $%.2f", viewModel.scrapValue()))
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppTheme.textSecondary)
-            secondaryButton("Sell to System") {
-                viewModel.sellToSystem()
+    private func inputOutputRow(name: String, needed: Double?, have: Double, isInput: Bool) -> some View {
+        HStack(spacing: 10) {
+            resourcePlaceholderIcon(name: name)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.textPrimary)
+                if isInput, let need = needed {
+                    Text("have \(formatQty(have)) · need \(formatQty(need))")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(have >= need ? AppTheme.chipReady : AppTheme.textError)
+                }
             }
-            .disabled(viewModel.isWorking || viewModel.hasAnyMachineProducing)
+            Spacer()
+            if let need = needed, isInput {
+                Text("\(formatQty(have))/\(formatQty(need))")
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(have >= need ? AppTheme.textSecondary : AppTheme.textError)
+            }
         }
-        .padding(AppTheme.cardPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .themedCard()
+        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .background(AppTheme.surfaceAlt.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
+
+    private func resourcePlaceholderIcon(name: String) -> some View {
+        ZStack {
+            Circle()
+                .fill(AppTheme.accent.opacity(0.25))
+                .frame(width: 36, height: 36)
+            Text(String(name.prefix(1)).uppercased())
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(AppTheme.accent)
+        }
+    }
+
+    private func formatQty(_ q: Double) -> String {
+        q.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(q))" : String(format: "%.1f", q)
+    }
+
+    // MARK: - Machines (stats + machine upgrade only)
 
     private var machinesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Machines")
+            sectionHeader("Machines", icon: "cpu.fill")
             Text("\(viewModel.machines.count) / \(viewModel.currentBuilding.capacity) installed")
                 .font(AppTheme.caption())
                 .foregroundStyle(AppTheme.textTertiary)
 
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.textError)
-            }
-            if viewModel.isWorking {
-                ProgressView()
-                    .tint(.white)
-            }
             ForEach(viewModel.machines) { machine in
-                machineCard(machine)
+                machineRow(machine)
             }
+        }
+    }
 
+    private func machineRow(_ machine: Machine) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(machine.name)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Spacer()
+                if viewModel.isExtractor, let a = machine.abundance, let s = machine.stability {
+                    Text("A:\(a) S:\(s)")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(AppTheme.textSecondary)
+                } else if let out = machine.outputValuePerCycle {
+                    Text(String(format: "%.1f/cycle", out))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+            HStack(spacing: 12) {
+                Text("Level \(machine.level)")
+                    .font(AppTheme.caption())
+                    .foregroundStyle(AppTheme.textTertiary)
+                if viewModel.canUpgradeMachine(machine) {
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(UpgradeCatalog.machineUpgradeRequirementLabel(for: viewModel.currentBuilding.type))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AppTheme.textTertiary)
+                        Button("Upgrade") {
+                            viewModel.upgradeMachine(machine)
+                        }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                        .disabled(viewModel.isWorking)
+                    }
+                }
+            }
+        }
+        .padding(AppTheme.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .themedCard()
+    }
+
+    private var addMachineSection: some View {
+        Group {
             if viewModel.canAddMachine {
                 Button {
                     viewModel.addMachine()
                 } label: {
                     HStack {
-                        Text("Add Machine")
+                        Text("Add machine")
                         Spacer()
                         Text(String(format: "$%.0f", viewModel.addMachineCost))
                             .font(AppTheme.captionMedium())
@@ -201,149 +431,52 @@ struct BuildingDetailView: View {
                 .buttonStyle(.plain)
                 .disabled(viewModel.isWorking)
             }
-
-            if viewModel.canUpgradeBuilding {
-                VStack(alignment: .leading, spacing: 6) {
-                    Button {
-                        viewModel.upgradeBuildingLevel()
-                    } label: {
-                        Text("Upgrade Building (Level \(viewModel.currentBuilding.level) → \(viewModel.currentBuilding.level + 1))")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(AppTheme.accent.opacity(0.2))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(viewModel.isWorking)
-                    Text("Requires: \(UpgradeCatalog.buildingUpgradeRequirementLabel(forLevel: viewModel.currentBuilding.level))")
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.textTertiary)
-                }
-            }
         }
     }
 
-    private func machineCard(_ machine: Machine) -> some View {
-        let selectedRecipeId = Binding(
-            get: { selectedRecipeIdForMachine[machine.id] ?? viewModel.recipes.first?.id ?? "" },
-            set: { selectedRecipeIdForMachine[machine.id] = $0 }
-        )
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(machine.name)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                Spacer()
-                if viewModel.isExtractor {
-                    if let a = machine.abundance, let s = machine.stability {
-                        Text("A:\(a) S:\(s)")
-                            .font(AppTheme.caption())
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                } else if let out = machine.outputValuePerCycle {
-                    Text(String(format: "%.1f/cycle", out))
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-            }
-            if viewModel.isExtractor {
-                detailRow("Abundance", "\(machine.abundance ?? 0)")
-                detailRow("Stability", "\(machine.stability ?? 0)")
-            } else {
-                detailRow("Output/cycle", String(format: "%.1f", machine.outputValuePerCycle ?? Machine.defaultOutputValuePerCycle))
-            }
-            detailRow("Upgrade level", "\(machine.level)")
+    // MARK: - Management
 
-            Divider().background(AppTheme.cardBorder)
+    private var managementSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader("Management", icon: "dollarsign.circle.fill")
+            VStack(alignment: .leading, spacing: 12) {
+                Text(String(format: "System sell value: $%.2f", viewModel.scrapValue()))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
 
-            // Production: per-machine
-            sectionTitle("Production")
-            if viewModel.currentBuilding.isListedOnMarket == true {
-                Text("Unavailable while listed on market.")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppTheme.textTertiary)
-            } else if viewModel.isMachineProducing(machine) {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Group {
-                        if viewModel.isMachineReadyToCollect(machine, at: context.date) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Ready to collect")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(AppTheme.chipReady)
-                                if let qty = machine.pendingOutputQuantity, qty > 0 {
-                                    Text("Output: \(Int(qty)) \(machine.pendingOutputItemName ?? "units")")
-                                        .font(AppTheme.caption())
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                }
-                                primaryButton("Collect") {
-                                    viewModel.collectProductionForMachine(machine)
-                                }
-                            }
-                        } else if let endsAt = machine.productionEndsAt {
-                            Text("Time remaining: \(viewModel.formattedTimeRemaining(until: endsAt, now: context.date))")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(AppTheme.textSecondary)
+                if viewModel.currentBuilding.isListedOnMarket == true {
+                    if let listing = viewModel.currentListing {
+                        detailRow("Buy now", String(format: "$%.2f", listing.buyNowPrice))
+                        detailRow("Current bid", String(format: "$%.2f", listing.currentBid))
+                        if listing.currentBidderID == nil || listing.currentBidderID?.isEmpty == true {
+                            Button("Cancel listing") { viewModel.cancelListing() }
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .disabled(viewModel.isWorking)
                         }
                     }
-                }
-            } else {
-                if viewModel.recipes.count > 1 {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Choose recipe")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppTheme.textTertiary)
-                        Picker("Recipe", selection: selectedRecipeId) {
-                            ForEach(viewModel.recipes) { r in
-                                Text(r.name).tag(r.id)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        if let r = viewModel.recipes.first(where: { $0.id == selectedRecipeId.wrappedValue }) {
-                            Text("Inputs: \(viewModel.productionInputSummary(for: r))")
-                                .font(AppTheme.caption())
-                                .foregroundStyle(AppTheme.textSecondary)
-                        }
+                } else {
+                    if viewModel.isExtractor {
+                        Button("List on marketplace") { viewModel.openListingSheet() }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppTheme.accent)
+                            .disabled(viewModel.isWorking || viewModel.hasAnyMachineProducing)
                     }
-                } else if !viewModel.recipes.isEmpty {
-                    Text("Inputs: \(viewModel.productionInputSummary(for: viewModel.recipes[0]))")
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.textSecondary)
-                } else if viewModel.isExtractor {
-                    Text("Input: \(viewModel.productionInputSummary)")
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-                primaryButton("Start Production") {
-                    let recipe: Recipe? = viewModel.recipes.first(where: { $0.id == selectedRecipeId.wrappedValue }) ?? viewModel.recipes.first
-                    viewModel.startProductionForMachine(machine, recipe: recipe)
-                }
-                .disabled(viewModel.isWorking || viewModel.recipes.isEmpty && !viewModel.isExtractor)
-            }
-
-            if viewModel.canUpgradeMachine(machine) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Upgrade: \(UpgradeCatalog.machineUpgradeRequirementLabel(for: viewModel.currentBuilding.type))")
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.textTertiary)
-                    Button("Upgrade") {
-                        viewModel.upgradeMachine(machine)
-                    }
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent)
-                    .disabled(viewModel.isWorking)
+                    Button("Sell to system") { viewModel.sellToSystem() }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.textError)
+                        .disabled(viewModel.isWorking || viewModel.hasAnyMachineProducing)
                 }
             }
+            .padding(AppTheme.cardPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .themedCard()
         }
-        .padding(AppTheme.cardPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .themedCard()
     }
 
     private var seedFirestoreSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionTitle("Testing")
+            sectionHeader("Testing", icon: "wand.and.stars")
             Button {
                 viewModel.seedInventoryForTesting()
             } label: {
@@ -351,7 +484,7 @@ struct BuildingDetailView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 12)
                     .background(AppTheme.surfaceAlt)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
@@ -359,6 +492,31 @@ struct BuildingDetailView: View {
             .disabled(viewModel.isWorking)
         }
     }
+
+    private func sectionHeader(_ title: String, icon: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppTheme.textPrimary)
+        }
+    }
+
+    private func detailRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppTheme.textTertiary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+    }
+
+    // MARK: - Listing sheet
 
     private var listingSheetView: some View {
         NavigationStack {
@@ -393,18 +551,14 @@ struct BuildingDetailView: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
-                        viewModel.closeListingSheet()
-                    }
-                    .foregroundStyle(AppTheme.textSecondary)
+                    Button("Cancel") { viewModel.closeListingSheet() }
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("List") {
-                        viewModel.listOwnedMine()
-                    }
-                    .fontWeight(.semibold)
-                    .foregroundStyle(AppTheme.chipReady)
-                    .disabled(viewModel.isWorking)
+                    Button("List") { viewModel.listOwnedMine() }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(AppTheme.chipReady)
+                        .disabled(viewModel.isWorking)
                 }
             }
             .overlay {
@@ -416,56 +570,6 @@ struct BuildingDetailView: View {
                 }
             }
         }
-    }
-
-    // MARK: - Shared components
-
-    private func sectionTitle(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(AppTheme.textPrimary)
-    }
-
-    private func detailRow(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(AppTheme.textTertiary)
-            Spacer()
-            Text(value)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppTheme.textSecondary)
-        }
-    }
-
-    private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(AppTheme.chipReady)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func secondaryButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(AppTheme.textPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(AppTheme.cardBackgroundAlt)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(AppTheme.cardBorder, lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
     }
 }
 
