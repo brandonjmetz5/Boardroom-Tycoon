@@ -10,41 +10,12 @@ import SwiftUI
 struct OperationDetailView: View {
     let operation: Operation
 
-    let mockMines: [Mine] = [
-        Mine(
-            id: "mine-001",
-            buildingID: "op-gold-production",
-            resourceType: .gold,
-            level: 1,
-            abundance: 65,
-            stability: 72,
-            isStarterMine: true
-        ),
-        Mine(
-            id: "mine-002",
-            buildingID: "op-gold-production",
-            resourceType: .gold,
-            level: 1,
-            abundance: 81,
-            stability: 60,
-            isStarterMine: false
-        )
-    ]
+    @StateObject private var viewModel: OperationDetailViewModel
 
-    let mockMachines: [Machine] = [
-        Machine(
-            id: "machine-001",
-            name: "Refinery Machine",
-            level: 1,
-            efficiencyBonus: 0.0
-        ),
-        Machine(
-            id: "machine-002",
-            name: "Refinery Machine",
-            level: 2,
-            efficiencyBonus: 0.05
-        )
-    ]
+    init(operation: Operation) {
+        self.operation = operation
+        _viewModel = StateObject(wrappedValue: OperationDetailViewModel(operation: operation))
+    }
 
     var body: some View {
         ScrollView {
@@ -64,7 +35,7 @@ struct OperationDetailView: View {
                         Text("Mines")
                             .font(.headline)
 
-                        ForEach(matchingMines.prefix(operation.capacity)) { mine in
+                        ForEach(viewModel.matchingMines.prefix(operation.capacity)) { mine in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("\(mine.resourceType.rawValue) Mine")
                                     .font(.headline)
@@ -85,7 +56,7 @@ struct OperationDetailView: View {
                         Text("Machines")
                             .font(.headline)
 
-                        ForEach(mockMachines.prefix(operation.capacity)) { machine in
+                        ForEach(viewModel.machines.prefix(operation.capacity)) { machine in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(machine.name)
                                     .font(.headline)
@@ -106,10 +77,6 @@ struct OperationDetailView: View {
             .padding()
         }
         .navigationTitle(operation.name)
-    }
-
-    private var matchingMines: [Mine] {
-        mockMines.filter { $0.buildingID == operation.id }
     }
 }
 

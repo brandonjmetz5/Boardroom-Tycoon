@@ -6,22 +6,21 @@
 //
 
 import SwiftUI
-import Combine
 
 struct HomeView: View {
     let userID: String
 
-    @State private var prospectingJobs: [ProspectingJob] = []
-    @State private var isLoadingProspecting = true
-    @State private var prospectingErrorMessage: String?
-
-    private let prospectingService = ProspectingService()
-    private let mineMarketService = MineMarketService()
+    @StateObject private var viewModel: HomeViewModel
 
     private let columns = [
         GridItem(.flexible()),
         GridItem(.flexible())
     ]
+
+    init(userID: String) {
+        self.userID = userID
+        _viewModel = StateObject(wrappedValue: HomeViewModel(userID: userID))
+    }
 
     var body: some View {
         ScrollView {
@@ -53,14 +52,14 @@ struct HomeView: View {
                     Text("Prospecting")
                         .font(.headline)
 
-                    if isLoadingProspecting {
+                    if viewModel.isLoadingProspecting {
                         ProgressView("Loading prospecting jobs...")
                             .controlSize(.small)
                             .padding()
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color.gray.opacity(0.1))
                             .cornerRadius(12)
-                    } else if let prospectingErrorMessage {
+                    } else if let prospectingErrorMessage = viewModel.prospectingErrorMessage {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Failed to load prospecting jobs")
                                 .font(.subheadline)
@@ -74,10 +73,10 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.gray.opacity(0.1))
                         .cornerRadius(12)
-                    } else if let activeJob = prospectingJobs.first(where: { !$0.isComplete }) {
+                    } else if let activeJob = viewModel.activeProspectingJob {
                         TimelineView(.periodic(from: .now, by: 1)) { context in
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("Resource: \(prospectingLabel(for: activeJob.resourceType))")
+                                Text("Resource: \(viewModel.prospectingLabel(for: activeJob.resourceType))")
 
                                 if activeJob.isRevealed {
                                     Text("Status: Result Revealed")
@@ -86,7 +85,7 @@ struct HomeView: View {
                                     Text("Status: Ready to Reveal")
                                         .bold()
                                 } else {
-                                    Text("Time Remaining: \(formattedTimeRemaining(until: activeJob.endsAt, now: context.date))")
+                                    Text("Time Remaining: \(viewModel.formattedTimeRemaining(until: activeJob.endsAt, now: context.date))")
                                 }
                             }
                             .padding()
@@ -147,50 +146,7 @@ struct HomeView: View {
         }
         .navigationTitle("Home")
         .onAppear {
-            mineMarketService.settleExpiredMineListings { _ in }
-            loadProspectingJobs()
-        }
-    }
-
-    private func loadProspectingJobs() {
-        prospectingService.fetchProspectingJobs(for: userID) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let jobs):
-                    self.prospectingJobs = jobs
-                    self.isLoadingProspecting = false
-                    self.prospectingErrorMessage = nil
-                case .failure(let error):
-                    self.prospectingErrorMessage = error.localizedDescription
-                    self.isLoadingProspecting = false
-                }
-            }
-        }
-    }
-
-    private func formattedTimeRemaining(until endDate: Date, now: Date) -> String {
-        let remainingSeconds = max(0, Int(ceil(endDate.timeIntervalSince(now))))
-        let minutes = remainingSeconds / 60
-        let seconds = remainingSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    private func prospectingLabel(for resourceType: ResourceType) -> String {
-        switch resourceType {
-        case .gold:
-            return "Gold Mine"
-        case .silver:
-            return "Silver Mine"
-        case .diamond:
-            return "Diamond Mine"
-        case .oil:
-            return "Oil Rig"
-        case .coal:
-            return "Coal Mine"
-        case .iron:
-            return "Iron Mine"
-        default:
-            return resourceType.rawValue
+            viewModel.loadData()
         }
     }
 }

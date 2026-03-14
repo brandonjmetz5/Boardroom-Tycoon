@@ -12,510 +12,254 @@ struct BuildingDetailView: View {
     let building: Building
 
     @Environment(\.dismiss) private var dismiss
-
-    @State private var currentBuilding: Building
-    @State private var currentListing: MineMarketListing?
-    @State private var isWorking = false
-    @State private var errorMessage: String?
-
-    @State private var showListingSheet = false
-    @State private var buyNowPriceText = ""
-
-    private let productionService = ProductionService()
-    private let buildingService = BuildingService()
-    private let mineMarketService = MineMarketService()
+    @StateObject private var viewModel: BuildingDetailViewModel
 
     init(userID: String, building: Building) {
         self.userID = userID
         self.building = building
-        _currentBuilding = State(initialValue: building)
+        _viewModel = StateObject(wrappedValue: BuildingDetailViewModel(userID: userID, building: building))
     }
-
-    let mockMachines: [Machine] = [
-        Machine(
-            id: "machine-001",
-            name: "Refinery Machine",
-            level: 1,
-            efficiencyBonus: 0.0
-        ),
-        Machine(
-            id: "machine-002",
-            name: "Refinery Machine",
-            level: 2,
-            efficiencyBonus: 0.05
-        )
-    ]
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Type: \(currentBuilding.type.rawValue)")
-                    Text("Level: \(currentBuilding.level)")
-                    Text("Capacity: \(currentBuilding.capacity)")
+                    Text("Type: \(viewModel.currentBuilding.type.rawValue)")
+                    Text("Level: \(viewModel.currentBuilding.level)")
+                    Text("Capacity: \(viewModel.currentBuilding.capacity)")
                 }
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.gray.opacity(0.1))
                 .cornerRadius(12)
 
-                if currentBuilding.type == .mine || currentBuilding.type == .rig || currentBuilding.type == .quarry {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Mine Details")
-                            .font(.headline)
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Resource: \(currentBuilding.resourceType?.rawValue ?? "Unknown")")
-                            Text("Abundance: \(currentBuilding.abundance ?? 0)")
-                            Text("Stability: \(currentBuilding.stability ?? 0)")
-                            Text("Starter Mine: \((currentBuilding.isStarterMine ?? false) ? "Yes" : "No")")
-                            Text("Output Range: \(formattedOutputRange())")
-
-                            if currentBuilding.isListedOnMarket == true {
-                                Text("Market Status: Listed on Market")
-                                    .foregroundStyle(.orange)
-                                    .bold()
-                            }
-                        }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(12)
-                    }
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Production")
-                            .font(.headline)
-
-                        TimelineView(.periodic(from: .now, by: 1)) { context in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Producing: \((currentBuilding.isProducing ?? false) ? "Yes" : "No")")
-
-                                if currentBuilding.isListedOnMarket == true {
-                                    Text("Production unavailable while listed on the market.")
-                                        .foregroundStyle(.secondary)
-                                } else if currentBuilding.isProducing == true {
-                                    if isReadyToCollect(at: context.date) {
-                                        Text("Status: Ready to Collect")
-                                            .bold()
-
-                                        if let pendingOutputQuantity = currentBuilding.pendingOutputQuantity,
-                                           pendingOutputQuantity > 0 {
-                                            Text("Output Ready: \(Int(pendingOutputQuantity))")
-                                        }
-                                    } else if let productionEndsAt = currentBuilding.productionEndsAt {
-                                        Text("Time Remaining: \(formattedTimeRemaining(until: productionEndsAt, now: context.date))")
-                                    }
-                                }
-                            }
-                            .padding()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(12)
-
-                            if let errorMessage {
-                                Text(errorMessage)
-                                    .foregroundStyle(.red)
-                            }
-
-                            if isWorking {
-                                ProgressView()
-                            } else if currentBuilding.isListedOnMarket == true {
-                                Text("This mine is currently listed on the marketplace.")
-                                    .foregroundStyle(.secondary)
-                            } else if currentBuilding.isProducing == true {
-                                if isReadyToCollect(at: context.date) {
-                                    Button("Collect Output") {
-                                        collectProduction()
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                } else {
-                                    Text("Production is currently running.")
-                                        .foregroundStyle(.secondary)
-                                }
-                            } else {
-                                Button("Start Production") {
-                                    startProduction()
-                                }
-                                .buttonStyle(.borderedProminent)
-                            }
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Management")
-                            .font(.headline)
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("System Sell Value: $\(scrapValue(), specifier: "%.2f")")
-                                .font(.subheadline)
-
-                            if currentBuilding.isListedOnMarket == true {
-                                if let currentListing {
-                                    Text("Buy Now: $\(currentListing.buyNowPrice, specifier: "%.2f")")
-                                        .font(.subheadline)
-
-                                    Text("Current Bid: $\(currentListing.currentBid, specifier: "%.2f")")
-                                        .font(.subheadline)
-
-                                    if currentListing.currentBidderID == nil || currentListing.currentBidderID?.isEmpty == true {
-                                        Button("Cancel Listing") {
-                                            cancelListing()
-                                        }
-                                        .buttonStyle(.bordered)
-                                        .disabled(isWorking)
-                                    } else {
-                                        Text("This listing has bids and cannot be cancelled.")
-                                            .foregroundStyle(.secondary)
-                                    }
-                                } else {
-                                    Text("Loading listing details...")
-                                        .foregroundStyle(.secondary)
-                                }
-                            } else {
-                                Button("List on Marketplace") {
-                                    errorMessage = nil
-                                    buyNowPriceText = ""
-                                    showListingSheet = true
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(isWorking || (currentBuilding.isProducing ?? false))
-
-                                Button("Sell to System") {
-                                    sellToSystem()
-                                }
-                                .buttonStyle(.bordered)
-                                .disabled(isWorking || (currentBuilding.isProducing ?? false))
-                            }
-                        }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(12)
-                    }
+                if viewModel.currentBuilding.type == .mine || viewModel.currentBuilding.type == .rig || viewModel.currentBuilding.type == .quarry {
+                    mineDetailsSection
+                    productionSection
+                    managementSection
                 } else {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Machines")
-                            .font(.headline)
-
-                        ForEach(mockMachines.prefix(currentBuilding.capacity)) { machine in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(machine.name)
-                                    .font(.headline)
-
-                                Text("Level: \(machine.level)")
-                                Text("Efficiency Bonus: \(Int(machine.efficiencyBonus * 100))%")
-                            }
-                            .padding()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(12)
-                        }
-                    }
+                    machinesSection
                 }
 
                 Spacer()
             }
             .padding()
         }
-        .navigationTitle(currentBuilding.name)
+        .navigationTitle(viewModel.currentBuilding.name)
         .onAppear {
-            refreshBuilding()
+            viewModel.onDismiss = { dismiss() }
+            viewModel.refreshBuilding()
         }
-        .sheet(isPresented: $showListingSheet) {
-            NavigationStack {
-                Form {
-                    Section("Set Buy Now Price") {
-                        TextField("Enter buy now price", text: $buyNowPriceText)
-                            .keyboardType(.decimalPad)
+        .sheet(isPresented: $viewModel.showListingSheet) {
+            listingSheetView
+        }
+    }
 
-                        Text("Resource: \(currentBuilding.resourceType?.rawValue ?? "Unknown")")
-                        Text("Abundance: \(currentBuilding.abundance ?? 0)")
-                        Text("Stability: \(currentBuilding.stability ?? 0)")
-                        Text("Level: \(currentBuilding.level)")
+    private var mineDetailsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Mine Details")
+                .font(.headline)
 
-                        if let pricing = suggestedPricing() {
-                            Text("Suggested Starting Bid: $\(pricing.startingBid, specifier: "%.2f")")
-                            Text("Suggested Buy Now Range: $\(pricing.suggestedBuyNowLow, specifier: "%.2f") - $\(pricing.suggestedBuyNowHigh, specifier: "%.2f")")
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Resource: \(viewModel.currentBuilding.resourceType?.rawValue ?? "Unknown")")
+                Text("Abundance: \(viewModel.currentBuilding.abundance ?? 0)")
+                Text("Stability: \(viewModel.currentBuilding.stability ?? 0)")
+                Text("Starter Mine: \((viewModel.currentBuilding.isStarterMine ?? false) ? "Yes" : "No")")
+                Text("Output Range: \(viewModel.formattedOutputRange())")
+
+                if viewModel.currentBuilding.isListedOnMarket == true {
+                    Text("Market Status: Listed on Market")
+                        .foregroundStyle(.orange)
+                        .bold()
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(12)
+        }
+    }
+
+    private var productionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Production")
+                .font(.headline)
+
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Producing: \((viewModel.currentBuilding.isProducing ?? false) ? "Yes" : "No")")
+
+                    if viewModel.currentBuilding.isListedOnMarket == true {
+                        Text("Production unavailable while listed on the market.")
+                            .foregroundStyle(.secondary)
+                    } else if viewModel.currentBuilding.isProducing == true {
+                        if viewModel.isReadyToCollect(at: context.date) {
+                            Text("Status: Ready to Collect")
+                                .bold()
+
+                            if let pendingOutputQuantity = viewModel.currentBuilding.pendingOutputQuantity,
+                               pendingOutputQuantity > 0 {
+                                Text("Output Ready: \(Int(pendingOutputQuantity))")
+                            }
+                        } else if let productionEndsAt = viewModel.currentBuilding.productionEndsAt {
+                            Text("Time Remaining: \(viewModel.formattedTimeRemaining(until: productionEndsAt, now: context.date))")
+                        }
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(12)
+
+                if let errorMessage = viewModel.errorMessage {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                }
+
+                if viewModel.isWorking {
+                    ProgressView()
+                } else if viewModel.currentBuilding.isListedOnMarket == true {
+                    Text("This mine is currently listed on the marketplace.")
+                        .foregroundStyle(.secondary)
+                } else if viewModel.currentBuilding.isProducing == true {
+                    if viewModel.isReadyToCollect(at: context.date) {
+                        Button("Collect Output") {
+                            viewModel.collectProduction()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    } else {
+                        Text("Production is currently running.")
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Button("Start Production") {
+                        viewModel.startProduction()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+    }
+
+    private var managementSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Management")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("System Sell Value: $\(viewModel.scrapValue(), specifier: "%.2f")")
+                    .font(.subheadline)
+
+                if viewModel.currentBuilding.isListedOnMarket == true {
+                    if let currentListing = viewModel.currentListing {
+                        Text("Buy Now: $\(currentListing.buyNowPrice, specifier: "%.2f")")
+                            .font(.subheadline)
+                        Text("Current Bid: $\(currentListing.currentBid, specifier: "%.2f")")
+                            .font(.subheadline)
+                        if currentListing.currentBidderID == nil || currentListing.currentBidderID?.isEmpty == true {
+                            Button("Cancel Listing") {
+                                viewModel.cancelListing()
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(viewModel.isWorking)
+                        } else {
+                            Text("This listing has bids and cannot be cancelled.")
                                 .foregroundStyle(.secondary)
                         }
+                    } else {
+                        Text("Loading listing details...")
+                            .foregroundStyle(.secondary)
                     }
+                } else {
+                    Button("List on Marketplace") {
+                        viewModel.openListingSheet()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(viewModel.isWorking || (viewModel.currentBuilding.isProducing ?? false))
 
-                    if let errorMessage {
-                        Section {
-                            Text(errorMessage)
-                                .foregroundStyle(.red)
-                        }
+                    Button("Sell to System") {
+                        viewModel.sellToSystem()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(viewModel.isWorking || (viewModel.currentBuilding.isProducing ?? false))
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(12)
+        }
+    }
+
+    private var machinesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Machines")
+                .font(.headline)
+
+            ForEach(viewModel.mockMachines.prefix(viewModel.currentBuilding.capacity)) { machine in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(machine.name)
+                        .font(.headline)
+                    Text("Level: \(machine.level)")
+                    Text("Efficiency Bonus: \(Int(machine.efficiencyBonus * 100))%")
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(12)
+            }
+        }
+    }
+
+    private var listingSheetView: some View {
+        NavigationStack {
+            Form {
+                Section("Set Buy Now Price") {
+                    TextField("Enter buy now price", text: $viewModel.buyNowPriceText)
+                        .keyboardType(.decimalPad)
+
+                    Text("Resource: \(viewModel.currentBuilding.resourceType?.rawValue ?? "Unknown")")
+                    Text("Abundance: \(viewModel.currentBuilding.abundance ?? 0)")
+                    Text("Stability: \(viewModel.currentBuilding.stability ?? 0)")
+                    Text("Level: \(viewModel.currentBuilding.level)")
+
+                    if let pricing = viewModel.suggestedPricing() {
+                        Text("Suggested Starting Bid: $\(pricing.startingBid, specifier: "%.2f")")
+                        Text("Suggested Buy Now Range: $\(pricing.suggestedBuyNowLow, specifier: "%.2f") - $\(pricing.suggestedBuyNowHigh, specifier: "%.2f")")
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .navigationTitle("List Mine")
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Cancel") {
-                            showListingSheet = false
-                            buyNowPriceText = ""
-                            errorMessage = nil
-                        }
-                    }
 
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("List") {
-                            listOwnedMine()
-                        }
-                        .disabled(isWorking)
-                    }
-                }
-                .overlay {
-                    if isWorking {
-                        ProgressView("Listing...")
-                            .padding()
-                            .background(.regularMaterial)
-                            .cornerRadius(12)
+                if let errorMessage = viewModel.errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .foregroundStyle(.red)
                     }
                 }
             }
-        }
-    }
-
-    private func isReadyToCollect(at date: Date) -> Bool {
-        guard let productionEndsAt = currentBuilding.productionEndsAt else { return false }
-        return currentBuilding.isProducing == true && productionEndsAt <= date
-    }
-
-    private func refreshBuilding() {
-        buildingService.fetchBuildings(for: userID) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let buildings):
-                    if let updated = buildings.first(where: { $0.id == currentBuilding.id }) {
-                        self.currentBuilding = updated
-                        self.refreshListingIfNeeded()
+            .navigationTitle("List Mine")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        viewModel.closeListingSheet()
                     }
-                case .failure:
-                    break
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("List") {
+                        viewModel.listOwnedMine()
+                    }
+                    .disabled(viewModel.isWorking)
+                }
+            }
+            .overlay {
+                if viewModel.isWorking {
+                    ProgressView("Listing...")
+                        .padding()
+                        .background(.regularMaterial)
+                        .cornerRadius(12)
                 }
             }
         }
-    }
-
-    private func refreshListingIfNeeded() {
-        guard currentBuilding.isListedOnMarket == true,
-              let listingID = currentBuilding.marketListingID,
-              !listingID.isEmpty
-        else {
-            currentListing = nil
-            return
-        }
-
-        mineMarketService.fetchMineListing(by: listingID) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let listing):
-                    self.currentListing = listing
-                case .failure:
-                    self.currentListing = nil
-                }
-            }
-        }
-    }
-
-    private func startProduction() {
-        isWorking = true
-        errorMessage = nil
-
-        productionService.startProduction(for: userID, buildingID: currentBuilding.id) { result in
-            DispatchQueue.main.async {
-                self.isWorking = false
-
-                switch result {
-                case .success:
-                    refreshBuilding()
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func collectProduction() {
-        isWorking = true
-        errorMessage = nil
-
-        productionService.collectProduction(for: userID, buildingID: currentBuilding.id) { result in
-            DispatchQueue.main.async {
-                self.isWorking = false
-
-                switch result {
-                case .success:
-                    refreshBuilding()
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func sellToSystem() {
-        isWorking = true
-        errorMessage = nil
-
-        buildingService.sellBuildingToSystem(
-            for: userID,
-            building: currentBuilding,
-            sellValue: scrapValue()
-        ) { result in
-            DispatchQueue.main.async {
-                self.isWorking = false
-
-                switch result {
-                case .success:
-                    dismiss()
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func listOwnedMine() {
-        guard let buyNowPrice = Double(buyNowPriceText), buyNowPrice > 0 else {
-            errorMessage = "Enter a valid buy now price."
-            return
-        }
-
-        isWorking = true
-        errorMessage = nil
-
-        mineMarketService.listOwnedMineOnMarket(
-            for: userID,
-            building: currentBuilding,
-            buyNowPrice: buyNowPrice
-        ) { result in
-            DispatchQueue.main.async {
-                self.isWorking = false
-
-                switch result {
-                case .success:
-                    self.showListingSheet = false
-                    self.buyNowPriceText = ""
-                    dismiss()
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func cancelListing() {
-        guard let currentListing else { return }
-
-        isWorking = true
-        errorMessage = nil
-
-        mineMarketService.cancelMineListing(for: userID, listing: currentListing) { result in
-            DispatchQueue.main.async {
-                self.isWorking = false
-
-                switch result {
-                case .success:
-                    dismiss()
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func suggestedPricing() -> (startingBid: Double, suggestedBuyNowLow: Double, suggestedBuyNowHigh: Double)? {
-        guard
-            let resourceType = currentBuilding.resourceType,
-            let abundance = currentBuilding.abundance,
-            let stability = currentBuilding.stability
-        else {
-            return nil
-        }
-
-        let baseValue: Double
-
-        switch resourceType {
-        case .gold:
-            baseValue = 800
-        case .silver:
-            baseValue = 700
-        case .diamond:
-            baseValue = 1200
-        case .oil:
-            baseValue = 900
-        case .coal:
-            baseValue = 650
-        case .iron:
-            baseValue = 750
-        default:
-            baseValue = 700
-        }
-
-        let statBonus = Double((abundance - 50) + (stability - 50)) * 12.0
-        let levelBonus = Double(currentBuilding.level - 1) * 150.0
-
-        let startingBid = max(100, baseValue + statBonus + levelBonus)
-        let suggestedBuyNowLow = startingBid * 1.35
-        let suggestedBuyNowHigh = startingBid * 1.75
-
-        return (startingBid, suggestedBuyNowLow, suggestedBuyNowHigh)
-    }
-
-    private func formattedTimeRemaining(until endDate: Date, now: Date) -> String {
-        let remainingSeconds = max(0, Int(ceil(endDate.timeIntervalSince(now))))
-        let minutes = remainingSeconds / 60
-        let seconds = remainingSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    private func formattedOutputRange() -> String {
-        guard
-            let abundance = currentBuilding.abundance,
-            let stability = currentBuilding.stability
-        else {
-            return "Unknown"
-        }
-
-        let maxOutput = max(1, abundance - 40)
-        let normalizedStability = Double(stability - 50) / 50.0
-        let stabilityMultiplier = 0.5 + (normalizedStability * 0.4)
-        let minOutput = max(1, Int((Double(maxOutput) * stabilityMultiplier).rounded(.down)))
-
-        return "\(minOutput)-\(maxOutput)"
-    }
-
-    private func scrapValue() -> Double {
-        guard let resourceType = currentBuilding.resourceType else {
-            return 250
-        }
-
-        let baseValue: Double
-
-        switch resourceType {
-        case .gold:
-            baseValue = 500
-        case .silver:
-            baseValue = 425
-        case .diamond:
-            baseValue = 700
-        case .oil:
-            baseValue = 550
-        case .coal:
-            baseValue = 400
-        case .iron:
-            baseValue = 450
-        default:
-            baseValue = 400
-        }
-
-        let abundanceBonus = Double((currentBuilding.abundance ?? 50) - 50) * 4.0
-        let stabilityBonus = Double((currentBuilding.stability ?? 50) - 50) * 4.0
-        let levelBonus = Double(currentBuilding.level - 1) * 100.0
-
-        return max(100, baseValue + abundanceBonus + stabilityBonus + levelBonus)
     }
 }
 
@@ -540,7 +284,6 @@ struct BuildingDetailView: View {
                 pendingOutputQuantity: nil,
                 isListedOnMarket: false,
                 marketListingID: nil
-                
             )
         )
     }

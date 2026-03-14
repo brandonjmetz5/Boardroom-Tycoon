@@ -10,18 +10,19 @@ import SwiftUI
 struct InventoryView: View {
     let userID: String
 
-    @State private var inventoryItems: [InventoryItem] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @StateObject private var viewModel: InventoryViewModel
 
-    private let inventoryService = InventoryService()
+    init(userID: String) {
+        self.userID = userID
+        _viewModel = StateObject(wrappedValue: InventoryViewModel(userID: userID))
+    }
 
     var body: some View {
         Group {
-            if isLoading {
+            if viewModel.isLoading {
                 ProgressView("Loading inventory...")
                     .controlSize(.large)
-            } else if let errorMessage {
+            } else if let errorMessage = viewModel.errorMessage {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Failed to load inventory")
                         .font(.headline)
@@ -31,12 +32,12 @@ struct InventoryView: View {
                 }
                 .padding()
             } else {
-                List(inventoryItems) { inventoryItem in
+                List(viewModel.inventoryItems) { inventoryItem in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(inventoryItem.item.name)
                             .font(.headline)
 
-                        Text("Quantity: \(formattedQuantity(for: inventoryItem))")
+                        Text("Quantity: \(viewModel.formattedQuantity(for: inventoryItem))")
                             .font(.subheadline)
 
                         Text("Category: \(inventoryItem.item.category.rawValue)")
@@ -49,30 +50,7 @@ struct InventoryView: View {
             }
         }
         .onAppear {
-            loadInventory()
-        }
-    }
-
-    private func loadInventory() {
-        inventoryService.fetchInventory(for: userID) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let items):
-                    self.inventoryItems = items
-                    self.isLoading = false
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
-                    self.isLoading = false
-                }
-            }
-        }
-    }
-
-    private func formattedQuantity(for inventoryItem: InventoryItem) -> String {
-        if inventoryItem.item.isFractional {
-            return String(format: "%.2f", inventoryItem.quantity)
-        } else {
-            return String(Int(inventoryItem.quantity))
+            viewModel.loadInventory()
         }
     }
 }
