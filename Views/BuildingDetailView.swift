@@ -28,11 +28,13 @@ struct BuildingDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
                     overviewCard
-                    if viewModel.currentBuilding.type == .mine || viewModel.currentBuilding.type == .rig || viewModel.currentBuilding.type == .quarry {
+                    if viewModel.isExtractor {
                         mineDetailsSection
                         productionSection
                         managementSection
                     } else {
+                        productionSectionNonExtractor
+                        managementSectionNonExtractor
                         machinesSection
                     }
                 }
@@ -204,6 +206,61 @@ struct BuildingDetailView: View {
             .padding(AppTheme.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .themedCard()
+        }
+    }
+
+    private var managementSectionNonExtractor: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Management")
+            Text(String(format: "System Sell Value: $%.2f", viewModel.scrapValue()))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+            secondaryButton("Sell to System") {
+                viewModel.sellToSystem()
+            }
+            .disabled(viewModel.isWorking || (viewModel.currentBuilding.isProducing ?? false))
+        }
+        .padding(AppTheme.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .themedCard()
+    }
+
+    private var productionSectionNonExtractor: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Production")
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                VStack(alignment: .leading, spacing: 12) {
+                    detailRow("Producing", (viewModel.currentBuilding.isProducing ?? false) ? "Yes" : "No")
+                    if let errorMessage = viewModel.errorMessage {
+                        Text(errorMessage)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textError)
+                    }
+                    if viewModel.isWorking {
+                        ProgressView()
+                            .tint(.white)
+                    } else if viewModel.currentBuilding.isProducing == true {
+                        if viewModel.isReadyToCollect(at: context.date) {
+                            primaryButton("Collect Output") {
+                                viewModel.collectProduction()
+                            }
+                        } else {
+                            if let productionEndsAt = viewModel.currentBuilding.productionEndsAt {
+                                Text("Time Remaining: \(viewModel.formattedTimeRemaining(until: productionEndsAt, now: context.date))")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                            }
+                        }
+                    } else {
+                        primaryButton("Start Production") {
+                            viewModel.startProduction()
+                        }
+                    }
+                }
+                .padding(AppTheme.cardPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .themedCard()
+            }
         }
     }
 

@@ -104,4 +104,58 @@ final class RecipeService {
             completion(.success(recipes))
         }
     }
+
+    func fetchRecipe(byId recipeId: String, completion: @escaping (Result<Recipe?, Error>) -> Void) {
+        let ref = db.collection("recipes").document(recipeId)
+        ref.getDocument { snapshot, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            guard let data = snapshot?.data(),
+                  let id = data["id"] as? String,
+                  let name = data["name"] as? String,
+                  let cycleTimeInMinutes = data["cycleTimeInMinutes"] as? Int,
+                  let inputItemsData = data["inputItems"] as? [[String: Any]],
+                  let outputItemsData = data["outputItems"] as? [[String: Any]]
+            else {
+                completion(.success(nil))
+                return
+            }
+            let inputItems = inputItemsData.compactMap { ingredientData -> RecipeIngredient? in
+                guard
+                    let ingredientID = ingredientData["id"] as? String,
+                    let itemID = ingredientData["itemID"] as? String,
+                    let itemName = ingredientData["itemName"] as? String,
+                    let categoryRawValue = ingredientData["category"] as? String,
+                    let category = ItemCategory(rawValue: categoryRawValue),
+                    let isFractional = ingredientData["isFractional"] as? Bool,
+                    let quantity = ingredientData["quantity"] as? Double
+                else { return nil }
+                let item = Item(id: itemID, name: itemName, category: category, isFractional: isFractional)
+                return RecipeIngredient(id: ingredientID, item: item, quantity: quantity)
+            }
+            let outputItems = outputItemsData.compactMap { ingredientData -> RecipeIngredient? in
+                guard
+                    let ingredientID = ingredientData["id"] as? String,
+                    let itemID = ingredientData["itemID"] as? String,
+                    let itemName = ingredientData["itemName"] as? String,
+                    let categoryRawValue = ingredientData["category"] as? String,
+                    let category = ItemCategory(rawValue: categoryRawValue),
+                    let isFractional = ingredientData["isFractional"] as? Bool,
+                    let quantity = ingredientData["quantity"] as? Double
+                else { return nil }
+                let item = Item(id: itemID, name: itemName, category: category, isFractional: isFractional)
+                return RecipeIngredient(id: ingredientID, item: item, quantity: quantity)
+            }
+            let recipe = Recipe(
+                id: id,
+                name: name,
+                inputItems: inputItems,
+                outputItems: outputItems,
+                cycleTimeInMinutes: cycleTimeInMinutes
+            )
+            completion(.success(recipe))
+        }
+    }
 }

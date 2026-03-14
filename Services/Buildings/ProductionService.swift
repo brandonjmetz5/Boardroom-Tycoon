@@ -113,93 +113,79 @@ final class ProductionService {
         let profileRef = db.collection("playerProfiles").document(userID)
         let buildingRef = profileRef.collection("buildings").document(buildingID)
 
-        db.runTransaction({ transaction, errorPointer in
+        db.runTransaction({ [weak self] transaction, errorPointer in
+            guard let self else { return nil }
             do {
                 let profileSnapshot = try transaction.getDocument(profileRef)
                 let buildingSnapshot = try transaction.getDocument(buildingRef)
-
-                guard
-                    let buildingData = buildingSnapshot.data(),
-                    let profileData = profileSnapshot.data(),
-                    let pendingOutputQuantity = buildingData["pendingOutputQuantity"] as? Double,
-                    let isProducing = buildingData["isProducing"] as? Bool,
-                    let productionEndsAtTimestamp = buildingData["productionEndsAt"] as? Timestamp,
-                    let currentXP = profileData["xp"] as? Int,
-                    let resourceTypeRawValue = buildingData["resourceType"] as? String,
-                    let resourceType = ResourceType(rawValue: resourceTypeRawValue)
-                else {
-                    let error = NSError(
-                        domain: "ProductionService",
-                        code: 2001,
-                        userInfo: [NSLocalizedDescriptionKey: "Invalid building production data."]
-                    )
-                    errorPointer?.pointee = error
+                guard let buildingData = buildingSnapshot.data(), let profileData = profileSnapshot.data() else {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2001, userInfo: [NSLocalizedDescriptionKey: "Invalid building or profile data."])
                     return nil
                 }
-
+                let isProducing = buildingData["isProducing"] as? Bool ?? false
+                let productionEndsAtTimestamp = buildingData["productionEndsAt"] as? Timestamp
                 let isListedOnMarket = buildingData["isListedOnMarket"] as? Bool ?? false
                 if isListedOnMarket {
-                    let error = NSError(
-                        domain: "ProductionService",
-                        code: 2005,
-                        userInfo: [NSLocalizedDescriptionKey: "This mine is listed on the market and cannot collect production."]
-                    )
-                    errorPointer?.pointee = error
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2005, userInfo: [NSLocalizedDescriptionKey: "Listed buildings cannot collect production."])
                     return nil
                 }
-
                 if !isProducing {
-                    let error = NSError(
-                        domain: "ProductionService",
-                        code: 2002,
-                        userInfo: [NSLocalizedDescriptionKey: "This building is not producing."]
-                    )
-                    errorPointer?.pointee = error
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2002, userInfo: [NSLocalizedDescriptionKey: "This building is not producing."])
+                    return nil
+                }
+                guard let endsAt = productionEndsAtTimestamp?.dateValue(), endsAt <= Date() else {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2003, userInfo: [NSLocalizedDescriptionKey: "Production is not finished yet."])
                     return nil
                 }
 
-                if productionEndsAtTimestamp.dateValue() > Date() {
-                    let error = NSError(
-                        domain: "ProductionService",
-                        code: 2003,
-                        userInfo: [NSLocalizedDescriptionKey: "Production is not finished yet."]
-                    )
-                    errorPointer?.pointee = error
-                    return nil
+                let pendingOutputQuantity = buildingData["pendingOutputQuantity"] as? Double ?? 0
+                if let resourceTypeRawValue = buildingData["resourceType"] as? String,
+                   let resourceType = ResourceType(rawValue: resourceTypeRawValue) {
+                    let inventoryDocID = self.inventoryDocumentID(for: resourceType)
+                    let inventoryName = self.inventoryDisplayName(for: resourceType)
+                    let inventoryRef = profileRef.collection("inventory").document(inventoryDocID)
+                    let inventorySnapshot = try transaction.getDocument(inventoryRef)
+                    let currentQuantity = inventorySnapshot.data()?["quantity"] as? Double ?? 0.0
+                    let currentXP = profileData["xp"] as? Int ?? 0
+                    let xpReward = 10
+                    let updatedXP = currentXP + xpReward
+                    let updatedLevel = self.levelForTotalXP(updatedXP)
+                    let updatedBuildingSlotCount = self.buildingSlotCount(for: updatedLevel)
+                    let inventoryData: [String: Any] = [
+                        "id": inventoryDocID,
+                        "name": inventoryName,
+                        "category": "Raw Material",
+                        "isFractional": false,
+                        "quantity": currentQuantity + pendingOutputQuantity
+                    ]
+                    transaction.setData(inventoryData, forDocument: inventoryRef)
+                    transaction.updateData(["xp": updatedXP, "level": updatedLevel, "buildingSlotCount": updatedBuildingSlotCount], forDocument: profileRef)
+                } else if let outputItemId = buildingData["pendingOutputItemId"] as? String,
+                          let outputItemName = buildingData["pendingOutputItemName"] as? String {
+                    let inventoryRef = profileRef.collection("inventory").document(outputItemId)
+                    let inventorySnapshot = try transaction.getDocument(inventoryRef)
+                    let existingData = inventorySnapshot.data()
+                    let currentQuantity = existingData?["quantity"] as? Double ?? 0.0
+                    let category = existingData?["category"] as? String ?? "Refined Material"
+                    let isFractional = existingData?["isFractional"] as? Bool ?? false
+                    let inventoryData: [String: Any] = [
+                        "id": outputItemId,
+                        "name": outputItemName,
+                        "category": category,
+                        "isFractional": isFractional,
+                        "quantity": currentQuantity + pendingOutputQuantity
+                    ]
+                    transaction.setData(inventoryData, forDocument: inventoryRef)
                 }
 
-                let inventoryDocID = self.inventoryDocumentID(for: resourceType)
-                let inventoryName = self.inventoryDisplayName(for: resourceType)
-                let inventoryRef = profileRef.collection("inventory").document(inventoryDocID)
-                let inventorySnapshot = try transaction.getDocument(inventoryRef)
-
-                let currentQuantity = inventorySnapshot.data()?["quantity"] as? Double ?? 0.0
-                let xpReward = 10
-                let updatedXP = currentXP + xpReward
-                let updatedLevel = self.levelForTotalXP(updatedXP)
-                let updatedBuildingSlotCount = self.buildingSlotCount(for: updatedLevel)
-
-                let inventoryData: [String: Any] = [
-                    "id": inventoryDocID,
-                    "name": inventoryName,
-                    "category": "Raw Material",
-                    "isFractional": false,
-                    "quantity": currentQuantity + pendingOutputQuantity
-                ]
-
-                transaction.setData(inventoryData, forDocument: inventoryRef)
                 transaction.updateData([
                     "isProducing": false,
                     "productionStartedAt": NSNull(),
                     "productionEndsAt": NSNull(),
-                    "pendingOutputQuantity": 0.0
+                    "pendingOutputQuantity": 0.0,
+                    "pendingOutputItemId": NSNull(),
+                    "pendingOutputItemName": NSNull()
                 ], forDocument: buildingRef)
-
-                transaction.updateData([
-                    "xp": updatedXP,
-                    "level": updatedLevel,
-                    "buildingSlotCount": updatedBuildingSlotCount
-                ], forDocument: profileRef)
 
                 return nil
             } catch let error as NSError {
@@ -207,11 +193,75 @@ final class ProductionService {
                 return nil
             }
         }) { _, error in
-            if let error = error {
-                completion(.failure(error))
-            } else {
-                completion(.success(()))
+            if let error = error { completion(.failure(error)) }
+            else { completion(.success(())) }
+        }
+    }
+
+    /// Start recipe-based production: consume inputs from inventory, set building producing with output.
+    func startRecipeProduction(for userID: String, building: Building, recipe: Recipe, completion: @escaping (Result<Void, Error>) -> Void) {
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingRef = profileRef.collection("buildings").document(building.id)
+
+        guard let firstOutput = recipe.outputItems.first else {
+            completion(.failure(NSError(domain: "ProductionService", code: 2010, userInfo: [NSLocalizedDescriptionKey: "Recipe has no output."])))
+            return
+        }
+
+        #if DEBUG
+        let cycleSeconds: TimeInterval = 10
+        #else
+        let cycleSeconds = TimeInterval(recipe.cycleTimeInMinutes * 60)
+        #endif
+
+        db.runTransaction({ [weak self] transaction, errorPointer in
+            guard let self else { return nil }
+            do {
+                let buildingSnapshot = try transaction.getDocument(buildingRef)
+                guard let buildingData = buildingSnapshot.data() else {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2000, userInfo: [NSLocalizedDescriptionKey: "Building not found."])
+                    return nil
+                }
+                if buildingData["isListedOnMarket"] as? Bool == true {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2004, userInfo: [NSLocalizedDescriptionKey: "Building cannot produce while listed."])
+                    return nil
+                }
+                if buildingData["isProducing"] as? Bool == true {
+                    errorPointer?.pointee = NSError(domain: "ProductionService", code: 2007, userInfo: [NSLocalizedDescriptionKey: "Already producing."])
+                    return nil
+                }
+
+                for input in recipe.inputItems {
+                    let invRef = profileRef.collection("inventory").document(input.item.id)
+                    let invSnap = try transaction.getDocument(invRef)
+                    let qty = invSnap.data()?["quantity"] as? Double ?? 0
+                    if qty < input.quantity {
+                        errorPointer?.pointee = NSError(domain: "ProductionService", code: 2008, userInfo: [NSLocalizedDescriptionKey: "Not enough \(input.item.name). Need \(input.quantity), have \(qty)."])
+                        return nil
+                    }
+                    var invData = invSnap.data() ?? ["id": input.item.id, "name": input.item.name, "category": input.item.category.rawValue, "isFractional": input.item.isFractional]
+                    invData["quantity"] = qty - input.quantity
+                    transaction.setData(invData, forDocument: invRef)
+                }
+
+                let startedAt = Date()
+                let endsAt = startedAt.addingTimeInterval(cycleSeconds)
+                transaction.updateData([
+                    "isProducing": true,
+                    "productionStartedAt": Timestamp(date: startedAt),
+                    "productionEndsAt": Timestamp(date: endsAt),
+                    "pendingOutputQuantity": firstOutput.quantity,
+                    "pendingOutputItemId": firstOutput.item.id,
+                    "pendingOutputItemName": firstOutput.item.name
+                ], forDocument: buildingRef)
+                return nil
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
             }
+        }) { _, error in
+            if let error = error { completion(.failure(error)) }
+            else { completion(.success(())) }
         }
     }
 
@@ -241,6 +291,8 @@ final class ProductionService {
             return "raw-coal"
         case .iron:
             return "raw-iron"
+        case .quarry:
+            return "raw-stone"
         default:
             return "raw-material"
         }
@@ -260,6 +312,8 @@ final class ProductionService {
             return "Raw Coal"
         case .iron:
             return "Raw Iron"
+        case .quarry:
+            return "Raw Stone"
         default:
             return resourceType.rawValue
         }

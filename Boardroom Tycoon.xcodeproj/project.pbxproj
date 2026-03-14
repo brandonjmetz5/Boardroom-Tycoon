@@ -11,6 +11,7 @@
 		A865774A2F6319930029071D /* BuildingSlot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86577492F6319930029071D /* BuildingSlot.swift */; };
 		A865774E2F631D020029071D /* PurchasableBuilding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A865774D2F631D020029071D /* PurchasableBuilding.swift */; };
 		A86577502F631D340029071D /* BuildingCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A865774F2F631D340029071D /* BuildingCatalog.swift */; };
+		A86577562F631D350029071D /* BuildingRecipeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86577552F631D350029071D /* BuildingRecipeCatalog.swift */; };
 		A86577522F634F0B0029071D /* MineMarketListing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86577512F634F0B0029071D /* MineMarketListing.swift */; };
 		A86577542F6353440029071D /* MineMarketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86577532F6353440029071D /* MineMarketService.swift */; };
 		A8AB73742F61B7D00012C9BC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */; };
@@ -85,6 +86,7 @@
 		A86577492F6319930029071D /* BuildingSlot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingSlot.swift; sourceTree = "<group>"; };
 		A865774D2F631D020029071D /* PurchasableBuilding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PurchasableBuilding.swift; sourceTree = "<group>"; };
 		A865774F2F631D340029071D /* BuildingCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BuildingCatalog.swift"; sourceTree = "<group>"; };
+		A86577552F631D350029071D /* BuildingRecipeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingRecipeCatalog.swift; sourceTree = "<group>"; };
 		A86577512F634F0B0029071D /* MineMarketListing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MineMarketListing.swift; sourceTree = "<group>"; };
 		A86577532F6353440029071D /* MineMarketService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MineMarketService.swift; sourceTree = "<group>"; };
 		A8AB73652F61B7B20012C9BC /* Boardroom Tycoon.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Boardroom Tycoon.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -243,6 +245,7 @@
 			isa = PBXGroup;
 			children = (
 				A865774F2F631D340029071D /* BuildingCatalog.swift */,
+				A86577552F631D350029071D /* BuildingRecipeCatalog.swift */,
 			);
 			path = Catalogs;
 			sourceTree = "<group>";
@@ -509,6 +512,7 @@
 				A8AB74152F63000E012C9BC /* PortfolioView.swift in Sources */,
 				A8AB73A32F61E88C0012C9BC /* OperationType.swift in Sources */,
 				A86577502F631D340029071D /* BuildingCatalog.swift in Sources */,
+				A86577562F631D350029071D /* BuildingRecipeCatalog.swift in Sources */,
 				A8AB73B52F62075A0012C9BC /* InventoryService.swift in Sources */,
 				A865774A2F6319930029071D /* BuildingSlot.swift in Sources */,
 				A8AB73D12F62FB880012C9BC /* MarketOrderService.swift in Sources */,

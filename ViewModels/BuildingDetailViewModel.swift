@@ -17,6 +17,7 @@ final class BuildingDetailViewModel: ObservableObject {
     @Published private(set) var currentListing: MineMarketListing?
     @Published private(set) var isWorking = false
     @Published var errorMessage: String?
+    @Published private(set) var recipe: Recipe?
 
     @Published var showListingSheet = false
     @Published var buyNowPriceText = ""
@@ -24,6 +25,7 @@ final class BuildingDetailViewModel: ObservableObject {
     private let productionService = ProductionService()
     private let buildingService = BuildingService()
     private let mineMarketService = MineMarketService()
+    private let recipeService = RecipeService()
 
     let mockMachines: [Machine] = [
         Machine(
@@ -58,10 +60,27 @@ final class BuildingDetailViewModel: ObservableObject {
                     if let updated = buildings.first(where: { $0.id == self.currentBuilding.id }) {
                         self.currentBuilding = updated
                         self.refreshListingIfNeeded()
+                        if !self.isExtractor {
+                            self.loadRecipeIfNeeded()
+                        }
                     }
                 case .failure:
                     break
                 }
+            }
+        }
+    }
+
+    private func loadRecipeIfNeeded() {
+        let recipeId = BuildingRecipeCatalog.recipeId(forBuildingId: currentBuilding.id)
+            ?? BuildingRecipeCatalog.recipeId(forBuildingName: currentBuilding.name)
+        guard let recipeId else {
+            recipe = nil
+            return
+        }
+        recipeService.fetchRecipe(byId: recipeId) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.recipe = (try? result.get()) ?? nil
             }
         }
     }
@@ -92,17 +111,31 @@ final class BuildingDetailViewModel: ObservableObject {
         isWorking = true
         errorMessage = nil
 
-        productionService.startProduction(for: userID, buildingID: currentBuilding.id) { [weak self] result in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.isWorking = false
-                switch result {
-                case .success:
-                    self.refreshBuilding()
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
+        if isExtractor {
+            productionService.startProduction(for: userID, buildingID: currentBuilding.id) { [weak self] result in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.isWorking = false
+                    switch result {
+                    case .success: self.refreshBuilding()
+                    case .failure(let error): self.errorMessage = error.localizedDescription
+                    }
                 }
             }
+        } else if let recipe = recipe {
+            productionService.startRecipeProduction(for: userID, building: currentBuilding, recipe: recipe) { [weak self] result in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.isWorking = false
+                    switch result {
+                    case .success: self.refreshBuilding()
+                    case .failure(let error): self.errorMessage = error.localizedDescription
+                    }
+                }
+            }
+        } else {
+            isWorking = false
+            errorMessage = "No recipe configured for this building."
         }
     }
 
@@ -231,6 +264,7 @@ final class BuildingDetailViewModel: ObservableObject {
         case .oil: baseValue = 900
         case .coal: baseValue = 650
         case .iron: baseValue = 750
+        case .quarry: baseValue = 700
         default: baseValue = 700
         }
 
@@ -265,24 +299,33 @@ final class BuildingDetailViewModel: ObservableObject {
     }
 
     func scrapValue() -> Double {
-        guard let resourceType = currentBuilding.resourceType else {
-            return 250
+        if let resourceType = currentBuilding.resourceType {
+            let baseValue: Double
+            switch resourceType {
+            case .gold: baseValue = 500
+            case .silver: baseValue = 425
+            case .diamond: baseValue = 700
+            case .oil: baseValue = 550
+            case .coal: baseValue = 400
+            case .iron: baseValue = 450
+            case .quarry: baseValue = 400
+            default: baseValue = 400
+            }
+            let abundanceBonus = Double((currentBuilding.abundance ?? 50) - 50) * 4.0
+            let stabilityBonus = Double((currentBuilding.stability ?? 50) - 50) * 4.0
+            let levelBonus = Double(currentBuilding.level - 1) * 100.0
+            return max(100, baseValue + abundanceBonus + stabilityBonus + levelBonus)
         }
-
-        let baseValue: Double
-        switch resourceType {
-        case .gold: baseValue = 500
-        case .silver: baseValue = 425
-        case .diamond: baseValue = 700
-        case .oil: baseValue = 550
-        case .coal: baseValue = 400
-        case .iron: baseValue = 450
-        default: baseValue = 400
+        switch currentBuilding.type {
+        case .refinery: return 400
+        case .plant: return 450
+        case .shop: return 500
+        case .mill: return 350
+        default: return 250
         }
+    }
 
-        let abundanceBonus = Double((currentBuilding.abundance ?? 50) - 50) * 4.0
-        let stabilityBonus = Double((currentBuilding.stability ?? 50) - 50) * 4.0
-        let levelBonus = Double(currentBuilding.level - 1) * 100.0
-        return max(100, baseValue + abundanceBonus + stabilityBonus + levelBonus)
+    var isExtractor: Bool {
+        currentBuilding.type == .mine || currentBuilding.type == .rig || currentBuilding.type == .quarry
     }
 }

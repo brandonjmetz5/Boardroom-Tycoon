@@ -16,7 +16,7 @@ struct PortfolioView: View {
 
     init(userID: String) {
         self.userID = userID
-        _stocksVM = StateObject(wrappedValue: StocksViewModel())
+        _stocksVM = StateObject(wrappedValue: StocksViewModel(userID: userID))
         _inventoryVM = StateObject(wrappedValue: InventoryViewModel(userID: userID))
     }
 
@@ -90,7 +90,15 @@ struct PortfolioView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(stocksVM.stocks) { stock in
-                            stockRow(stock)
+                            Button {
+                                if stocksVM.canTrade {
+                                    stocksVM.openTradeSheet(for: stock)
+                                }
+                            } label: {
+                                stockRow(stock: stock)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!stocksVM.canTrade)
                         }
                     }
                     .padding(.horizontal, AppTheme.horizontalPadding)
@@ -98,6 +106,9 @@ struct PortfolioView: View {
                     .padding(.bottom, 24)
                 }
             }
+        }
+        .sheet(item: $stocksVM.selectedStockForTrade) { stock in
+            stockTradeSheet(stock: stock)
         }
     }
 
@@ -164,7 +175,7 @@ struct PortfolioView: View {
         .padding(.horizontal, 24)
     }
 
-    private func stockRow(_ stock: Stock) -> some View {
+    private func stockRow(stock: Stock) -> some View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(stock.name)
@@ -173,6 +184,11 @@ struct PortfolioView: View {
                 Text(stock.symbol)
                     .font(AppTheme.caption())
                     .foregroundStyle(AppTheme.textSecondary)
+                if let pos = stocksVM.position(for: stock.symbol), pos.sharesOwned > 0 {
+                    Text("Own \(String(format: "%.2f", pos.sharesOwned)) shares")
+                        .font(AppTheme.captionMedium())
+                        .foregroundStyle(AppTheme.textTertiary)
+                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
@@ -182,11 +198,110 @@ struct PortfolioView: View {
                 Text(stocksVM.formattedChange(stock.priceChange))
                     .font(AppTheme.captionMedium())
                     .foregroundStyle(stock.priceChange >= 0 ? AppTheme.chipPositive : AppTheme.chipNegative)
+                if stocksVM.canTrade {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.textTertiary)
+                }
             }
         }
         .padding(AppTheme.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .appCard()
+    }
+
+    private func stockTradeSheet(stock: Stock) -> some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.background.ignoresSafeArea()
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(stock.name)
+                            .font(AppTheme.titleSmall())
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(stock.symbol)
+                            .font(AppTheme.caption())
+                            .foregroundStyle(AppTheme.textSecondary)
+                        Text(String(format: "$%.2f", stock.currentPrice))
+                            .font(AppTheme.monoNumber())
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(AppTheme.cardPadding)
+                    .appCard()
+
+                    Picker("Action", selection: $stocksVM.tradeSegment) {
+                        Text("Buy").tag(0)
+                        Text("Sell").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+
+                    if stocksVM.tradeSegment == 0 {
+                        if let cash = stocksVM.profile?.cash {
+                            Text("Cash: \(String(format: "$%.2f", cash))")
+                                .font(AppTheme.caption())
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                    } else {
+                        if let pos = stocksVM.position(for: stock.symbol) {
+                            Text("You own: \(String(format: "%.2f", pos.sharesOwned)) shares")
+                                .font(AppTheme.caption())
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                    }
+
+                    TextField("Shares", text: $stocksVM.tradeQuantityText)
+                        .keyboardType(.decimalPad)
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.vertical, 4)
+
+                    if let total = stocksVM.tradeTotal() {
+                        Text(stocksVM.tradeSegment == 0 ? "Cost: \(String(format: "$%.2f", total))" : "Proceeds: \(String(format: "$%.2f", total))")
+                            .font(AppTheme.bodyMedium())
+                            .foregroundStyle(AppTheme.accent)
+                    }
+
+                    if let err = stocksVM.tradeErrorMessage {
+                        Text(err)
+                            .font(AppTheme.caption())
+                            .foregroundStyle(AppTheme.textError)
+                    }
+
+                    Button {
+                        stocksVM.submitTrade()
+                    } label: {
+                        Text(stocksVM.tradeSegment == 0 ? "Buy" : "Sell")
+                            .font(AppTheme.bodyMedium())
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(AppTheme.accent)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .disabled(stocksVM.isSubmitting || stocksVM.parsedTradeQuantity <= 0)
+                    .opacity(stocksVM.isSubmitting ? 0.7 : 1)
+                }
+                .padding(AppTheme.horizontalPadding)
+
+                if stocksVM.isSubmitting {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                        .tint(AppTheme.accent)
+                }
+            }
+            .navigationTitle(stocksVM.tradeSegment == 0 ? "Buy \(stock.symbol)" : "Sell \(stock.symbol)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.surface, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        stocksVM.closeTradeSheet()
+                    }
+                    .foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+        }
     }
 
     private func inventoryRow(_ item: InventoryItem) -> some View {

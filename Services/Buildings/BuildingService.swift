@@ -69,6 +69,8 @@ final class BuildingService {
                 }
 
                 let pendingOutputQuantity = data["pendingOutputQuantity"] as? Double
+                let pendingOutputItemId = data["pendingOutputItemId"] as? String
+                let pendingOutputItemName = data["pendingOutputItemName"] as? String
 
                 let isListedOnMarket = data["isListedOnMarket"] as? Bool
                 let marketListingID = data["marketListingID"] as? String
@@ -88,6 +90,8 @@ final class BuildingService {
                     productionStartedAt: productionStartedAt,
                     productionEndsAt: productionEndsAt,
                     pendingOutputQuantity: pendingOutputQuantity,
+                    pendingOutputItemId: pendingOutputItemId,
+                    pendingOutputItemName: pendingOutputItemName,
                     isListedOnMarket: isListedOnMarket,
                     marketListingID: marketListingID
                 )

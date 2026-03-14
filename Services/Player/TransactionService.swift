@@ -50,4 +50,29 @@ final class TransactionService {
             completion(.success(transactions))
         }
     }
+
+    /// Record a transaction (e.g. stock buy/sell). Optional for analytics/history.
+    func createTransaction(
+        userID: String,
+        type: String,
+        amount: Double,
+        description: String,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let ref = db.collection("playerProfiles").document(userID).collection("transactions").document()
+        let data: [String: Any] = [
+            "id": ref.documentID,
+            "type": type,
+            "amount": amount,
+            "description": description,
+            "createdAt": Timestamp(date: Date())
+        ]
+        ref.setData(data) { error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
 }

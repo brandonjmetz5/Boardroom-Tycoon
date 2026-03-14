@@ -891,6 +891,8 @@ final class MineMarketService {
             baseValue = 650
         case .iron:
             baseValue = 750
+        case .quarry:
+            baseValue = 700
         default:
             baseValue = 700
         }
