@@ -328,4 +328,16 @@ final class BuildingDetailViewModel: ObservableObject {
     var isExtractor: Bool {
         currentBuilding.type == .mine || currentBuilding.type == .rig || currentBuilding.type == .quarry
     }
+
+    /// Text describing what input is required to start production (e.g. "2 Fuel Cells").
+    var productionInputSummary: String {
+        if isExtractor {
+            let n = Int(ProductionService.fuelRequiredPerCycle)
+            return n == 1 ? "1 Fuel Cell" : "\(n) Fuel Cells"
+        }
+        guard let recipe = recipe, !recipe.inputItems.isEmpty else {
+            return "Recipe inputs"
+        }
+        return recipe.inputItems.map { "\(Int($0.quantity)) \($0.item.name)" }.joined(separator: ", ")
+    }
 }

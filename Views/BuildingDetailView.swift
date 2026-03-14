@@ -151,6 +151,9 @@ struct BuildingDetailView: View {
                                 .foregroundStyle(AppTheme.textTertiary)
                         }
                     } else {
+                        Text("Input required: \(viewModel.productionInputSummary)")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
                         primaryButton("Start Production") {
                             viewModel.startProduction()
                         }
@@ -252,6 +255,9 @@ struct BuildingDetailView: View {
                             }
                         }
                     } else {
+                        Text("Input required: \(viewModel.productionInputSummary)")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
                         primaryButton("Start Production") {
                             viewModel.startProduction()
                         }

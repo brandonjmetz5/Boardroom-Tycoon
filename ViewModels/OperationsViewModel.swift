@@ -302,6 +302,16 @@ final class OperationsViewModel: ObservableObject {
         return "Level \(building.level)"
     }
 
+    /// Input required to start production (e.g. "2 Fuel Cells" for extractors).
+    func productionInputHint(for building: Building) -> String? {
+        let isExtractor = building.type == .mine || building.type == .rig || building.type == .quarry
+        if isExtractor {
+            let n = Int(ProductionService.fuelRequiredPerCycle)
+            return n == 1 ? "1 Fuel Cell" : "\(n) Fuel Cells"
+        }
+        return nil
+    }
+
     func formattedTimeRemaining(until endDate: Date, now: Date) -> String {
         let remainingSeconds = max(0, Int(ceil(endDate.timeIntervalSince(now))))
         let minutes = remainingSeconds / 60

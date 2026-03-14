@@ -180,6 +180,12 @@ struct OperationsView: View {
                             Text(viewModel.buildingDetailText(for: building, now: context.date))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(Color.white.opacity(0.56))
+                            if viewModel.buildingStatus(for: building, now: context.date) == .idle,
+                               let hint = viewModel.productionInputHint(for: building) {
+                                Text("Input: \(hint)")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(Color.white.opacity(0.5))
+                            }
                         }
                     }
                     .padding(18)

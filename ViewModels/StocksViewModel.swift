@@ -19,6 +19,9 @@ final class StocksViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
 
     @Published var selectedStockForTrade: Stock?
+    @Published private(set) var priceHistory: [StockPricePoint] = []
+    @Published private(set) var isPriceHistoryLoading = false
+    @Published private(set) var sparklineData: [String: [StockPricePoint]] = [:]
     @Published var tradeQuantityText = ""
     @Published var tradeSegment = 0 // 0 = Buy, 1 = Sell
     @Published private(set) var isSubmitting = false
@@ -48,6 +51,7 @@ final class StocksViewModel: ObservableObject {
                 switch result {
                 case .success(let list):
                     self.stocks = list
+                    self.loadSparklines()
                     if self.userID != nil {
                         self.loadPositionsAndProfile()
                     } else {
@@ -97,12 +101,50 @@ final class StocksViewModel: ObservableObject {
         tradeQuantityText = ""
         tradeErrorMessage = nil
         tradeSegment = 0
+        priceHistory = []
+        isPriceHistoryLoading = true
+        stockService.fetchPriceHistory(for: stock) { [weak self] points in
+            DispatchQueue.main.async {
+                self?.priceHistory = points
+                self?.isPriceHistoryLoading = false
+            }
+        }
     }
 
     func closeTradeSheet() {
         selectedStockForTrade = nil
+        priceHistory = []
+        isPriceHistoryLoading = false
         tradeQuantityText = ""
         tradeErrorMessage = nil
+    }
+
+    private func loadSparklines() {
+        var data: [String: [StockPricePoint]] = [:]
+        for stock in stocks {
+            data[stock.symbol] = StockService.generateFakeHistory(symbol: stock.symbol, currentPrice: stock.currentPrice, count: 7)
+        }
+        sparklineData = data
+    }
+
+    func sparklinePoints(for symbol: String) -> [StockPricePoint] {
+        sparklineData[symbol] ?? []
+    }
+
+    /// Total market value of all positions at current prices.
+    var portfolioValue: Double {
+        positions.reduce(0) { sum, pos in
+            guard let stock = stocks.first(where: { $0.symbol == pos.symbol }) else { return sum }
+            return sum + pos.sharesOwned * stock.currentPrice
+        }
+    }
+
+    /// Estimated today's P&L (positions × price change per share).
+    var todayPL: Double {
+        positions.reduce(0) { sum, pos in
+            guard let stock = stocks.first(where: { $0.symbol == pos.symbol }) else { return sum }
+            return sum + pos.sharesOwned * stock.priceChange
+        }
     }
 
     func buyStock() {

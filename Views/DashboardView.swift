@@ -40,6 +40,7 @@ struct DashboardView: View {
                         treasurySection
                         operationsOverviewSection
                         fieldOpsSection
+                        inventorySection
                         departmentsSection
                     }
                     .padding(.horizontal, AppTheme.horizontalPadding)
@@ -292,6 +293,76 @@ struct DashboardView: View {
             .background(Capsule().fill(color.opacity(0.2)))
     }
 
+    // MARK: - Inventory
+
+    private var inventorySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionLabel("Inventory", icon: "shippingbox.fill")
+
+            if viewModel.inventoryItems.isEmpty {
+                Text("No items yet. Produce or acquire resources to see them here.")
+                    .font(AppTheme.caption())
+                    .foregroundStyle(AppTheme.textTertiary)
+                    .padding(AppTheme.cardPadding)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .appCard()
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(viewModel.inventoryItems) { inv in
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(inv.item.name)
+                                    .font(AppTheme.bodyMedium())
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                Text(inv.item.category.rawValue)
+                                    .font(AppTheme.captionMedium())
+                                    .foregroundStyle(AppTheme.textTertiary)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(viewModel.formattedQuantity(for: inv))
+                                    .font(AppTheme.monoNumber())
+                                    .foregroundStyle(AppTheme.accent)
+                                if let value = ItemValueCatalog.value(quantity: inv.quantity, itemId: inv.item.id) {
+                                    Text(String(format: "≈ $%.2f", value))
+                                        .font(AppTheme.captionMedium())
+                                        .foregroundStyle(AppTheme.textSecondary)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        if inv.id != viewModel.inventoryItems.last?.id {
+                            Rectangle()
+                                .fill(AppTheme.border)
+                                .frame(height: 1)
+                        }
+                    }
+                    if viewModel.totalInventoryValue > 0 {
+                        Rectangle()
+                            .fill(AppTheme.border)
+                            .frame(height: 1)
+                        HStack {
+                            Text("Total value")
+                                .font(AppTheme.bodyMedium())
+                                .foregroundStyle(AppTheme.textSecondary)
+                            Spacer()
+                            Text(String(format: "$%.2f", viewModel.totalInventoryValue))
+                                .font(AppTheme.monoNumber())
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                    }
+                }
+                .padding(AppTheme.cardPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .appCard()
+            }
+        }
+        .padding(.bottom, AppTheme.sectionSpacing)
+    }
+
     // MARK: - Departments
 
     private var departmentsSection: some View {
@@ -304,7 +375,7 @@ struct DashboardView: View {
             ], spacing: 12) {
                 departmentTile(.operations, title: "Operations", subtitle: "Buildings & production", icon: "building.2.fill")
                 departmentTile(.market, title: "Market", subtitle: "Buy & sell mines", icon: "cart.fill")
-                departmentTile(.portfolio, title: "Portfolio", subtitle: "Stocks & inventory", icon: "chart.pie.fill")
+                departmentTile(.portfolio, title: "Portfolio", subtitle: "Stocks", icon: "chart.pie.fill")
                 departmentTile(.profile, title: "Profile", subtitle: "Account & stats", icon: "person.fill")
             }
         }

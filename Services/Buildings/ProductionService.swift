@@ -11,8 +11,8 @@ import FirebaseFirestore
 final class ProductionService {
     private let db = Firestore.firestore()
 
-    /// Fuel cells consumed per production cycle (design: 1 per cycle).
-    private let fuelCostPerCycle: Double = 1
+    /// Fuel cells consumed per production cycle per extractor (mine/rig/quarry).
+    static let fuelRequiredPerCycle: Double = 2
 
     /// Inventory document ID for fuel (matches starter inventory and Item catalog).
     private let fuelInventoryDocID = "fuel-cell"
@@ -59,11 +59,11 @@ final class ProductionService {
                 }
 
                 let fuelQuantity = fuelSnapshot.data()?["quantity"] as? Double ?? 0
-                if fuelQuantity < self.fuelCostPerCycle {
+                if fuelQuantity < Self.fuelRequiredPerCycle {
                     errorPointer?.pointee = NSError(
                         domain: "ProductionService",
                         code: 2006,
-                        userInfo: [NSLocalizedDescriptionKey: "Not enough fuel. Each production cycle costs 1 Fuel Cell."]
+                        userInfo: [NSLocalizedDescriptionKey: "Not enough fuel. Each production cycle costs \(Int(Self.fuelRequiredPerCycle)) Fuel Cells."]
                     )
                     return nil
                 }
@@ -84,7 +84,7 @@ final class ProductionService {
                     "pendingOutputQuantity": pendingOutputQuantity
                 ], forDocument: buildingRef)
 
-                let newFuelQuantity = fuelQuantity - self.fuelCostPerCycle
+                let newFuelQuantity = fuelQuantity - Self.fuelRequiredPerCycle
                 let fuelData: [String: Any] = fuelSnapshot.data() ?? [
                     "id": self.fuelInventoryDocID,
                     "name": "Fuel Cell",

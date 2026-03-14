@@ -15,6 +15,7 @@ final class HomeViewModel: ObservableObject {
     @Published private(set) var profile: PlayerProfile?
     @Published private(set) var buildings: [Building] = []
     @Published private(set) var prospectingJobs: [ProspectingJob] = []
+    @Published private(set) var inventoryItems: [InventoryItem] = []
     @Published private(set) var isLoading = true
     @Published private(set) var isLoadingProspecting = true
     @Published private(set) var prospectingErrorMessage: String?
@@ -24,6 +25,7 @@ final class HomeViewModel: ObservableObject {
     private let buildingService = BuildingService()
     private let prospectingService = ProspectingService()
     private let mineMarketService = MineMarketService()
+    private let inventoryService = InventoryService()
 
     init(userID: String) {
         self.userID = userID
@@ -69,6 +71,17 @@ final class HomeViewModel: ObservableObject {
         loadProspectingJobs { [weak self] in
             self?.isLoadingProspecting = false
             group.leave()
+        }
+
+        group.enter()
+        inventoryService.fetchInventory(for: userID) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let items): self?.inventoryItems = items
+                case .failure: break
+                }
+                group.leave()
+            }
         }
 
         group.notify(queue: .main) { [weak self] in
@@ -141,6 +154,21 @@ final class HomeViewModel: ObservableObject {
         case .iron: return "Iron Mine"
         case .quarry: return "Stone Quarry"
         default: return resourceType.rawValue
+        }
+    }
+
+    func formattedQuantity(for inventoryItem: InventoryItem) -> String {
+        if inventoryItem.item.isFractional {
+            return String(format: "%.2f", inventoryItem.quantity)
+        } else {
+            return String(Int(inventoryItem.quantity))
+        }
+    }
+
+    /// Total $ value of all inventory items that have a unit price.
+    var totalInventoryValue: Double {
+        inventoryItems.reduce(0) { sum, inv in
+            sum + (ItemValueCatalog.value(quantity: inv.quantity, itemId: inv.item.id) ?? 0)
         }
     }
 }
