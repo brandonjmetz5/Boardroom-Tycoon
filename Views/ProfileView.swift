@@ -61,7 +61,7 @@ struct ProfileView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("Profile")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(AppTheme.titleMedium())
                     .foregroundStyle(AppTheme.textPrimary)
             }
         }

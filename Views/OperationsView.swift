@@ -5,13 +5,6 @@
 //  Created by brandon metz on 3/11/26.
 //
 
-//
-//  OperationsView.swift
-//  Boardroom Tycoon
-//
-//  Created by brandon metz on 3/11/26.
-//
-
 import SwiftUI
 
 struct OperationsView: View {
@@ -30,33 +23,33 @@ struct OperationsView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.03, green: 0.05, blue: 0.07)
+            AppTheme.background
                 .ignoresSafeArea()
 
             Group {
                 if viewModel.isLoading {
                     ProgressView("Loading operations...")
                         .controlSize(.large)
-                        .tint(.white)
-                        .foregroundStyle(.white)
+                        .tint(AppTheme.accent)
+                        .foregroundStyle(AppTheme.textSecondary)
                 } else if let loadingErrorMessage = viewModel.loadingErrorMessage {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Failed to load operations")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-
+                            .font(AppTheme.titleSmall())
+                            .foregroundStyle(AppTheme.textPrimary)
                         Text(loadingErrorMessage)
-                            .foregroundStyle(.red)
+                            .font(AppTheme.caption())
+                            .foregroundStyle(AppTheme.textError)
                     }
-                    .padding()
+                    .padding(AppTheme.cardPadding)
                 } else {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
                             headerSection
                             summarySection
                             slotsGridSection
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, AppTheme.horizontalPadding)
                         .padding(.top, 12)
                         .padding(.bottom, 24)
                     }
@@ -68,8 +61,8 @@ struct OperationsView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("Operations")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(AppTheme.titleMedium())
+                    .foregroundStyle(AppTheme.textPrimary)
             }
         }
         .onAppear {
@@ -86,8 +79,8 @@ struct OperationsView: View {
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Manage your buildings, slots, and production.")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.68))
+                .font(AppTheme.caption())
+                .foregroundStyle(AppTheme.textSecondary)
         }
     }
 
@@ -118,24 +111,15 @@ struct OperationsView: View {
     private func summaryPill(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.58))
-
+                .font(AppTheme.captionMedium())
+                .foregroundStyle(AppTheme.textTertiary)
             Text(value)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
+                .font(AppTheme.monoNumber())
+                .foregroundStyle(AppTheme.accent)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(red: 0.08, green: 0.11, blue: 0.15))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.white.opacity(0.04), lineWidth: 1)
-        )
+        .padding(AppTheme.cardPadding)
+        .appPill()
     }
 
     private var slotsGridSection: some View {
@@ -167,7 +151,7 @@ struct OperationsView: View {
                         .opacity(0.34)
 
                     RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .fill(Color(red: 0.07, green: 0.10, blue: 0.13).opacity(0.76))
+                        .fill(AppTheme.surface.opacity(0.9))
 
                     VStack(alignment: .leading, spacing: 0) {
                         HStack {
@@ -202,15 +186,15 @@ struct OperationsView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156)
                 .background(
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .fill(Color(red: 0.07, green: 0.10, blue: 0.13))
+                    RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
+                        .fill(AppTheme.surface)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .stroke(Color.white.opacity(0.04), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
+                        .stroke(AppTheme.border, lineWidth: 1)
                 )
-                .contentShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
             }
             .buttonStyle(.plain)
         }
@@ -231,8 +215,8 @@ struct OperationsView: View {
                         .clipped()
                         .opacity(0.34)
 
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .fill(Color(red: 0.08, green: 0.11, blue: 0.14).opacity(0.78))
+                    RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
+                        .fill(AppTheme.surfaceAlt.opacity(0.9))
 
                     VStack(alignment: .leading, spacing: 0) {
                         HStack {
@@ -241,8 +225,8 @@ struct OperationsView: View {
                             statusChip(
                                 title: job.endsAt <= context.date ? "Ready" : "Prospecting",
                                 color: job.endsAt <= context.date
-                                    ? Color(red: 0.24, green: 0.62, blue: 0.44)
-                                    : Color(red: 0.30, green: 0.53, blue: 0.78)
+                                    ? AppTheme.chipReady
+                                    : AppTheme.chipProspecting
                             )
                         }
 
@@ -274,15 +258,15 @@ struct OperationsView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156)
                 .background(
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .fill(Color(red: 0.08, green: 0.11, blue: 0.14))
+                    RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
+                        .fill(AppTheme.surfaceAlt)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .stroke(Color.white.opacity(0.04), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
+                        .stroke(AppTheme.border, lineWidth: 1)
                 )
-                .contentShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
             }
             .buttonStyle(.plain)
             .disabled(viewModel.isPurchasing)
@@ -301,8 +285,8 @@ struct OperationsView: View {
                     .clipped()
                     .opacity(0.34)
 
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(Color(red: 0.07, green: 0.10, blue: 0.13).opacity(0.74))
+                RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
+                    .fill(AppTheme.surface.opacity(0.9))
 
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
@@ -310,7 +294,7 @@ struct OperationsView: View {
 
                         statusChip(
                             title: "Available",
-                            color: Color(red: 0.37, green: 0.49, blue: 0.78)
+                            color: AppTheme.chipAvailable
                         )
                     }
 
@@ -330,15 +314,15 @@ struct OperationsView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156)
             .background(
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(Color(red: 0.07, green: 0.10, blue: 0.13))
+                RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
+                    .fill(AppTheme.surface)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(Color.white.opacity(0.04), lineWidth: 1)
+                RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -357,10 +341,10 @@ struct OperationsView: View {
 
     private func statusColor(for status: BuildingStatusDisplay) -> Color {
         switch status {
-        case .listed: return Color(red: 0.42, green: 0.37, blue: 0.78)
-        case .ready: return Color(red: 0.24, green: 0.62, blue: 0.44)
-        case .producing: return Color(red: 0.76, green: 0.55, blue: 0.22)
-        case .idle: return Color(red: 0.34, green: 0.39, blue: 0.47)
+        case .listed: return AppTheme.chipListed
+        case .ready: return AppTheme.chipReady
+        case .producing: return AppTheme.chipProducing
+        case .idle: return AppTheme.chipIdle
         }
     }
 

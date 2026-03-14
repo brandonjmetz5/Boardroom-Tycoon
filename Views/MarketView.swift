@@ -77,7 +77,7 @@ struct MarketView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text("Market")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(AppTheme.titleMedium())
                     .foregroundStyle(AppTheme.textPrimary)
             }
         }

@@ -40,9 +40,7 @@ struct ContentView: View {
                     }
                     .padding(24)
                 } else if let userID = viewModel.userID {
-                    NavigationStack {
-                        HomeView(userID: userID)
-                    }
+                    MainTabView(userID: userID)
                 } else {
                     Text("No user found.")
                         .font(.system(size: 15, weight: .medium))
