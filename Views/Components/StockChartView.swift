@@ -80,7 +80,6 @@ struct StockChartView: View {
                         }
                         chartLinePath(pts: pts, width: width, height: height, minP: minP, range: range, minT: minT, tRange: tRange)
                             .stroke(lineColor, lineWidth: 2)
-                            .antialiased(true)
                     }
                 }
                 .frame(height: 120)
