@@ -38,6 +38,7 @@ struct BuildingDetailView: View {
                         managementSectionNonExtractor
                         machinesSection
                     }
+                    seedFirestoreSection
                 }
                 .padding(.horizontal, AppTheme.horizontalPadding)
                 .padding(.top, 12)
@@ -318,7 +319,7 @@ struct BuildingDetailView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(viewModel.isWorking)
-                    Text("Requires: 1 Steel Beams, 1 Walls, 1 Foundation, 1 Window")
+                    Text("Requires: \(UpgradeCatalog.buildingUpgradeRequirementLabel(forLevel: viewModel.currentBuilding.level))")
                         .font(AppTheme.caption())
                         .foregroundStyle(AppTheme.textTertiary)
                 }
@@ -353,17 +354,41 @@ struct BuildingDetailView: View {
             }
             detailRow("Upgrade level", "\(machine.level)")
             if viewModel.canUpgradeMachine(machine) {
-                Button("Upgrade") {
-                    viewModel.upgradeMachine(machine)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Upgrade: \(UpgradeCatalog.machineUpgradeRequirementLabel(for: viewModel.currentBuilding.type))")
+                        .font(AppTheme.caption())
+                        .foregroundStyle(AppTheme.textTertiary)
+                    Button("Upgrade") {
+                        viewModel.upgradeMachine(machine)
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+                    .disabled(viewModel.isWorking)
                 }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppTheme.accent)
-                .disabled(viewModel.isWorking)
             }
         }
         .padding(AppTheme.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .themedCard()
+    }
+
+    private var seedFirestoreSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle("Testing")
+            Button {
+                viewModel.seedInventoryForTesting()
+            } label: {
+                Text("Seed Firestore (5 of each resource)")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(AppTheme.surfaceAlt)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isWorking)
+        }
     }
 
     private var listingSheetView: some View {

@@ -507,13 +507,18 @@ final class BuildingService {
                     errorPointer?.pointee = NSError(domain: "BuildingService", code: 1302, userInfo: [NSLocalizedDescriptionKey: "Building is already max level."])
                     return nil
                 }
-                let requiredQty = UpgradeCatalog.buildingUpgradeQuantityPerLevel
-                for itemID in UpgradeCatalog.buildingUpgradeItemIDs {
+                let required = UpgradeCatalog.buildingUpgradeRequirement(forLevel: level)
+                guard !required.isEmpty else {
+                    errorPointer?.pointee = NSError(domain: "BuildingService", code: 1303, userInfo: [NSLocalizedDescriptionKey: "Invalid level for upgrade."])
+                    return nil
+                }
+                for (itemID, requiredQty) in required {
                     let invRef = inventoryRef.document(itemID)
                     let invSnap = try transaction.getDocument(invRef)
                     let qty = invSnap.data()?["quantity"] as? Double ?? 0
                     if qty < requiredQty {
-                        errorPointer?.pointee = NSError(domain: "BuildingService", code: 1303, userInfo: [NSLocalizedDescriptionKey: "Need 1 of each: Steel Beams, Walls, Foundation, Window. Missing or insufficient: \(itemID)."])
+                        let label = UpgradeCatalog.buildingUpgradeRequirementLabel(forLevel: level)
+                        errorPointer?.pointee = NSError(domain: "BuildingService", code: 1303, userInfo: [NSLocalizedDescriptionKey: "Need \(label). Missing or insufficient: \(itemID)."])
                         return nil
                     }
                     var invData = invSnap.data() ?? [:]
@@ -594,12 +599,13 @@ final class BuildingService {
         }
     }
 
-    /// Consume one machine upgrade item; extractor: +2 abundance, +2 stability (cap 100); non-extractor: +0.5 output (cap 5).
-    func upgradeMachine(for userID: String, buildingID: String, machineID: String, isExtractor: Bool, completion: @escaping (Result<Void, Error>) -> Void) {
+    /// Consume machine upgrade items required for this building type; extractor: +2 abundance/stability (cap 100); non-extractor: +0.5 output (cap 5).
+    func upgradeMachine(for userID: String, buildingID: String, machineID: String, buildingType: BuildingType, isExtractor: Bool, completion: @escaping (Result<Void, Error>) -> Void) {
         let profileRef = db.collection("playerProfiles").document(userID)
         let buildingRef = profileRef.collection("buildings").document(buildingID)
         let machineRef = buildingRef.collection("machines").document(machineID)
         let inventoryRef = profileRef.collection("inventory")
+        let required = UpgradeCatalog.machineUpgradeRequirement(for: buildingType)
 
         db.runTransaction({ transaction, errorPointer in
             do {
@@ -608,22 +614,22 @@ final class BuildingService {
                     errorPointer?.pointee = NSError(domain: "BuildingService", code: 1501, userInfo: [NSLocalizedDescriptionKey: "Machine not found."])
                     return nil
                 }
-                var consumed = false
-                for itemID in UpgradeCatalog.machineUpgradeItemIDs {
+                guard !required.isEmpty else {
+                    errorPointer?.pointee = NSError(domain: "BuildingService", code: 1502, userInfo: [NSLocalizedDescriptionKey: "No upgrade requirement for this building type."])
+                    return nil
+                }
+                for (itemID, requiredQty) in required {
                     let invRef = inventoryRef.document(itemID)
                     let invSnap = try transaction.getDocument(invRef)
                     let qty = invSnap.data()?["quantity"] as? Double ?? 0
-                    if qty >= 1 {
-                        var invData = invSnap.data() ?? [:]
-                        invData["quantity"] = qty - 1
-                        transaction.setData(invData, forDocument: invRef)
-                        consumed = true
-                        break
+                    if qty < requiredQty {
+                        let label = UpgradeCatalog.machineUpgradeRequirementLabel(for: buildingType)
+                        errorPointer?.pointee = NSError(domain: "BuildingService", code: 1502, userInfo: [NSLocalizedDescriptionKey: "Need \(label). Missing or insufficient: \(itemID)."])
+                        return nil
                     }
-                }
-                if !consumed {
-                    errorPointer?.pointee = NSError(domain: "BuildingService", code: 1502, userInfo: [NSLocalizedDescriptionKey: "Need one of: Machine Computer, Precision Cutting Heads, Diamond Drill Bits, Machine Gear, or Robotic Machine Arms."])
-                    return nil
+                    var invData = invSnap.data() ?? [:]
+                    invData["quantity"] = qty - requiredQty
+                    transaction.setData(invData, forDocument: invRef)
                 }
                 if isExtractor {
                     var a = (machineData["abundance"] as? Int) ?? 50

@@ -27,6 +27,7 @@ final class BuildingDetailViewModel: ObservableObject {
     private let buildingService = BuildingService()
     private let mineMarketService = MineMarketService()
     private let recipeService = RecipeService()
+    private let inventoryService = InventoryService()
 
     var onDismiss: (() -> Void)?
 
@@ -310,10 +311,27 @@ final class BuildingDetailViewModel: ObservableObject {
         }
     }
 
+    func seedInventoryForTesting() {
+        isWorking = true
+        errorMessage = nil
+        inventoryService.seedInventoryForTesting(for: userID, quantityPerItem: 5) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isWorking = false
+                switch result {
+                case .success:
+                    self.errorMessage = "Seeded 5 of every resource into inventory."
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
     func upgradeMachine(_ machine: Machine) {
         isWorking = true
         errorMessage = nil
-        buildingService.upgradeMachine(for: userID, buildingID: currentBuilding.id, machineID: machine.id, isExtractor: isExtractor) { [weak self] result in
+        buildingService.upgradeMachine(for: userID, buildingID: currentBuilding.id, machineID: machine.id, buildingType: currentBuilding.type, isExtractor: isExtractor) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.isWorking = false

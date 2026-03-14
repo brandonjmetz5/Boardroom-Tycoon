@@ -119,4 +119,27 @@ final class InventoryService {
             completion(.success(inventoryItems))
         }
     }
+
+    /// For testing: set 5 of every catalogued item in the player's inventory (creates or overwrites docs).
+    func seedInventoryForTesting(for userID: String, quantityPerItem: Double = 5, completion: @escaping (Result<Void, Error>) -> Void) {
+        let inventoryRef = db.collection("playerProfiles").document(userID).collection("inventory")
+        let batch = db.batch()
+        for seed in UpgradeCatalog.allItemsForSeeding {
+            let data: [String: Any] = [
+                "id": seed.id,
+                "name": seed.name,
+                "category": seed.category,
+                "isFractional": seed.isFractional,
+                "quantity": quantityPerItem
+            ]
+            batch.setData(data, forDocument: inventoryRef.document(seed.id))
+        }
+        batch.commit { error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
 }
