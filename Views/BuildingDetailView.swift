@@ -95,7 +95,7 @@ struct BuildingDetailView: View {
                             lineWidth: 1
                         )
                 )
-    }
+    )}
 
     private func labelValue(_ label: String, _ value: String) -> some View {
         HStack(spacing: 4) {
