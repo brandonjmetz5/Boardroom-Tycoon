@@ -2,7 +2,7 @@
 //  StockChartView.swift
 //  Boardroom Tycoon
 //
-//  Line chart for stock price history (fake data for testing).
+//  Line chart with X (time) and Y (price) axes.
 //
 
 import SwiftUI
@@ -12,7 +12,13 @@ struct StockChartView: View {
     var title: String = "30D"
     var lineColor: Color = AppTheme.accent
     var showGradient: Bool = true
+    var showAxes: Bool = true
     var isLoading: Bool = false
+
+    private static let chartHeight: CGFloat = 180
+    private static let yAxisWidth: CGFloat = 52
+    private static let xAxisHeight: CGFloat = 22
+    private static let axisLabelCount: Int = 5
 
     private var sortedPoints: [StockPricePoint] {
         points.sorted { $0.timestamp < $1.timestamp }
@@ -20,85 +26,203 @@ struct StockChartView: View {
 
     var body: some View {
         if isLoading {
-            VStack(spacing: 10) {
-                ProgressView()
-                    .scaleEffect(0.9)
-                    .tint(lineColor)
-                Text("Loading chart…")
-                    .font(AppTheme.caption())
-                    .foregroundStyle(AppTheme.textTertiary)
-            }
-            .frame(height: 120)
+            chartLoadingView
+        } else if sortedPoints.isEmpty {
+            chartEmptyView
+        } else if showAxes {
+            chartWithAxes
+        } else {
+            chartWithoutAxes
+        }
+    }
+
+    private var chartLoadingView: some View {
+        VStack(spacing: 10) {
+            ProgressView()
+                .scaleEffect(0.9)
+                .tint(lineColor)
+            Text("Loading chart…")
+                .font(AppTheme.caption())
+                .foregroundStyle(AppTheme.textTertiary)
+        }
+        .frame(height: Self.chartHeight + Self.xAxisHeight + 40)
+        .frame(maxWidth: .infinity)
+        .padding(AppTheme.cardPadding)
+        .background(AppTheme.surfaceAlt)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
+    }
+
+    private var chartEmptyView: some View {
+        Text("No history")
+            .font(AppTheme.caption())
+            .foregroundStyle(AppTheme.textTertiary)
+            .frame(height: Self.chartHeight + Self.xAxisHeight + 40)
             .frame(maxWidth: .infinity)
             .padding(AppTheme.cardPadding)
             .background(AppTheme.surfaceAlt)
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
-        } else if sortedPoints.isEmpty {
-            Text("No history")
-                .font(AppTheme.caption())
-                .foregroundStyle(AppTheme.textTertiary)
-                .frame(height: 120)
-                .frame(maxWidth: .infinity)
-                .padding(AppTheme.cardPadding)
-                .background(AppTheme.surfaceAlt)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text(title)
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.textSecondary)
-                    Spacer()
-                    if let last = sortedPoints.last {
-                        Text(String(format: "$%.2f", last.price))
-                            .font(AppTheme.monoNumber())
-                            .foregroundStyle(lineColor)
-                    }
-                }
+    }
 
-                GeometryReader { geo in
-                    let width = geo.size.width
-                    let height = geo.size.height
-                    let pts = sortedPoints
-                    let minP = pts.map(\.price).min() ?? 0
-                    let maxP = pts.map(\.price).max() ?? 1
-                    let range = max(maxP - minP, 0.01)
-                    let minT = pts.first?.timestamp.timeIntervalSince1970 ?? 0
-                    let maxT = pts.last?.timestamp.timeIntervalSince1970 ?? 1
-                    let tRange = max(maxT - minT, 1)
+    private var chartWithAxes: some View {
+        let pts = sortedPoints
+        let minP = pts.map(\.price).min() ?? 0
+        let maxP = pts.map(\.price).max() ?? 1
+        let range = max(maxP - minP, 0.01)
+        let minT = pts.first?.timestamp.timeIntervalSince1970 ?? 0
+        let maxT = pts.last?.timestamp.timeIntervalSince1970 ?? 1
+        let tRange = max(maxT - minT, 1)
+        let priceLabels = Self.priceLabels(min: minP, max: maxP)
+        let timeLabels = Self.timeLabels(points: pts)
 
-                    ZStack(alignment: .bottomLeading) {
-                        if showGradient {
-                            chartFillPath(pts: pts, width: width, height: height, minP: minP, range: range, minT: minT, tRange: tRange)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [lineColor.opacity(0.35), lineColor.opacity(0.02)],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                        }
-                        chartLinePath(pts: pts, width: width, height: height, minP: minP, range: range, minT: minT, tRange: tRange)
-                            .stroke(lineColor, lineWidth: 2)
-                    }
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(AppTheme.caption())
+                    .foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+                if let last = pts.last {
+                    Text(String(format: "$%.2f", last.price))
+                        .font(AppTheme.monoNumber())
+                        .foregroundStyle(lineColor)
                 }
-                .frame(height: 120)
             }
-            .padding(AppTheme.cardPadding)
-            .background(AppTheme.surfaceAlt)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
+
+            HStack(alignment: .top, spacing: 6) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(priceLabels.enumerated().reversed()), id: \.offset) { _, value in
+                        Text(Self.formatPrice(value))
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(AppTheme.textTertiary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(width: Self.yAxisWidth, height: Self.chartHeight)
+
+                VStack(spacing: 2) {
+                    GeometryReader { geo in
+                        let w = geo.size.width
+                        let h = geo.size.height
+                        ZStack(alignment: .bottomLeading) {
+                            if showGradient {
+                                chartFillPath(pts: pts, width: w, height: h, minP: minP, range: range, minT: minT, tRange: tRange)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [lineColor.opacity(0.35), lineColor.opacity(0.02)],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
+                            }
+                            chartLinePath(pts: pts, width: w, height: h, minP: minP, range: range, minT: minT, tRange: tRange)
+                                .stroke(lineColor, lineWidth: 2)
+                        }
+                    }
+                    .frame(height: Self.chartHeight)
+
+                    HStack {
+                        ForEach(Array(timeLabels.enumerated()), id: \.offset) { idx, item in
+                            Text(item.label)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundStyle(AppTheme.textTertiary)
+                            if idx < timeLabels.count - 1 {
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+                    .frame(height: Self.xAxisHeight)
+                }
+            }
         }
+        .padding(AppTheme.cardPadding)
+        .background(AppTheme.surfaceAlt)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
+    }
+
+    private var chartWithoutAxes: some View {
+        let pts = sortedPoints
+        let minP = pts.map(\.price).min() ?? 0
+        let maxP = pts.map(\.price).max() ?? 1
+        let range = max(maxP - minP, 0.01)
+        let minT = pts.first?.timestamp.timeIntervalSince1970 ?? 0
+        let maxT = pts.last?.timestamp.timeIntervalSince1970 ?? 1
+        let tRange = max(maxT - minT, 1)
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(AppTheme.caption())
+                    .foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+                if let last = pts.last {
+                    Text(String(format: "$%.2f", last.price))
+                        .font(AppTheme.monoNumber())
+                        .foregroundStyle(lineColor)
+                }
+            }
+            GeometryReader { geo in
+                let w = geo.size.width
+                let h = geo.size.height
+                ZStack(alignment: .bottomLeading) {
+                    if showGradient {
+                        chartFillPath(pts: pts, width: w, height: h, minP: minP, range: range, minT: minT, tRange: tRange)
+                            .fill(
+                                LinearGradient(
+                                    colors: [lineColor.opacity(0.35), lineColor.opacity(0.02)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                    }
+                    chartLinePath(pts: pts, width: w, height: h, minP: minP, range: range, minT: minT, tRange: tRange)
+                        .stroke(lineColor, lineWidth: 2)
+                }
+            }
+            .frame(height: Self.chartHeight)
+        }
+        .padding(AppTheme.cardPadding)
+        .background(AppTheme.surfaceAlt)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
+    }
+
+    private static func priceLabels(min: Double, max: Double) -> [Double] {
+        guard max > min else { return [min, max] }
+        var labels: [Double] = []
+        for i in 0..<axisLabelCount {
+            let fraction = Double(i) / Double(axisLabelCount - 1)
+            labels.append(min + (max - min) * fraction)
+        }
+        return labels
+    }
+
+    private static func formatPrice(_ value: Double) -> String {
+        if value >= 1000 { return String(format: "%.1fk", value / 1000) }
+        if value >= 1 { return String(format: "%.2f", value) }
+        return String(format: "%.3f", value)
+    }
+
+    private static func timeLabels(points: [StockPricePoint]) -> [(offset: Int, label: String)] {
+        let pts = points.sorted { $0.timestamp < $1.timestamp }
+        guard !pts.isEmpty else { return [] }
+        let count = min(axisLabelCount, pts.count)
+        let step = max(1, (pts.count - 1) / max(1, count - 1))
+        let indices = (0..<count).map { min($0 * step, pts.count - 1) }
+        let calendar = Calendar.current
+        let isIntraday = pts.count >= 2 && abs(pts.last!.timestamp.timeIntervalSince(pts.first!.timestamp)) < 24 * 3600
+        let formatter = DateFormatter()
+        formatter.dateFormat = isIntraday ? "HH:mm" : "M/d"
+        return indices.map { (offset: $0, label: formatter.string(from: pts[$0].timestamp)) }
     }
 
     private func chartLinePath(pts: [StockPricePoint], width: CGFloat, height: CGFloat, minP: Double, range: Double, minT: TimeInterval, tRange: TimeInterval) -> Path {
         var path = Path()
         guard !pts.isEmpty, range > 0 else { return path }
-        let padding: CGFloat = 2
-        let drawWidth = width - padding * 2
+        let pad: CGFloat = 2
+        let drawW = width - pad * 2
+        let drawH = height - pad * 2
         for (i, pt) in pts.enumerated() {
             let t = pt.timestamp.timeIntervalSince1970
-            let x = padding + CGFloat((t - minT) / tRange) * drawWidth
-            let y = height - padding - CGFloat((pt.price - minP) / range) * (height - padding * 2)
+            let x = pad + CGFloat((t - minT) / tRange) * drawW
+            let y = height - pad - CGFloat((pt.price - minP) / range) * drawH
             if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
             else { path.addLine(to: CGPoint(x: x, y: y)) }
         }
@@ -107,18 +231,18 @@ struct StockChartView: View {
 
     private func chartFillPath(pts: [StockPricePoint], width: CGFloat, height: CGFloat, minP: Double, range: Double, minT: TimeInterval, tRange: TimeInterval) -> Path {
         var path = chartLinePath(pts: pts, width: width, height: height, minP: minP, range: range, minT: minT, tRange: tRange)
-        let padding: CGFloat = 2
-        let drawWidth = width - padding * 2
-        path.addLine(to: CGPoint(x: padding + drawWidth, y: height - padding))
-        path.addLine(to: CGPoint(x: padding, y: height - padding))
+        let pad: CGFloat = 2
+        let drawW = width - pad * 2
+        path.addLine(to: CGPoint(x: pad + drawW, y: height - pad))
+        path.addLine(to: CGPoint(x: pad, y: height - pad))
         path.closeSubpath()
         return path
     }
 }
 
 #Preview {
-    let points = StockService.generateFakeHistory(symbol: "GLD", currentPrice: 184.50, count: 31)
-    return StockChartView(points: points, title: "30D")
+    let points = StockService.generateFakeHistory(symbol: "GLD", currentPrice: 184.50, timeFrame: .oneDay)
+    return StockChartView(points: points, title: "1D")
         .padding()
         .background(AppTheme.background)
 }

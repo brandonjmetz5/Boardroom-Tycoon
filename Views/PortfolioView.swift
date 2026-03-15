@@ -10,6 +10,7 @@ import SwiftUI
 struct PortfolioView: View {
     let userID: String
 
+    @State private var portfolioSegment = 0
     @StateObject private var stocksVM: StocksViewModel
 
     init(userID: String) {
@@ -22,7 +23,24 @@ struct PortfolioView: View {
             AppTheme.background
                 .ignoresSafeArea()
 
-            stocksContent
+            VStack(spacing: 0) {
+                Picker("Section", selection: $portfolioSegment) {
+                    Text("Stocks").tag(0)
+                    Text("My Positions").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, AppTheme.horizontalPadding)
+                .padding(.vertical, 12)
+
+                if portfolioSegment == 0 {
+                    stocksContent
+                } else {
+                    positionsContent
+                }
+            }
+        }
+        .sheet(item: $stocksVM.selectedStockForTrade) { stock in
+            stockTradeSheet(stock: stock)
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -95,9 +113,104 @@ struct PortfolioView: View {
                 }
             }
         }
-        .sheet(item: $stocksVM.selectedStockForTrade) { stock in
-            stockTradeSheet(stock: stock)
+    }
+
+    private var positionsContent: some View {
+        Group {
+            if stocksVM.isLoading {
+                Spacer()
+                ProgressView()
+                    .scaleEffect(1.1)
+                    .tint(AppTheme.accent)
+                Text("Loading...")
+                    .font(AppTheme.caption())
+                    .foregroundStyle(AppTheme.textSecondary)
+                Spacer()
+            } else if stocksVM.positionsWithStock.isEmpty {
+                emptyState(
+                    title: "No positions",
+                    message: "You don't have any holdings yet. Tap Stocks to buy."
+                )
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        if stocksVM.canTrade {
+                            portfolioSummaryCard
+                        }
+                        ForEach(stocksVM.positionsWithStock, id: \.position.id) { item in
+                            Button {
+                                if stocksVM.canTrade {
+                                    stocksVM.openTradeSheet(for: item.stock, preferSell: true)
+                                }
+                            } label: {
+                                positionRow(position: item.position, stock: item.stock)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!stocksVM.canTrade)
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.horizontalPadding)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
+                }
+            }
         }
+    }
+
+    private func positionRow(position: StockPosition, stock: Stock) -> some View {
+        let marketValue = position.sharesOwned * stock.currentPrice
+        let costBasis = position.sharesOwned * position.averageCost
+        let pl = marketValue - costBasis
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(stock.name)
+                        .font(AppTheme.bodyMedium())
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(stock.symbol)
+                        .font(AppTheme.caption())
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Text("\(String(format: "%.2f", position.sharesOwned)) shares")
+                        .font(AppTheme.captionMedium())
+                        .foregroundStyle(AppTheme.textTertiary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(String(format: "$%.2f", marketValue))
+                        .font(AppTheme.monoNumber())
+                        .foregroundStyle(AppTheme.accent)
+                    Text("Avg cost \(String(format: "$%.2f", position.averageCost))")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppTheme.textTertiary)
+                    HStack(spacing: 4) {
+                        Text(pl >= 0 ? "+" : "")
+                            .font(AppTheme.captionMedium())
+                            .foregroundStyle(pl >= 0 ? AppTheme.chipPositive : AppTheme.chipNegative)
+                        Text(String(format: "$%.2f", abs(pl)))
+                            .font(AppTheme.captionMedium())
+                            .foregroundStyle(pl >= 0 ? AppTheme.chipPositive : AppTheme.chipNegative)
+                        Text(pl >= 0 ? "gain" : "loss")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(pl >= 0 ? AppTheme.chipPositive : AppTheme.chipNegative)
+                    }
+                }
+            }
+            HStack(spacing: 12) {
+                Text("Price now: \(String(format: "$%.2f", stock.currentPrice))")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+                if stocksVM.canTrade {
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.textTertiary)
+                }
+            }
+        }
+        .padding(AppTheme.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
     }
 
     private var portfolioSummaryCard: some View {
@@ -157,6 +270,17 @@ struct PortfolioView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
         .padding(.horizontal, 24)
+    }
+
+    private func chartTitleForTimeFrame(_ tf: ChartTimeFrame) -> String {
+        switch tf {
+        case .oneMin: return "1 min"
+        case .fiveMin: return "5 min"
+        case .fifteenMin: return "15 min"
+        case .oneHour: return "1 hour"
+        case .oneDay: return "1 day"
+        case .all: return "30 days"
+        }
     }
 
     private func stockRow(stock: Stock) -> some View {
@@ -231,9 +355,29 @@ struct PortfolioView: View {
                             .padding(AppTheme.cardPadding)
                             .appCard()
 
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(ChartTimeFrame.allCases) { tf in
+                                        Button {
+                                            stocksVM.changeChartTimeFrame(to: tf)
+                                        } label: {
+                                            Text(tf.displayName)
+                                                .font(AppTheme.captionMedium())
+                                                .foregroundStyle(stocksVM.selectedChartTimeFrame == tf ? AppTheme.background : AppTheme.textSecondary)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 8)
+                                                .background(stocksVM.selectedChartTimeFrame == tf ? AppTheme.accent : Color.clear)
+                                                .clipShape(Capsule())
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+
                             StockChartView(
                                 points: stocksVM.priceHistory,
-                                title: "30-day history",
+                                title: chartTitleForTimeFrame(stocksVM.selectedChartTimeFrame),
                                 isLoading: stocksVM.isPriceHistoryLoading
                             )
                             .frame(maxWidth: .infinity)

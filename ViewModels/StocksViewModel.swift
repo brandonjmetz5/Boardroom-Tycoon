@@ -21,6 +21,7 @@ final class StocksViewModel: ObservableObject {
     @Published var selectedStockForTrade: Stock?
     @Published private(set) var priceHistory: [StockPricePoint] = []
     @Published private(set) var isPriceHistoryLoading = false
+    @Published var selectedChartTimeFrame: ChartTimeFrame = .oneDay
     @Published private(set) var sparklineData: [String: [StockPricePoint]] = [:]
     @Published var tradeQuantityText = ""
     @Published var tradeSegment = 0 // 0 = Buy, 1 = Sell
@@ -96,19 +97,22 @@ final class StocksViewModel: ObservableObject {
         }
     }
 
-    func openTradeSheet(for stock: Stock) {
+    /// Positions with matching stock info (for My Positions tab). Only includes positions we have price data for.
+    var positionsWithStock: [(position: StockPosition, stock: Stock)] {
+        positions.compactMap { pos in
+            guard let stock = stocks.first(where: { $0.symbol == pos.symbol }) else { return nil }
+            return (position: pos, stock: stock)
+        }
+    }
+
+    func openTradeSheet(for stock: Stock, preferSell: Bool = false) {
         selectedStockForTrade = stock
         tradeQuantityText = ""
         tradeErrorMessage = nil
-        tradeSegment = 0
+        tradeSegment = preferSell ? 1 : 0
         priceHistory = []
         isPriceHistoryLoading = true
-        stockService.fetchPriceHistory(for: stock) { [weak self] points in
-            DispatchQueue.main.async {
-                self?.priceHistory = points
-                self?.isPriceHistoryLoading = false
-            }
-        }
+        loadPriceHistoryForSelectedStock()
     }
 
     func closeTradeSheet() {
@@ -117,6 +121,23 @@ final class StocksViewModel: ObservableObject {
         isPriceHistoryLoading = false
         tradeQuantityText = ""
         tradeErrorMessage = nil
+    }
+
+    /// Call when user changes timeframe; reloads chart for current stock.
+    func changeChartTimeFrame(to timeFrame: ChartTimeFrame) {
+        selectedChartTimeFrame = timeFrame
+        loadPriceHistoryForSelectedStock()
+    }
+
+    private func loadPriceHistoryForSelectedStock() {
+        guard let stock = selectedStockForTrade else { return }
+        isPriceHistoryLoading = true
+        stockService.fetchPriceHistory(for: stock, timeFrame: selectedChartTimeFrame) { [weak self] points in
+            DispatchQueue.main.async {
+                self?.priceHistory = points
+                self?.isPriceHistoryLoading = false
+            }
+        }
     }
 
     private func loadSparklines() {
