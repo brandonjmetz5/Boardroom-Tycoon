@@ -62,6 +62,48 @@ enum BuildingCatalog {
             name: "Jewelry Shop",
             type: .shop,
             cost: 5000
+        ),
+        PurchasableBuilding(
+            id: "tech-plant",
+            name: "Tech Plant",
+            type: .plant,
+            cost: 5200
+        ),
+        PurchasableBuilding(
+            id: "steel-mill",
+            name: "Steel Mill",
+            type: .mill,
+            cost: 3800
+        ),
+        PurchasableBuilding(
+            id: "silver-processing-plant",
+            name: "Silver Processing Plant",
+            type: .plant,
+            cost: 4000
+        ),
+        PurchasableBuilding(
+            id: "diamond-processing-plant",
+            name: "Diamond Processing Plant",
+            type: .plant,
+            cost: 4800
+        ),
+        PurchasableBuilding(
+            id: "diamond-refinery",
+            name: "Diamond Refinery",
+            type: .refinery,
+            cost: 4200
+        ),
+        PurchasableBuilding(
+            id: "silver-refinery",
+            name: "Silver Refinery",
+            type: .refinery,
+            cost: 2600
+        ),
+        PurchasableBuilding(
+            id: "construction-materials-plant",
+            name: "Construction Materials Plant",
+            type: .plant,
+            cost: 4400
         )
     ]
 }
