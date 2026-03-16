@@ -379,6 +379,7 @@ struct BuildingDetailView: View {
                     .frame(width: 52, height: 52)
                 Image(assetName)
                     .resizable()
+                    .interpolation(.high)
                     .scaledToFill()
                     .frame(width: 50, height: 50)
                     .clipShape(Circle())
