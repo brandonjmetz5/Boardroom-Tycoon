@@ -380,7 +380,7 @@ struct BuildingDetailView: View {
                 Image(assetName)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 46, height: 46)
+                    .frame(width: 50, height: 50)
                     .clipShape(Circle())
             }
         } else {
