@@ -22,6 +22,19 @@ enum BuildingLevelCatalog {
         }
     }
 
+    /// Extractor-only output multiplier. Smaller than throughput—abundance stays king.
+    /// Level 2 abundance 60 must NOT beat level 1 abundance 100.
+    static func extractorOutputMultiplier(forLevel level: Int) -> Double {
+        switch level {
+        case 1: return 1.00
+        case 2: return 1.10
+        case 3: return 1.20
+        case 4: return 1.30
+        case 5: return 1.40
+        default: return 1.00
+        }
+    }
+
     /// Cost multiplier when upgrading TO this level. Applied to both cash and material costs.
     /// Upgrade to 2 = 1.0, to 3 = 2.0, to 4 = 3.5, to 5 = 5.5
     static func upgradeCostMultiplier(forTargetLevel targetLevel: Int) -> Double {

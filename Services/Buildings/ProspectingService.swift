@@ -230,7 +230,7 @@ final class ProspectingService {
                    let existingAbundance = jobData["revealedAbundance"] as? Int {
                     abundance = existingAbundance
                 } else {
-                    abundance = Int.random(in: 50...100)
+                    abundance = Self.rollAbundance()
                 }
 
                 let buildingName = self.buildingName(for: resourceType)
@@ -609,6 +609,19 @@ final class ProspectingService {
             return .mine
         default:
             return .mine
+        }
+    }
+
+    /// Weighted abundance roll. High abundance (90+) is rare—takes many prospecting attempts.
+    /// ~45% → 25–50, ~30% → 50–70, ~15% → 70–82, ~7% → 82–92, ~3% → 92–100
+    private static func rollAbundance() -> Int {
+        let roll = Int.random(in: 1...100)
+        switch roll {
+        case 1...45: return Int.random(in: 25...50)
+        case 46...75: return Int.random(in: 50...70)
+        case 76...90: return Int.random(in: 70...82)
+        case 91...97: return Int.random(in: 82...92)
+        default: return Int.random(in: 92...100)
         }
     }
 }

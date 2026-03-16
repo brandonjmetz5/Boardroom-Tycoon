@@ -473,47 +473,35 @@ final class ProductionService {
         }
     }
 
-    // MARK: - Extractor Output (abundance + level)
+    // MARK: - Extractor Output (deterministic: abundance + level % bonus)
 
-    /// Base mean output by resource type (used for abundance scaling).
-    private static func baseMean(for resourceType: ResourceType?) -> Double {
+    /// Level-1 output at abundance 100 by resource type. Each abundance point maps 1:1 (abundance 99 → 99% of this).
+    private static func baseOutputAt100(for resourceType: ResourceType?) -> Int {
         switch resourceType {
-        case .gold?: return 15
-        case .silver?: return 16
-        case .diamond?: return 8
-        case .oil?: return 20
-        case .coal?: return 18
-        case .iron?: return 17
-        case .quarry?, .sandQuarry?, .stoneQuarry?, .gravelQuarry?: return 14
-        default: return 15
+        case .gold?: return 30
+        case .silver?: return 32
+        case .diamond?: return 16
+        case .oil?: return 40
+        case .coal?: return 36
+        case .iron?: return 34
+        case .quarry?, .sandQuarry?, .stoneQuarry?, .gravelQuarry?: return 28
+        default: return 30
         }
     }
 
-    /// Returns the min and max output per cycle for an extractor with given abundance and level.
-    /// - **Abundance** (0–100) is revealed when prospecting finishes; higher abundance = better base range.
-    /// - **Building level** increases the output range via throughput multiplier. Upgrading compensates for
-    ///   low abundance: e.g. abundance 60 at level 2 produces more than abundance 60 at level 1.
-    static func extractorOutputRange(abundance: Int, level: Int, resourceType: ResourceType?) -> (min: Int, max: Int) {
-        let baseMean = Self.baseMean(for: resourceType)
+    /// Deterministic output per cycle. Abundance 100 = max at level 1; each level adds modest % bonus.
+    /// High-abundance mines stay king—level 2 abundance 60 < level 1 abundance 100.
+    static func extractorOutput(abundance: Int, level: Int, resourceType: ResourceType?) -> Int {
         let clampedAbundance = max(1, min(100, abundance))
-        let abundanceMultiplier = 0.5 + Double(clampedAbundance) / 100.0
-        let mean = baseMean * abundanceMultiplier
-
-        let baseMin = max(1.0, mean * 0.8)
-        let baseMax = max(baseMin, mean * 1.2)
-
-        let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: level)
-        let scaledMin = Int(BuildingLevelCatalog.scaleQuantity(baseMin, throughputMultiplier: mult))
-        let scaledMax = Int(BuildingLevelCatalog.scaleQuantity(baseMax, throughputMultiplier: mult))
-
-        return (max(1, scaledMin), max(scaledMin, scaledMax))
+        let baseAt100 = Double(Self.baseOutputAt100(for: resourceType))
+        let level1Output = max(1, Int((Double(clampedAbundance) / 100.0 * baseAt100).rounded()))
+        let mult = BuildingLevelCatalog.extractorOutputMultiplier(forLevel: level)
+        return max(1, Int(BuildingLevelCatalog.scaleQuantity(Double(level1Output), throughputMultiplier: mult)))
     }
 
-    /// Generate a base output for an extractor building using abundance and level.
-    /// Abundance determines base range; level scales the output via throughput multiplier.
+    /// Deterministic output for production—no randomness.
     private func generateMineOutput(resourceType: ResourceType?, abundance: Int, level: Int) -> Int {
-        let (minOut, maxOut) = Self.extractorOutputRange(abundance: abundance, level: level, resourceType: resourceType)
-        return Int.random(in: minOut...maxOut)
+        Self.extractorOutput(abundance: abundance, level: level, resourceType: resourceType)
     }
 
     private func inventoryDocumentID(for resourceType: ResourceType) -> String {

@@ -196,9 +196,9 @@ struct BuildingDetailView: View {
                     Spacer()
                 }
                 detailRow("Abundance", "\(viewModel.currentBuilding.abundance ?? 0)")
-                detailRow("Output range", viewModel.formattedOutputRange())
-                if let nextRange = viewModel.formattedOutputRangeAtNextLevel() {
-                    detailRow("At Level \(viewModel.currentBuilding.level + 1)", nextRange)
+                detailRow("Output per cycle", viewModel.formattedOutputPerCycle())
+                if let nextOutput = viewModel.formattedOutputAtNextLevel() {
+                    detailRow("At Level \(viewModel.currentBuilding.level + 1)", nextOutput)
                         .foregroundStyle(AppTheme.accent.opacity(0.9))
                 }
                 if viewModel.currentBuilding.isListedOnMarket == true {
@@ -292,7 +292,7 @@ struct BuildingDetailView: View {
                                     isInput: false
                                 )
                             } else if viewModel.isExtractor {
-                                Text("Output: Raw \(viewModel.currentBuilding.resourceType?.rawValue ?? "resource") (variable)")
+                                Text("Output: \(viewModel.formattedOutputPerCycle()) Raw \(viewModel.currentBuilding.resourceType?.rawValue ?? "resource")")
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundStyle(AppTheme.textSecondary)
                             }

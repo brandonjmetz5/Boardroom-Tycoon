@@ -445,31 +445,30 @@ final class BuildingDetailViewModel: ObservableObject {
         return String(format: "%02d:%02d", minutes, seconds)
     }
 
-    /// Output range per cycle. Abundance (from prospecting) sets base range; level scales it.
-    /// Upgrading increases the range: e.g. abundance 60 at level 2 produces more than at level 1.
-    func formattedOutputRange() -> String {
+    /// Output per cycle (deterministic). Abundance sets base; level adds % bonus.
+    func formattedOutputPerCycle() -> String {
         guard let abundance = currentBuilding.abundance else { return "Unknown" }
-        let range = ProductionService.extractorOutputRange(
+        let output = ProductionService.extractorOutput(
             abundance: abundance,
             level: currentBuilding.level,
             resourceType: currentBuilding.resourceType
         )
-        return "\(range.min)–\(range.max)"
+        return "\(output)"
     }
 
-    /// Output range at next level (for upgrade incentive). Nil if max level.
-    func formattedOutputRangeAtNextLevel() -> String? {
+    /// Output at next level (for upgrade incentive). Nil if max level.
+    func formattedOutputAtNextLevel() -> String? {
         guard
             let abundance = currentBuilding.abundance,
             currentBuilding.level < BuildingService.maxBuildingLevel
         else { return nil }
         let nextLevel = currentBuilding.level + 1
-        let range = ProductionService.extractorOutputRange(
+        let output = ProductionService.extractorOutput(
             abundance: abundance,
             level: nextLevel,
             resourceType: currentBuilding.resourceType
         )
-        return "\(range.min)–\(range.max)"
+        return "\(output)"
     }
 
     func scrapValue() -> Double {
@@ -502,9 +501,12 @@ final class BuildingDetailViewModel: ObservableObject {
         currentBuilding.type == .mine || currentBuilding.type == .rig || currentBuilding.type == .quarry
     }
 
-    /// Throughput multiplier for current building level (e.g. 1.0, 1.75, 2.5).
+    /// Throughput multiplier for display. Extractors use smaller output multiplier; others use recipe throughput.
     var throughputMultiplier: Double {
-        BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)
+        if isExtractor {
+            return BuildingLevelCatalog.extractorOutputMultiplier(forLevel: currentBuilding.level)
+        }
+        return BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)
     }
 
     /// Scaled input summary for a specific recipe at current level.
