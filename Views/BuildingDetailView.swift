@@ -197,6 +197,10 @@ struct BuildingDetailView: View {
                 }
                 detailRow("Abundance", "\(viewModel.currentBuilding.abundance ?? 0)")
                 detailRow("Output range", viewModel.formattedOutputRange())
+                if let nextRange = viewModel.formattedOutputRangeAtNextLevel() {
+                    detailRow("At Level \(viewModel.currentBuilding.level + 1)", nextRange)
+                        .foregroundStyle(AppTheme.accent.opacity(0.9))
+                }
                 if viewModel.currentBuilding.isListedOnMarket == true {
                     HStack(spacing: 6) {
                         Circle().fill(AppTheme.chipListed).frame(width: 8, height: 8)

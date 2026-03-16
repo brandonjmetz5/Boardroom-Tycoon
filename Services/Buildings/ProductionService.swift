@@ -155,8 +155,7 @@ final class ProductionService {
             let fuelRequired = BuildingLevelCatalog.scaleQuantity(Self.baseFuelPerExtractorCycle, throughputMultiplier: mult)
             let buildingAbundance = buildingData["abundance"] as? Int ?? 50
             let resourceType = (buildingData["resourceType"] as? String).flatMap(ResourceType.init(rawValue:))
-            let baseOutput = self.generateMineOutput(resourceType: resourceType, abundance: buildingAbundance)
-            let totalOutput = Int(BuildingLevelCatalog.scaleQuantity(Double(baseOutput), throughputMultiplier: mult))
+            let totalOutput = self.generateMineOutput(resourceType: resourceType, abundance: buildingAbundance, level: level)
 
             self.db.runTransaction({ transaction, errorPointer in
                 do {
@@ -474,29 +473,47 @@ final class ProductionService {
         }
     }
 
-    /// Generate a base output for an extractor building using abundance only.
-    /// Different resource types can have different base means.
-    private func generateMineOutput(resourceType: ResourceType?, abundance: Int) -> Int {
-        let baseMean: Double
-        switch resourceType {
-        case .gold?: baseMean = 15
-        case .silver?: baseMean = 16
-        case .diamond?: baseMean = 8
-        case .oil?: baseMean = 20
-        case .coal?: baseMean = 18
-        case .iron?: baseMean = 17
-        case .quarry?, .sandQuarry?, .stoneQuarry?, .gravelQuarry?: baseMean = 14
-        default: baseMean = 15
-        }
+    // MARK: - Extractor Output (abundance + level)
 
+    /// Base mean output by resource type (used for abundance scaling).
+    private static func baseMean(for resourceType: ResourceType?) -> Double {
+        switch resourceType {
+        case .gold?: return 15
+        case .silver?: return 16
+        case .diamond?: return 8
+        case .oil?: return 20
+        case .coal?: return 18
+        case .iron?: return 17
+        case .quarry?, .sandQuarry?, .stoneQuarry?, .gravelQuarry?: return 14
+        default: return 15
+        }
+    }
+
+    /// Returns the min and max output per cycle for an extractor with given abundance and level.
+    /// - **Abundance** (0–100) is revealed when prospecting finishes; higher abundance = better base range.
+    /// - **Building level** increases the output range via throughput multiplier. Upgrading compensates for
+    ///   low abundance: e.g. abundance 60 at level 2 produces more than abundance 60 at level 1.
+    static func extractorOutputRange(abundance: Int, level: Int, resourceType: ResourceType?) -> (min: Int, max: Int) {
+        let baseMean = Self.baseMean(for: resourceType)
         let clampedAbundance = max(1, min(100, abundance))
         let abundanceMultiplier = 0.5 + Double(clampedAbundance) / 100.0
         let mean = baseMean * abundanceMultiplier
 
-        let minOutput = max(1, Int((mean * 0.8).rounded(.down)))
-        let maxOutput = max(minOutput, Int((mean * 1.2).rounded(.up)))
+        let baseMin = max(1.0, mean * 0.8)
+        let baseMax = max(baseMin, mean * 1.2)
 
-        return Int.random(in: minOutput...maxOutput)
+        let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: level)
+        let scaledMin = Int(BuildingLevelCatalog.scaleQuantity(baseMin, throughputMultiplier: mult))
+        let scaledMax = Int(BuildingLevelCatalog.scaleQuantity(baseMax, throughputMultiplier: mult))
+
+        return (max(1, scaledMin), max(scaledMin, scaledMax))
+    }
+
+    /// Generate a base output for an extractor building using abundance and level.
+    /// Abundance determines base range; level scales the output via throughput multiplier.
+    private func generateMineOutput(resourceType: ResourceType?, abundance: Int, level: Int) -> Int {
+        let (minOut, maxOut) = Self.extractorOutputRange(abundance: abundance, level: level, resourceType: resourceType)
+        return Int.random(in: minOut...maxOut)
     }
 
     private func inventoryDocumentID(for resourceType: ResourceType) -> String {

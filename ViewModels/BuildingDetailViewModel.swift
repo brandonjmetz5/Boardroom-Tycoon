@@ -445,17 +445,31 @@ final class BuildingDetailViewModel: ObservableObject {
         return String(format: "%02d:%02d", minutes, seconds)
     }
 
+    /// Output range per cycle. Abundance (from prospecting) sets base range; level scales it.
+    /// Upgrading increases the range: e.g. abundance 60 at level 2 produces more than at level 1.
     func formattedOutputRange() -> String {
-        guard
-            let abundance = currentBuilding.abundance
-        else {
-            return "Unknown"
-        }
+        guard let abundance = currentBuilding.abundance else { return "Unknown" }
+        let range = ProductionService.extractorOutputRange(
+            abundance: abundance,
+            level: currentBuilding.level,
+            resourceType: currentBuilding.resourceType
+        )
+        return "\(range.min)–\(range.max)"
+    }
 
-        let maxOutput = max(1, abundance - 40)
-        // Without stability, use a simple range based on abundance.
-        let minOutput = max(1, Int((Double(maxOutput) * 0.6).rounded(.down)))
-        return "\(minOutput)-\(maxOutput)"
+    /// Output range at next level (for upgrade incentive). Nil if max level.
+    func formattedOutputRangeAtNextLevel() -> String? {
+        guard
+            let abundance = currentBuilding.abundance,
+            currentBuilding.level < BuildingService.maxBuildingLevel
+        else { return nil }
+        let nextLevel = currentBuilding.level + 1
+        let range = ProductionService.extractorOutputRange(
+            abundance: abundance,
+            level: nextLevel,
+            resourceType: currentBuilding.resourceType
+        )
+        return "\(range.min)–\(range.max)"
     }
 
     func scrapValue() -> Double {
