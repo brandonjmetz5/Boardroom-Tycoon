@@ -252,7 +252,7 @@ struct BuildingDetailView: View {
                         }
                     }
 
-                    if viewModel.recipes.isEmpty == false && viewModel.isExtractor == false {
+                    if (viewModel.recipes.isEmpty == false && viewModel.isExtractor == false) || (viewModel.isExtractor && viewModel.maxOutputQuality > 1) {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Output Quality")
                                 .font(.system(size: 12, weight: .medium))

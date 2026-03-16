@@ -46,7 +46,7 @@ enum BuildingRecipeCatalog {
         case "gold-processing-plant", "Gold Processing Plant": return ["process-gold-ring", "process-gold-watch", "process-microchip"]
         case "fuel-processing-plant", "Fuel Processing Plant": return ["process-fuel-cells", "process-machinery-fuel-packs"]
         case "tech-plant", "Tech Plant": return ["tech-machine-computer"]
-        case "jewelry-shop", "Jewelry Shop": return ["craft-prem-ring", "craft-prem-watch", "craft-luxury-ring", "craft-luxury-watch"]
+        case "jewelry-shop", "Jewelry Shop": return ["craft-luxury-ring", "craft-luxury-watch"]
         case "fabrication-plant", "Fabrication Plant": return ["fabricate-steel-beams", "fabricate-machine-gear", "fabricate-robotic-arm"]
         case "material-depot", "Material Depot": return ["depot-window", "depot-foundation", "depot-walls"]
         default: return []

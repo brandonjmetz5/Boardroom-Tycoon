@@ -45,8 +45,6 @@ enum RecipeCatalog {
         // Tech Plant
         case "tech-machine-computer": return techMachineComputerRecipe
         // Jewelry Shop
-        case "craft-prem-ring": return craftPremRingRecipe
-        case "craft-prem-watch": return craftPremWatchRecipe
         case "craft-luxury-ring": return craftLuxuryRingRecipe
         case "craft-luxury-watch": return craftLuxuryWatchRecipe
         // Fabrication Plant
@@ -70,6 +68,49 @@ enum RecipeCatalog {
     static func recipes(forBuildingId buildingId: String) -> [Recipe] {
         let ids = BuildingRecipeCatalog.recipeIds(forBuildingId: buildingId)
         return ids.compactMap { recipe(forId: $0) }
+    }
+
+    /// All recipe IDs (for collecting researchable output items).
+    private static let allRecipeIds: [String] = [
+        "refine-gold", "refine-oil-gasoline", "refine-oil-diesel", "refine-coal-processed", "refine-coal-heat-blocks",
+        "refine-iron", "refine-silver", "refine-diamond-cut", "refine-diamond-dust", "refine-steel",
+        "construct-glass", "construct-bricks", "construct-concrete", "process-diamond-drill-bits", "process-precision-cutting-heads",
+        "process-silver-ring", "process-silver-watch", "process-heatsinks", "process-gold-ring", "process-gold-watch",
+        "process-microchip", "process-fuel-cells", "process-machinery-fuel-packs", "tech-machine-computer",
+        "craft-luxury-ring", "craft-luxury-watch",
+        "fabricate-steel-beams", "fabricate-machine-gear", "fabricate-robotic-arm",
+        "depot-window", "depot-foundation", "depot-walls"
+    ]
+
+    /// Researchable products (recipe outputs + raw materials). Fallback when Firestore items is empty.
+    static func researchableItems() -> [Item] {
+        var seen = Set<String>()
+        var result: [Item] = []
+
+        for id in allRecipeIds {
+            guard let r = recipe(forId: id), let out = r.outputItems.first else { continue }
+            let item = out.item
+            if !seen.contains(item.id) {
+                seen.insert(item.id)
+                result.append(item)
+            }
+        }
+
+        let rawMaterials: [Item] = [
+            Item(id: "raw-gold", name: "Raw Gold", category: .rawMaterial, isFractional: false),
+            Item(id: "raw-silver", name: "Raw Silver", category: .rawMaterial, isFractional: false),
+            Item(id: "raw-diamonds", name: "Raw Diamonds", category: .rawMaterial, isFractional: false),
+            Item(id: "crude-oil", name: "Crude Oil", category: .rawMaterial, isFractional: false),
+            Item(id: "raw-coal", name: "Raw Coal", category: .rawMaterial, isFractional: false),
+            Item(id: "raw-iron", name: "Raw Iron", category: .rawMaterial, isFractional: false),
+            Item(id: "fuel-cell", name: "Fuel Cells", category: .fuel, isFractional: false)
+        ]
+        for item in rawMaterials where !seen.contains(item.id) {
+            seen.insert(item.id)
+            result.append(item)
+        }
+
+        return result.sorted { $0.name < $1.name }
     }
 
     // MARK: - Refineries
@@ -450,36 +491,6 @@ enum RecipeCatalog {
     }
 
     // MARK: - Jewelry Shop
-
-    private static var craftPremRingRecipe: Recipe {
-        Recipe(
-            id: "craft-prem-ring",
-            name: "Prem Ring",
-            inputItems: [
-                RecipeIngredient(id: "in-gold-ring", item: Item(id: "gold-ring", name: "Gold Ring", category: .luxuryGood, isFractional: false), quantity: 5),
-                RecipeIngredient(id: "in-silver-ring", item: Item(id: "silver-ring", name: "Silver Ring", category: .luxuryGood, isFractional: false), quantity: 5)
-            ],
-            outputItems: [
-                RecipeIngredient(id: "out-prem-ring", item: Item(id: "prem-ring", name: "Prem Ring", category: .luxuryGood, isFractional: false), quantity: 5)
-            ],
-            cycleTimeInMinutes: 45
-        )
-    }
-
-    private static var craftPremWatchRecipe: Recipe {
-        Recipe(
-            id: "craft-prem-watch",
-            name: "Prem Watch",
-            inputItems: [
-                RecipeIngredient(id: "in-gold-watch", item: Item(id: "gold-watch", name: "Gold Watch", category: .luxuryGood, isFractional: false), quantity: 3),
-                RecipeIngredient(id: "in-silver-watch", item: Item(id: "silver-watch", name: "Silver Watch", category: .luxuryGood, isFractional: false), quantity: 3)
-            ],
-            outputItems: [
-                RecipeIngredient(id: "out-prem-watch", item: Item(id: "prem-watch", name: "Prem Watch", category: .luxuryGood, isFractional: false), quantity: 3)
-            ],
-            cycleTimeInMinutes: 45
-        )
-    }
 
     private static var craftLuxuryRingRecipe: Recipe {
         Recipe(

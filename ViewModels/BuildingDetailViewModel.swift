@@ -25,7 +25,7 @@ final class BuildingDetailViewModel: ObservableObject {
     @Published var selectedRecipeForBuilding: Recipe?
 
     @Published private(set) var inventoryItems: [InventoryItem] = []
-    /// Max quality unlocked for the primary output resource (if any).
+    /// Max quality unlocked for the primary output resource or recipe output (if any).
     @Published private(set) var maxOutputQuality: Int = 1
     /// Quality the player wants to produce for recipe-based buildings.
     @Published var selectedOutputQuality: Int = 1
@@ -88,9 +88,29 @@ final class BuildingDetailViewModel: ObservableObject {
     }
 
     private func loadQualityForCurrentOutput() {
-        guard !isExtractor,
-              let outputItemId = (selectedRecipeForBuilding ?? recipe)?.outputItems.first?.item.id
-        else {
+        let outputItemId: String?
+        if isExtractor {
+            // Extractors output raw resources (e.g. raw-gold); map ResourceType to base item id.
+            if let rt = currentBuilding.resourceType {
+                switch rt {
+                case .gold: outputItemId = "raw-gold"
+                case .silver: outputItemId = "raw-silver"
+                case .diamond: outputItemId = "raw-diamonds"
+                case .oil: outputItemId = "crude-oil"
+                case .coal: outputItemId = "raw-coal"
+                case .iron: outputItemId = "raw-iron"
+                case .quarry, .stoneQuarry: outputItemId = "raw-stone"
+                case .sandQuarry: outputItemId = "raw-sand"
+                case .gravelQuarry: outputItemId = "raw-gravel"
+                }
+            } else {
+                outputItemId = nil
+            }
+        } else {
+            outputItemId = (selectedRecipeForBuilding ?? recipe)?.outputItems.first?.item.id
+        }
+
+        guard let id = outputItemId else {
             maxOutputQuality = 1
             selectedOutputQuality = 1
             return
@@ -101,7 +121,7 @@ final class BuildingDetailViewModel: ObservableObject {
                 guard let self else { return }
                 switch result {
                 case .success(let qualities):
-                    let q = qualities.first(where: { $0.id == outputItemId })?.qualityLevel ?? 1
+                    let q = qualities.first(where: { $0.id == id })?.qualityLevel ?? 1
                     self.maxOutputQuality = max(1, q)
                     if self.selectedOutputQuality > self.maxOutputQuality {
                         self.selectedOutputQuality = self.maxOutputQuality
@@ -142,7 +162,8 @@ final class BuildingDetailViewModel: ObservableObject {
         isWorking = true
         errorMessage = nil
         if isExtractor {
-            productionService.startProduction(for: userID, buildingID: currentBuilding.id) { [weak self] result in
+            let targetQuality = max(1, min(maxOutputQuality, selectedOutputQuality))
+            productionService.startProduction(for: userID, buildingID: currentBuilding.id, targetQuality: targetQuality) { [weak self] result in
                 DispatchQueue.main.async {
                     guard let self else { return }
                     self.isWorking = false
@@ -327,7 +348,8 @@ final class BuildingDetailViewModel: ObservableObject {
         if isExtractor {
             let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)
             let fuelNeed = BuildingLevelCatalog.scaleQuantity(ProductionService.baseFuelPerExtractorCycle, throughputMultiplier: mult)
-            return inventoryQuantity(for: "fuel-cell") >= fuelNeed
+            let fuelDocId = ProductionService.fuelDocID(quality: selectedOutputQuality)
+            return inventoryQuantity(for: fuelDocId) >= fuelNeed
         }
         guard let r = selectedRecipeForBuilding ?? recipe else { return false }
         let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)
@@ -349,7 +371,9 @@ final class BuildingDetailViewModel: ObservableObject {
         if isExtractor {
             let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)
             let n = BuildingLevelCatalog.scaleQuantity(ProductionService.baseFuelPerExtractorCycle, throughputMultiplier: mult)
-            return [("Fuel Cells", "fuel-cell", n)]
+            let fuelDocId = ProductionService.fuelDocID(quality: selectedOutputQuality)
+            let fuelName = selectedOutputQuality > 1 ? "Fuel Cells (Q\(selectedOutputQuality))" : "Fuel Cells"
+            return [(fuelName, fuelDocId, n)]
         }
         guard let r = selectedRecipeForBuilding ?? recipe else { return [] }
         let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)

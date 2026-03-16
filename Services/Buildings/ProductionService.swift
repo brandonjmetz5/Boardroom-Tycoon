@@ -15,14 +15,35 @@ final class ProductionService {
     /// Level N uses base * throughputMultiplier(N), so higher levels use more fuel as they output more.
     static let baseFuelPerExtractorCycle: Double = 10
 
-    /// Inventory document ID for fuel (matches starter inventory and Item catalog).
+    /// Base inventory document ID for fuel (Q1). Q2+ use "fuel-cell-q2", etc.
     private let fuelInventoryDocID = "fuel-cell"
 
+    /// Fuel inventory doc ID for a given quality. Q1 = "fuel-cell"; Q2+ = "fuel-cell-qN". Use for UI and consumption.
+    static func fuelDocID(quality: Int) -> String {
+        guard quality > 1 else { return "fuel-cell" }
+        return "fuel-cell-q\(quality)"
+    }
+
+    private func fuelDocID(quality: Int) -> String {
+        Self.fuelDocID(quality: quality)
+    }
+
     /// Base cash cost per R&D cycle at level 1.
-    private let baseResearchCycleCost: Double = 500
+    static let baseResearchCycleCost: Double = 500
+
+    /// Cash cost for an R&D cycle at the given building level.
+    static func researchCycleCost(forLevel level: Int) -> Double {
+        let mult = 1.0 + 0.5 * Double(max(0, level - 1))
+        return (baseResearchCycleCost * mult).rounded()
+    }
 
     /// Range of research points per cycle for a given building level.
     private func researchPointsRange(forLevel level: Int) -> ClosedRange<Int> {
+        Self.researchPointsOutputRange(forLevel: level)
+    }
+
+    /// Range of research points output per cycle (for UI display).
+    static func researchPointsOutputRange(forLevel level: Int) -> ClosedRange<Int> {
         switch level {
         case 1: return 10...20
         case 2: return 20...35
@@ -84,8 +105,7 @@ final class ProductionService {
                     return nil
                 }
 
-                let levelMultiplier = 1.0 + 0.5 * Double(max(0, level - 1))
-                let cycleCost = (self.baseResearchCycleCost * levelMultiplier).rounded()
+                let cycleCost = Self.researchCycleCost(forLevel: level)
 
                 if currentCash < cycleCost {
                     errorPointer?.pointee = NSError(
@@ -135,10 +155,12 @@ final class ProductionService {
         }
     }
 
-    func startProduction(for userID: String, buildingID: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    func startProduction(for userID: String, buildingID: String, targetQuality: Int = 1, completion: @escaping (Result<Void, Error>) -> Void) {
         let profileRef = db.collection("playerProfiles").document(userID)
         let buildingRef = profileRef.collection("buildings").document(buildingID)
-        let fuelRef = profileRef.collection("inventory").document(fuelInventoryDocID)
+        let targetQualityClamped = max(1, targetQuality)
+        let fuelDocId = fuelDocID(quality: targetQualityClamped)
+        let fuelRef = profileRef.collection("inventory").document(fuelDocId)
 
         buildingRef.getDocument { [weak self] buildingSnapshot, buildingError in
             guard let self else { return }
@@ -179,10 +201,11 @@ final class ProductionService {
 
                     let fuelQuantity = fuelSnapshot.data()?["quantity"] as? Double ?? 0
                     if fuelQuantity < fuelRequired {
+                        let fuelLabel = targetQualityClamped > 1 ? "Fuel Cells (Q\(targetQualityClamped))" : "Fuel Cells"
                         errorPointer?.pointee = NSError(
                             domain: "ProductionService",
                             code: 2006,
-                            userInfo: [NSLocalizedDescriptionKey: "Not enough fuel. This cycle costs \(Int(fuelRequired)) Fuel Cells."]
+                            userInfo: [NSLocalizedDescriptionKey: "Not enough \(fuelLabel). This cycle costs \(Int(fuelRequired)) \(fuelLabel)."]
                         )
                         return nil
                     }
@@ -199,13 +222,14 @@ final class ProductionService {
                         "isProducing": true,
                         "productionStartedAt": Timestamp(date: startedAt),
                         "productionEndsAt": Timestamp(date: endsAt),
-                        "pendingOutputQuantity": Double(totalOutput)
+                        "pendingOutputQuantity": Double(totalOutput),
+                        "pendingOutputQuality": targetQualityClamped
                     ], forDocument: buildingRef)
 
                     let newFuelQuantity = fuelQuantity - fuelRequired
                     let fuelData: [String: Any] = fuelSnapshot.data() ?? [
-                        "id": self.fuelInventoryDocID,
-                        "name": "Fuel Cell",
+                        "id": fuelDocId,
+                        "name": targetQualityClamped > 1 ? "Fuel Cells (Q\(targetQualityClamped))" : "Fuel Cell",
                         "category": "Fuel",
                         "isFractional": false
                     ]
