@@ -28,11 +28,11 @@ struct BuildingDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
                     heroSection
-                    if viewModel.isExtractor {
-                        mineStatsSection
-                    }
-                    buildingUpgradeSection
-                    productionSection
+                if viewModel.isExtractor {
+                    mineStatsSection
+                }
+                buildingUpgradeSection
+                productionSection
                     managementSection
                     seedFirestoreSection
                 }
@@ -183,7 +183,7 @@ struct BuildingDetailView: View {
             sectionHeader("Resource", icon: "cube.fill")
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
-                    let resourceName = viewModel.currentBuilding.resourceType?.rawValue ?? "—"
+                let resourceName = viewModel.currentBuilding.resourceType?.rawValue ?? "—"
                     resourceIconView(name: resourceName)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Resource")
@@ -196,7 +196,6 @@ struct BuildingDetailView: View {
                     Spacer()
                 }
                 detailRow("Abundance", "\(viewModel.currentBuilding.abundance ?? 0)")
-                detailRow("Stability", "\(viewModel.currentBuilding.stability ?? 0)")
                 detailRow("Output range", viewModel.formattedOutputRange())
                 if viewModel.currentBuilding.isListedOnMarket == true {
                     HStack(spacing: 6) {
@@ -246,6 +245,20 @@ struct BuildingDetailView: View {
                             }
                             .pickerStyle(.menu)
                             .tint(AppTheme.accent)
+                        }
+                    }
+
+                    if viewModel.recipes.isEmpty == false && viewModel.isExtractor == false {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Output Quality")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AppTheme.textTertiary)
+                            Picker("Quality", selection: $viewModel.selectedOutputQuality) {
+                                ForEach(1...max(viewModel.maxOutputQuality, 1), id: \.self) { q in
+                                    Text("Q\(q)").tag(q)
+                                }
+                            }
+                            .pickerStyle(.segmented)
                         }
                     }
 
@@ -563,7 +576,6 @@ struct BuildingDetailView: View {
                             .keyboardType(.decimalPad)
                         Text("Resource: \(viewModel.currentBuilding.resourceType?.rawValue ?? "Unknown")")
                         Text("Abundance: \(viewModel.currentBuilding.abundance ?? 0)")
-                        Text("Stability: \(viewModel.currentBuilding.stability ?? 0)")
                         Text("Level: \(viewModel.currentBuilding.level)")
                         if let pricing = viewModel.suggestedPricing() {
                             Text(String(format: "Suggested Starting Bid: $%.2f", pricing.startingBid))
@@ -621,12 +633,13 @@ struct BuildingDetailView: View {
                 slotIndex: 1,
                 resourceType: .gold,
                 abundance: 50,
-                stability: 55,
                 isStarterMine: true,
                 isProducing: false,
                 productionStartedAt: nil,
                 productionEndsAt: nil,
                 pendingOutputQuantity: nil,
+                pendingOutputItemId: nil,
+                pendingOutputItemName: nil,
                 isListedOnMarket: false,
                 marketListingID: nil
             )

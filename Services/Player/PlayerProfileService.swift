@@ -32,6 +32,7 @@ final class PlayerProfileService {
                 "xp": profile.xp,
                 "buildingSlotCount": profile.buildingSlotCount,
                 "starterMineClaimed": profile.starterMineClaimed,
+                "researchPoints": profile.researchPoints,
                 "createdAt": Timestamp(date: profile.createdAt)
             ]
 
@@ -83,6 +84,8 @@ final class PlayerProfileService {
                 return
             }
 
+            let researchPoints = data["researchPoints"] as? Int ?? 0
+
             let profile = PlayerProfile(
                 id: id,
                 cash: cash,
@@ -90,6 +93,7 @@ final class PlayerProfileService {
                 xp: xp,
                 buildingSlotCount: buildingSlotCount,
                 starterMineClaimed: starterMineClaimed,
+                researchPoints: researchPoints,
                 createdAt: createdAtTimestamp.dateValue()
             )
 

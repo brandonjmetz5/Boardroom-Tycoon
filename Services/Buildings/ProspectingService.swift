@@ -42,7 +42,6 @@ final class ProspectingService {
 
                 let slotIndex = data["slotIndex"] as? Int ?? Int.max
                 let revealedAbundance = data["revealedAbundance"] as? Int
-                let revealedStability = data["revealedStability"] as? Int
 
                 return ProspectingJob(
                     id: id,
@@ -52,8 +51,7 @@ final class ProspectingService {
                     slotIndex: slotIndex,
                     isComplete: isComplete,
                     isRevealed: isRevealed,
-                    revealedAbundance: revealedAbundance,
-                    revealedStability: revealedStability
+                    revealedAbundance: revealedAbundance
                 )
             }
 
@@ -227,16 +225,12 @@ final class ProspectingService {
                 }
 
                 let abundance: Int
-                let stability: Int
 
                 if isRevealed,
-                   let existingAbundance = jobData["revealedAbundance"] as? Int,
-                   let existingStability = jobData["revealedStability"] as? Int {
+                   let existingAbundance = jobData["revealedAbundance"] as? Int {
                     abundance = existingAbundance
-                    stability = existingStability
                 } else {
                     abundance = Int.random(in: 50...100)
-                    stability = Int.random(in: 50...100)
                 }
 
                 let buildingName = self.buildingName(for: resourceType)
@@ -250,7 +244,6 @@ final class ProspectingService {
                     "slotIndex": slotIndex,
                     "resourceType": resourceType.rawValue,
                     "abundance": abundance,
-                    "stability": stability,
                     "isStarterMine": false,
                     "isListedOnMarket": false,
                     "marketListingID": NSNull()
@@ -260,7 +253,6 @@ final class ProspectingService {
                 transaction.updateData([
                     "isRevealed": true,
                     "revealedAbundance": abundance,
-                    "revealedStability": stability,
                     "isComplete": true
                 ], forDocument: jobRef)
 
@@ -296,8 +288,7 @@ final class ProspectingService {
                     let slotIndex = jobData["slotIndex"] as? Int,
                     let isComplete = jobData["isComplete"] as? Bool,
                     let isRevealed = jobData["isRevealed"] as? Bool,
-                    let abundance = jobData["revealedAbundance"] as? Int,
-                    let stability = jobData["revealedStability"] as? Int
+                    let abundance = jobData["revealedAbundance"] as? Int
                 else {
                     let error = NSError(
                         domain: "ProspectingService",
@@ -339,23 +330,12 @@ final class ProspectingService {
                     "slotIndex": slotIndex,
                     "resourceType": resourceType.rawValue,
                     "abundance": abundance,
-                    "stability": stability,
                     "isStarterMine": false,
                     "isListedOnMarket": false,
                     "marketListingID": NSNull()
                 ]
 
                 transaction.setData(buildingData, forDocument: newBuildingRef)
-                let firstMachineID = "machine-\(UUID().uuidString)"
-                let firstMachineData: [String: Any] = [
-                    "id": firstMachineID,
-                    "name": "Drill",
-                    "level": 0,
-                    "efficiencyBonus": 0,
-                    "abundance": abundance,
-                    "stability": stability
-                ]
-                transaction.setData(firstMachineData, forDocument: newBuildingRef.collection("machines").document(firstMachineID))
                 transaction.updateData([
                     "isComplete": true
                 ], forDocument: jobRef)
@@ -392,8 +372,7 @@ final class ProspectingService {
                     let slotIndex = jobData["slotIndex"] as? Int,
                     let isComplete = jobData["isComplete"] as? Bool,
                     let isRevealed = jobData["isRevealed"] as? Bool,
-                    let abundance = jobData["revealedAbundance"] as? Int,
-                    let stability = jobData["revealedStability"] as? Int
+                    let abundance = jobData["revealedAbundance"] as? Int
                 else {
                     let error = NSError(
                         domain: "ProspectingService",
@@ -435,7 +414,7 @@ final class ProspectingService {
                 }
 
                 let buildingName = self.buildingName(for: resourceType)
-                let startingBid = self.startingBid(for: resourceType, level: 1, abundance: abundance, stability: stability)
+                let startingBid = self.startingBid(for: resourceType, level: 1, abundance: abundance)
                 let createdAt = Date()
                 // let endsAt = createdAt.addingTimeInterval(60 * 60 * 24)
                 let endsAt = createdAt.addingTimeInterval(60)
@@ -449,7 +428,6 @@ final class ProspectingService {
                     "slotIndex": slotIndex,
                     "resourceType": resourceType.rawValue,
                     "abundance": abundance,
-                    "stability": stability,
                     "isStarterMine": false,
                     "isListedOnMarket": true,
                     "marketListingID": listingRef.documentID
@@ -463,7 +441,6 @@ final class ProspectingService {
                     "resourceType": resourceType.rawValue,
                     "level": 1,
                     "abundance": abundance,
-                    "stability": stability,
                     "buyNowPrice": buyNowPrice,
                     "startingBid": startingBid,
                     "currentBid": startingBid,
@@ -561,15 +538,15 @@ final class ProspectingService {
         }
     }
 
-    func suggestedMarketPricing(for resourceType: ResourceType, level: Int, abundance: Int, stability: Int) -> (startingBid: Double, suggestedBuyNowLow: Double, suggestedBuyNowHigh: Double) {
-        let startingBid = self.startingBid(for: resourceType, level: level, abundance: abundance, stability: stability)
+    func suggestedMarketPricing(for resourceType: ResourceType, level: Int, abundance: Int) -> (startingBid: Double, suggestedBuyNowLow: Double, suggestedBuyNowHigh: Double) {
+        let startingBid = self.startingBid(for: resourceType, level: level, abundance: abundance)
         let suggestedBuyNowLow = startingBid * 1.35
         let suggestedBuyNowHigh = startingBid * 1.75
 
         return (startingBid, suggestedBuyNowLow, suggestedBuyNowHigh)
     }
 
-    private func startingBid(for resourceType: ResourceType, level: Int, abundance: Int, stability: Int) -> Double {
+    private func startingBid(for resourceType: ResourceType, level: Int, abundance: Int) -> Double {
         let baseValue: Double
 
         switch resourceType {
@@ -591,7 +568,7 @@ final class ProspectingService {
             baseValue = 700
         }
 
-        let statBonus = Double((abundance - 50) + (stability - 50)) * 12.0
+        let statBonus = Double(abundance - 50) * 24.0
         let levelBonus = Double(level - 1) * 150.0
 
         return max(100, baseValue + statBonus + levelBonus)

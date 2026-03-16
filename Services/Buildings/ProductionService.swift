@@ -11,11 +11,129 @@ import FirebaseFirestore
 final class ProductionService {
     private let db = Firestore.firestore()
 
-    /// Base fuel cells per extractor cycle (level 1). Level N uses 10 * throughputMultiplier(N), rounded.
+    /// Base fuel cells per extractor cycle (level 1).
+    /// Level N uses base * throughputMultiplier(N), so higher levels use more fuel as they output more.
     static let baseFuelPerExtractorCycle: Double = 10
 
     /// Inventory document ID for fuel (matches starter inventory and Item catalog).
     private let fuelInventoryDocID = "fuel-cell"
+
+    /// Base cash cost per R&D cycle at level 1.
+    private let baseResearchCycleCost: Double = 500
+
+    /// Range of research points per cycle for a given building level.
+    private func researchPointsRange(forLevel level: Int) -> ClosedRange<Int> {
+        switch level {
+        case 1: return 10...20
+        case 2: return 20...35
+        case 3: return 35...55
+        case 4: return 55...80
+        default: return 80...120
+        }
+    }
+
+    /// Start an R&D research cycle: spends cash, schedules a timer, and stores pending research points on the building.
+    func startResearchCycle(for userID: String, buildingID: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingRef = profileRef.collection("buildings").document(buildingID)
+
+        db.runTransaction({ transaction, errorPointer in
+            do {
+                let profileSnap = try transaction.getDocument(profileRef)
+                let buildingSnap = try transaction.getDocument(buildingRef)
+
+                guard
+                    let profileData = profileSnap.data(),
+                    let buildingData = buildingSnap.data(),
+                    let typeRaw = buildingData["type"] as? String,
+                    let level = buildingData["level"] as? Int,
+                    let currentCash = profileData["cash"] as? Double
+                else {
+                    errorPointer?.pointee = NSError(
+                        domain: "ProductionService",
+                        code: 2100,
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid profile or building data."]
+                    )
+                    return nil
+                }
+
+                guard typeRaw == BuildingType.researchAndDevelopment.rawValue else {
+                    errorPointer?.pointee = NSError(
+                        domain: "ProductionService",
+                        code: 2101,
+                        userInfo: [NSLocalizedDescriptionKey: "Not an R&D building."]
+                    )
+                    return nil
+                }
+
+                if buildingData["isListedOnMarket"] as? Bool == true {
+                    errorPointer?.pointee = NSError(
+                        domain: "ProductionService",
+                        code: 2102,
+                        userInfo: [NSLocalizedDescriptionKey: "R&D building cannot run while listed."]
+                    )
+                    return nil
+                }
+
+                if buildingData["isProducing"] as? Bool == true {
+                    errorPointer?.pointee = NSError(
+                        domain: "ProductionService",
+                        code: 2103,
+                        userInfo: [NSLocalizedDescriptionKey: "R&D cycle already running."]
+                    )
+                    return nil
+                }
+
+                let levelMultiplier = 1.0 + 0.5 * Double(max(0, level - 1))
+                let cycleCost = (self.baseResearchCycleCost * levelMultiplier).rounded()
+
+                if currentCash < cycleCost {
+                    errorPointer?.pointee = NSError(
+                        domain: "ProductionService",
+                        code: 2104,
+                        userInfo: [NSLocalizedDescriptionKey: "Not enough cash for R&D cycle. Need $\(Int(cycleCost))."]
+                    )
+                    return nil
+                }
+
+                let range = self.researchPointsRange(forLevel: level)
+                let points = Int.random(in: range)
+
+                let startedAt = Date()
+                #if DEBUG
+                let cycleSeconds: TimeInterval = 10
+                #else
+                let cycleSeconds: TimeInterval = 60 * 15
+                #endif
+                let endsAt = startedAt.addingTimeInterval(cycleSeconds)
+
+                transaction.updateData([
+                    "cash": currentCash - cycleCost
+                ], forDocument: profileRef)
+
+                transaction.updateData([
+                    "isProducing": true,
+                    "productionStartedAt": Timestamp(date: startedAt),
+                    "productionEndsAt": Timestamp(date: endsAt),
+                    "pendingOutputQuantity": Double(points),
+                    "pendingOutputItemId": NSNull(),
+                    "pendingOutputItemName": NSNull(),
+                    "pendingOutputQuality": NSNull()
+                ], forDocument: buildingRef)
+
+                return nil
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
+            }
+        }) { _, error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
 
     func startProduction(for userID: String, buildingID: String, completion: @escaping (Result<Void, Error>) -> Void) {
         let profileRef = db.collection("playerProfiles").document(userID)
@@ -36,8 +154,8 @@ final class ProductionService {
             let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: level)
             let fuelRequired = BuildingLevelCatalog.scaleQuantity(Self.baseFuelPerExtractorCycle, throughputMultiplier: mult)
             let buildingAbundance = buildingData["abundance"] as? Int ?? 50
-            let buildingStability = buildingData["stability"] as? Int ?? 50
-            let baseOutput = self.generateMineOutput(abundance: buildingAbundance, stability: buildingStability)
+            let resourceType = (buildingData["resourceType"] as? String).flatMap(ResourceType.init(rawValue:))
+            let baseOutput = self.generateMineOutput(resourceType: resourceType, abundance: buildingAbundance)
             let totalOutput = Int(BuildingLevelCatalog.scaleQuantity(Double(baseOutput), throughputMultiplier: mult))
 
             self.db.runTransaction({ transaction, errorPointer in
@@ -140,10 +258,38 @@ final class ProductionService {
                     return nil
                 }
 
+                let typeRawValue = buildingData["type"] as? String ?? ""
                 let pendingOutputQuantity = buildingData["pendingOutputQuantity"] as? Double ?? 0
+                let pendingOutputQuality = buildingData["pendingOutputQuality"] as? Int
+
+                // Research & Development building: award research points instead of inventory.
+                if typeRawValue == BuildingType.researchAndDevelopment.rawValue {
+                    let currentResearchPoints = profileData["researchPoints"] as? Int ?? 0
+                    let awarded = Int(pendingOutputQuantity.rounded())
+                    if awarded > 0 {
+                        transaction.updateData([
+                            "researchPoints": currentResearchPoints + awarded
+                        ], forDocument: profileRef)
+                    }
+
+                    transaction.updateData([
+                        "isProducing": false,
+                        "productionStartedAt": NSNull(),
+                        "productionEndsAt": NSNull(),
+                        "pendingOutputQuantity": 0.0,
+                        "pendingOutputItemId": NSNull(),
+                        "pendingOutputItemName": NSNull(),
+                        "pendingOutputQuality": NSNull()
+                    ], forDocument: buildingRef)
+
+                    return nil
+                }
+
                 if let resourceTypeRawValue = buildingData["resourceType"] as? String,
                    let resourceType = ResourceType(rawValue: resourceTypeRawValue) {
-                    let inventoryDocID = self.inventoryDocumentID(for: resourceType)
+                    let baseInventoryDocID = self.inventoryDocumentID(for: resourceType)
+                    let quality = pendingOutputQuality ?? 1
+                    let inventoryDocID = quality > 1 ? "\(baseInventoryDocID)-q\(quality)" : baseInventoryDocID
                     let inventoryName = self.inventoryDisplayName(for: resourceType)
                     let inventoryRef = profileRef.collection("inventory").document(inventoryDocID)
                     let inventorySnapshot = try transaction.getDocument(inventoryRef)
@@ -153,30 +299,37 @@ final class ProductionService {
                     let updatedXP = currentXP + xpReward
                     let updatedLevel = self.levelForTotalXP(updatedXP)
                     let updatedBuildingSlotCount = self.buildingSlotCount(for: updatedLevel)
-                    let inventoryData: [String: Any] = [
+                    var inventoryData: [String: Any] = [
                         "id": inventoryDocID,
                         "name": inventoryName,
                         "category": "Raw Material",
                         "isFractional": false,
                         "quantity": currentQuantity + pendingOutputQuantity
                     ]
+                    inventoryData["quality"] = quality
+                    inventoryData["baseItemId"] = baseInventoryDocID
                     transaction.setData(inventoryData, forDocument: inventoryRef)
                     transaction.updateData(["xp": updatedXP, "level": updatedLevel, "buildingSlotCount": updatedBuildingSlotCount], forDocument: profileRef)
                 } else if let outputItemId = buildingData["pendingOutputItemId"] as? String,
                           let outputItemName = buildingData["pendingOutputItemName"] as? String {
-                    let inventoryRef = profileRef.collection("inventory").document(outputItemId)
+                    let quality = pendingOutputQuality ?? 1
+                    let baseId = outputItemId
+                    let inventoryDocID = quality > 1 ? "\(baseId)-q\(quality)" : baseId
+                    let inventoryRef = profileRef.collection("inventory").document(inventoryDocID)
                     let inventorySnapshot = try transaction.getDocument(inventoryRef)
                     let existingData = inventorySnapshot.data()
                     let currentQuantity = existingData?["quantity"] as? Double ?? 0.0
                     let category = existingData?["category"] as? String ?? "Refined Material"
                     let isFractional = existingData?["isFractional"] as? Bool ?? false
-                    let inventoryData: [String: Any] = [
-                        "id": outputItemId,
+                    var inventoryData: [String: Any] = [
+                        "id": inventoryDocID,
                         "name": outputItemName,
                         "category": category,
                         "isFractional": isFractional,
                         "quantity": currentQuantity + pendingOutputQuantity
                     ]
+                    inventoryData["quality"] = quality
+                    inventoryData["baseItemId"] = baseId
                     transaction.setData(inventoryData, forDocument: inventoryRef)
                 }
 
@@ -186,7 +339,8 @@ final class ProductionService {
                     "productionEndsAt": NSNull(),
                     "pendingOutputQuantity": 0.0,
                     "pendingOutputItemId": NSNull(),
-                    "pendingOutputItemName": NSNull()
+                    "pendingOutputItemName": NSNull(),
+                    "pendingOutputQuality": NSNull()
                 ], forDocument: buildingRef)
 
                 return nil
@@ -201,7 +355,8 @@ final class ProductionService {
     }
 
     /// Start recipe-based production: consume scaled inputs from inventory, set building producing with scaled output (throughput by building level).
-    func startRecipeProduction(for userID: String, building: Building, recipe: Recipe, completion: @escaping (Result<Void, Error>) -> Void) {
+    /// Optionally accepts a target quality; inputs must have quality >= target.
+    func startRecipeProduction(for userID: String, building: Building, recipe: Recipe, targetQuality: Int = 1, completion: @escaping (Result<Void, Error>) -> Void) {
         let profileRef = db.collection("playerProfiles").document(userID)
         let buildingRef = profileRef.collection("buildings").document(building.id)
 
@@ -245,23 +400,56 @@ final class ProductionService {
                     return nil
                 }
 
-                var inventorySnaps: [(DocumentReference, DocumentSnapshot, Double)] = []
+                // For quality-aware production, inputs must have quality >= targetQuality.
+                // We model quality by suffixing inventory doc IDs with "-qX" and also allow base quality (no suffix) when targetQuality == 1.
+                var inventoryUpdates: [(DocumentReference, Double)] = []
                 for (ing, needQty) in scaledInputs {
-                    let invRef = profileRef.collection("inventory").document(ing.item.id)
-                    let invSnap = try transaction.getDocument(invRef)
-                    let qty = invSnap.data()?["quantity"] as? Double ?? 0
-                    if qty < needQty {
-                        errorPointer?.pointee = NSError(domain: "ProductionService", code: 2008, userInfo: [NSLocalizedDescriptionKey: "Not enough \(ing.item.name). Need \(needQty), have \(qty)."])
+                    var remaining = needQty
+                    let baseId = ing.item.id
+                    var candidates: [DocumentReference] = []
+                    let inventoryCollection = profileRef.collection("inventory")
+
+                    if targetQuality > 1 {
+                        // Prefer exact quality doc.
+                        candidates.append(inventoryCollection.document("\(baseId)-q\(targetQuality)"))
+                    } else {
+                        // Base quality uses original ID.
+                        candidates.append(inventoryCollection.document(baseId))
+                    }
+
+                    var totalAvailable: Double = 0
+                    for ref in candidates {
+                        let snap = try transaction.getDocument(ref)
+                        let qty = snap.data()?["quantity"] as? Double ?? 0
+                        totalAvailable += qty
+                    }
+
+                    if totalAvailable < remaining {
+                        errorPointer?.pointee = NSError(
+                            domain: "ProductionService",
+                            code: 2008,
+                            userInfo: [NSLocalizedDescriptionKey: "Not enough \(ing.item.name) at required quality. Need \(needQty), have \(totalAvailable)."]
+                        )
                         return nil
                     }
-                    inventorySnaps.append((invRef, invSnap, needQty))
+
+                    for ref in candidates {
+                        if remaining <= 0 { break }
+                        let snap = try transaction.getDocument(ref)
+                        let qty = snap.data()?["quantity"] as? Double ?? 0
+                        if qty <= 0 { continue }
+                        let deduct = min(qty, remaining)
+                        remaining -= deduct
+                        inventoryUpdates.append((ref, deduct))
+                    }
                 }
 
-                for (invRef, invSnap, deductQty) in inventorySnaps {
-                    let qty = invSnap.data()?["quantity"] as? Double ?? 0
-                    var invData = invSnap.data() ?? [:]
+                for (ref, deductQty) in inventoryUpdates {
+                    let snap = try transaction.getDocument(ref)
+                    let qty = snap.data()?["quantity"] as? Double ?? 0
+                    var invData = snap.data() ?? [:]
                     invData["quantity"] = qty - deductQty
-                    transaction.setData(invData, forDocument: invRef)
+                    transaction.setData(invData, forDocument: ref)
                 }
 
                 let startedAt = Date()
@@ -272,7 +460,8 @@ final class ProductionService {
                     "productionEndsAt": Timestamp(date: endsAt),
                     "pendingOutputQuantity": scaledOutputQty,
                     "pendingOutputItemId": firstOutput.item.id,
-                    "pendingOutputItemName": firstOutput.item.name
+                    "pendingOutputItemName": firstOutput.item.name,
+                    "pendingOutputQuality": targetQuality
                 ], forDocument: buildingRef)
                 return nil
             } catch let error as NSError {
@@ -285,14 +474,27 @@ final class ProductionService {
         }
     }
 
-    private func generateMineOutput(abundance: Int, stability: Int) -> Int {
-        let maxOutput = max(1, abundance - 40)
+    /// Generate a base output for an extractor building using abundance only.
+    /// Different resource types can have different base means.
+    private func generateMineOutput(resourceType: ResourceType?, abundance: Int) -> Int {
+        let baseMean: Double
+        switch resourceType {
+        case .gold?: baseMean = 15
+        case .silver?: baseMean = 16
+        case .diamond?: baseMean = 8
+        case .oil?: baseMean = 20
+        case .coal?: baseMean = 18
+        case .iron?: baseMean = 17
+        case .quarry?, .sandQuarry?, .stoneQuarry?, .gravelQuarry?: baseMean = 14
+        default: baseMean = 15
+        }
 
-        let normalizedStability = Double(stability - 50) / 50.0
-        let stabilityMultiplier = 0.5 + (normalizedStability * 0.4)
+        let clampedAbundance = max(1, min(100, abundance))
+        let abundanceMultiplier = 0.5 + Double(clampedAbundance) / 100.0
+        let mean = baseMean * abundanceMultiplier
 
-        let rawMinOutput = Double(maxOutput) * stabilityMultiplier
-        let minOutput = max(1, Int(rawMinOutput.rounded(.down)))
+        let minOutput = max(1, Int((mean * 0.8).rounded(.down)))
+        let maxOutput = max(minOutput, Int((mean * 1.2).rounded(.up)))
 
         return Int.random(in: minOutput...maxOutput)
     }

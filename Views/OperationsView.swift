@@ -141,7 +141,7 @@ struct OperationsView: View {
 
     private func buildingCard(for building: Building) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            NavigationLink(destination: BuildingDetailView(userID: userID, building: building)) {
+            NavigationLink(destination: destinationView(for: building)) {
                 ZStack(alignment: .leading) {
                     Image(viewModel.buildingAssetName(for: building))
                         .resizable()
@@ -203,6 +203,16 @@ struct OperationsView: View {
                 .contentShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private func destinationView(for building: Building) -> AnyView {
+        if building.type == .mine || building.type == .rig || building.type == .quarry {
+            return AnyView(ExtractorDetailView(userID: userID, building: building))
+        } else if building.type == .researchAndDevelopment {
+            return AnyView(ResearchAndDevelopmentView(userID: userID, building: building))
+        } else {
+            return AnyView(BuildingDetailView(userID: userID, building: building))
         }
     }
 

@@ -25,6 +25,10 @@ final class BuildingDetailViewModel: ObservableObject {
     @Published var selectedRecipeForBuilding: Recipe?
 
     @Published private(set) var inventoryItems: [InventoryItem] = []
+    /// Max quality unlocked for the primary output resource (if any).
+    @Published private(set) var maxOutputQuality: Int = 1
+    /// Quality the player wants to produce for recipe-based buildings.
+    @Published var selectedOutputQuality: Int = 1
 
     @Published var showListingSheet = false
     @Published var buyNowPriceText = ""
@@ -34,6 +38,7 @@ final class BuildingDetailViewModel: ObservableObject {
     private let mineMarketService = MineMarketService()
     private let recipeService = RecipeService()
     private let inventoryService = InventoryService()
+    private let resourceQualityService = ResourceQualityService()
 
     var onDismiss: (() -> Void)?
 
@@ -70,6 +75,7 @@ final class BuildingDetailViewModel: ObservableObject {
         if selectedRecipeForBuilding == nil, let first = list.first {
             selectedRecipeForBuilding = first
         }
+        loadQualityForCurrentOutput()
     }
 
     private func loadInventory() {
@@ -77,6 +83,33 @@ final class BuildingDetailViewModel: ObservableObject {
             DispatchQueue.main.async {
                 guard let self else { return }
                 if case .success(let items) = result { self.inventoryItems = items }
+            }
+        }
+    }
+
+    private func loadQualityForCurrentOutput() {
+        guard !isExtractor,
+              let outputItemId = (selectedRecipeForBuilding ?? recipe)?.outputItems.first?.item.id
+        else {
+            maxOutputQuality = 1
+            selectedOutputQuality = 1
+            return
+        }
+
+        resourceQualityService.fetchQualities(for: userID) { [weak self] (result: Result<[ResourceQuality], Error>) in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let qualities):
+                    let q = qualities.first(where: { $0.id == outputItemId })?.qualityLevel ?? 1
+                    self.maxOutputQuality = max(1, q)
+                    if self.selectedOutputQuality > self.maxOutputQuality {
+                        self.selectedOutputQuality = self.maxOutputQuality
+                    }
+                case .failure:
+                    self.maxOutputQuality = 1
+                    self.selectedOutputQuality = 1
+                }
             }
         }
     }
@@ -125,7 +158,8 @@ final class BuildingDetailViewModel: ObservableObject {
                 errorMessage = "No recipe selected."
                 return
             }
-            productionService.startRecipeProduction(for: userID, building: currentBuilding, recipe: r) { [weak self] result in
+            let targetQuality = max(1, min(maxOutputQuality, selectedOutputQuality))
+            productionService.startRecipeProduction(for: userID, building: currentBuilding, recipe: r, targetQuality: targetQuality) { [weak self] result in
                 DispatchQueue.main.async {
                     guard let self else { return }
                     self.isWorking = false
@@ -379,8 +413,7 @@ final class BuildingDetailViewModel: ObservableObject {
     func suggestedPricing() -> (startingBid: Double, suggestedBuyNowLow: Double, suggestedBuyNowHigh: Double)? {
         guard
             let resourceType = currentBuilding.resourceType,
-            let abundance = currentBuilding.abundance,
-            let stability = currentBuilding.stability
+            let abundance = currentBuilding.abundance
         else {
             return nil
         }
@@ -397,7 +430,7 @@ final class BuildingDetailViewModel: ObservableObject {
         default: baseValue = 700
         }
 
-        let statBonus = Double((abundance - 50) + (stability - 50)) * 12.0
+        let statBonus = Double(abundance - 50) * 24.0
         let levelBonus = Double(currentBuilding.level - 1) * 150.0
         let startingBid = max(100, baseValue + statBonus + levelBonus)
         let suggestedBuyNowLow = startingBid * 1.35
@@ -414,16 +447,14 @@ final class BuildingDetailViewModel: ObservableObject {
 
     func formattedOutputRange() -> String {
         guard
-            let abundance = currentBuilding.abundance,
-            let stability = currentBuilding.stability
+            let abundance = currentBuilding.abundance
         else {
             return "Unknown"
         }
 
         let maxOutput = max(1, abundance - 40)
-        let normalizedStability = Double(stability - 50) / 50.0
-        let stabilityMultiplier = 0.5 + (normalizedStability * 0.4)
-        let minOutput = max(1, Int((Double(maxOutput) * stabilityMultiplier).rounded(.down)))
+        // Without stability, use a simple range based on abundance.
+        let minOutput = max(1, Int((Double(maxOutput) * 0.6).rounded(.down)))
         return "\(minOutput)-\(maxOutput)"
     }
 
@@ -440,10 +471,9 @@ final class BuildingDetailViewModel: ObservableObject {
             case .quarry, .sandQuarry, .stoneQuarry, .gravelQuarry: baseValue = 400
             default: baseValue = 400
             }
-            let abundanceBonus = Double((currentBuilding.abundance ?? 50) - 50) * 4.0
-            let stabilityBonus = Double((currentBuilding.stability ?? 50) - 50) * 4.0
+            let abundanceBonus = Double((currentBuilding.abundance ?? 50) - 50) * 8.0
             let levelBonus = Double(currentBuilding.level - 1) * 100.0
-            return max(100, baseValue + abundanceBonus + stabilityBonus + levelBonus)
+            return max(100, baseValue + abundanceBonus + levelBonus)
         }
         switch currentBuilding.type {
         case .refinery: return 400

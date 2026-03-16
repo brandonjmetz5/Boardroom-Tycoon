@@ -81,6 +81,7 @@ struct ProfileView: View {
             profileRow("Level", "\(profile.level)")
             profileRow("XP", "\(profile.xp)")
             profileRow("Building Slots", "\(profile.buildingSlotCount)")
+            profileRow("Research Points", "\(profile.researchPoints)")
             profileRow("Starter Mine Claimed", profile.starterMineClaimed ? "Yes" : "No")
             profileRow("Created", profile.createdAt.formatted(date: .abbreviated, time: .shortened))
         }

@@ -106,7 +106,6 @@ struct MarketView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     row("Level", "\(listing.level)")
                     row("Abundance", "\(listing.abundance)")
-                    row("Stability", "\(listing.stability)")
                 }
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppTheme.textSecondary)

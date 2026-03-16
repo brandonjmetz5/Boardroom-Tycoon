@@ -42,7 +42,6 @@ struct OperationDetailView: View {
 
                                 Text("Level: \(mine.level)")
                                 Text("Abundance: \(mine.abundance)")
-                                Text("Stability: \(mine.stability)")
                                 Text("Starter Mine: \(mine.isStarterMine ? "Yes" : "No")")
                             }
                             .padding()

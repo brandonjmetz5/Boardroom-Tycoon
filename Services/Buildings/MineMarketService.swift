@@ -43,7 +43,6 @@ final class MineMarketService {
                                 let resourceType = ResourceType(rawValue: resourceTypeRawValue),
                                 let level = data["level"] as? Int,
                                 let abundance = data["abundance"] as? Int,
-                                let stability = data["stability"] as? Int,
                                 let buyNowPrice = data["buyNowPrice"] as? Double,
                                 let startingBid = data["startingBid"] as? Double,
                                 let currentBid = data["currentBid"] as? Double,
@@ -63,7 +62,6 @@ final class MineMarketService {
                                 resourceType: resourceType,
                                 level: level,
                                 abundance: abundance,
-                                stability: stability,
                                 buyNowPrice: buyNowPrice,
                                 startingBid: startingBid,
                                 currentBid: currentBid,
@@ -108,7 +106,6 @@ final class MineMarketService {
                 let resourceType = ResourceType(rawValue: resourceTypeRawValue),
                 let level = data["level"] as? Int,
                 let abundance = data["abundance"] as? Int,
-                let stability = data["stability"] as? Int,
                 let buyNowPrice = data["buyNowPrice"] as? Double,
                 let startingBid = data["startingBid"] as? Double,
                 let currentBid = data["currentBid"] as? Double,
@@ -134,7 +131,6 @@ final class MineMarketService {
                 resourceType: resourceType,
                 level: level,
                 abundance: abundance,
-                stability: stability,
                 buyNowPrice: buyNowPrice,
                 startingBid: startingBid,
                 currentBid: currentBid,
@@ -162,8 +158,7 @@ final class MineMarketService {
                     let resourceTypeRawValue = buildingData["resourceType"] as? String,
                     let resourceType = ResourceType(rawValue: resourceTypeRawValue),
                     let level = buildingData["level"] as? Int,
-                    let abundance = buildingData["abundance"] as? Int,
-                    let stability = buildingData["stability"] as? Int
+                    let abundance = buildingData["abundance"] as? Int
                 else {
                     let error = NSError(
                         domain: "MineMarketService",
@@ -218,7 +213,7 @@ final class MineMarketService {
                     return nil
                 }
 
-                let startingBid = self.startingBid(for: resourceType, level: level, abundance: abundance, stability: stability)
+                let startingBid = self.startingBid(for: resourceType, level: level, abundance: abundance)
                 let createdAt = Date()
                 let endsAt = createdAt.addingTimeInterval(60 * 60 * 24)
 
@@ -230,7 +225,6 @@ final class MineMarketService {
                     "resourceType": resourceType.rawValue,
                     "level": level,
                     "abundance": abundance,
-                    "stability": stability,
                     "buyNowPrice": buyNowPrice,
                     "startingBid": startingBid,
                     "currentBid": startingBid,
@@ -875,7 +869,7 @@ final class MineMarketService {
         }
     }
 
-    private func startingBid(for resourceType: ResourceType, level: Int, abundance: Int, stability: Int) -> Double {
+    private func startingBid(for resourceType: ResourceType, level: Int, abundance: Int) -> Double {
         let baseValue: Double
 
         switch resourceType {
@@ -897,7 +891,7 @@ final class MineMarketService {
             baseValue = 700
         }
 
-        let statBonus = Double((abundance - 50) + (stability - 50)) * 12.0
+        let statBonus = Double(abundance - 50) * 24.0
         let levelBonus = Double(level - 1) * 150.0
 
         return max(100, baseValue + statBonus + levelBonus)

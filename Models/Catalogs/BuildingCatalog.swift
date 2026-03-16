@@ -104,6 +104,12 @@ enum BuildingCatalog {
             name: "Construction Materials Plant",
             type: .plant,
             cost: 4400
+        ),
+        PurchasableBuilding(
+            id: "research-and-development",
+            name: "Research & Development",
+            type: .researchAndDevelopment,
+            cost: 6000
         )
     ]
 }

@@ -58,6 +58,7 @@ enum UpgradeCatalog {
         case .shop:   return [("robotic-machine-arms", 1)]
         case .plant:  return [("robotic-machine-arms", 2)] // 2 for plant
         case .mill:   return [("machine-gear", 1)]
+        case .researchAndDevelopment: return []
         }
     }
 

@@ -16,7 +16,6 @@ struct MineMarketListing: Identifiable {
     let resourceType: ResourceType
     let level: Int
     let abundance: Int
-    let stability: Int
     let buyNowPrice: Double
     let startingBid: Double
     let currentBid: Double

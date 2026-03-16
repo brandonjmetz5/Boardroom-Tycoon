@@ -109,10 +109,13 @@ final class InventoryService {
                     isFractional: isFractional
                 )
 
+                let quality = data["quality"] as? Int
+
                 return InventoryItem(
                     id: document.documentID,
                     item: item,
-                    quantity: quantity
+                    quantity: quantity,
+                    quality: quality
                 )
             }
 

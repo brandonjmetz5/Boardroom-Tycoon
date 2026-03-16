@@ -49,7 +49,6 @@ final class BuildingService {
                 }
 
                 let abundance = data["abundance"] as? Int
-                let stability = data["stability"] as? Int
                 let isStarterMine = data["isStarterMine"] as? Bool
 
                 let isProducing = data["isProducing"] as? Bool
@@ -71,6 +70,7 @@ final class BuildingService {
                 let pendingOutputQuantity = data["pendingOutputQuantity"] as? Double
                 let pendingOutputItemId = data["pendingOutputItemId"] as? String
                 let pendingOutputItemName = data["pendingOutputItemName"] as? String
+                let pendingOutputQuality = data["pendingOutputQuality"] as? Int
 
                 let isListedOnMarket = data["isListedOnMarket"] as? Bool
                 let marketListingID = data["marketListingID"] as? String
@@ -84,7 +84,6 @@ final class BuildingService {
                     slotIndex: slotIndex,
                     resourceType: resourceType,
                     abundance: abundance,
-                    stability: stability,
                     isStarterMine: isStarterMine,
                     isProducing: isProducing,
                     productionStartedAt: productionStartedAt,
@@ -92,6 +91,7 @@ final class BuildingService {
                     pendingOutputQuantity: pendingOutputQuantity,
                     pendingOutputItemId: pendingOutputItemId,
                     pendingOutputItemName: pendingOutputItemName,
+                    pendingOutputQuality: pendingOutputQuality,
                     isListedOnMarket: isListedOnMarket,
                     marketListingID: marketListingID
                 )
@@ -167,7 +167,6 @@ final class BuildingService {
                     "slotIndex": 0,
                     "resourceType": "Gold",
                     "abundance": 50,
-                    "stability": 55,
                     "isStarterMine": true,
                     "isListedOnMarket": false,
                     "marketListingID": NSNull()
@@ -239,6 +238,22 @@ final class BuildingService {
                             )
                             errorPointer?.pointee = error
                             return nil
+                        }
+
+                        // Enforce only one Research & Development building per player.
+                        if purchasableBuilding.type == .researchAndDevelopment {
+                            let hasRAndD = buildingSnapshot?.documents.contains(where: {
+                                ($0.data()["type"] as? String) == BuildingType.researchAndDevelopment.rawValue
+                            }) ?? false
+                            if hasRAndD {
+                                let error = NSError(
+                                    domain: "BuildingService",
+                                    code: 1105,
+                                    userInfo: [NSLocalizedDescriptionKey: "You can only own one Research & Development building."]
+                                )
+                                errorPointer?.pointee = error
+                                return nil
+                            }
                         }
 
                         let usedSlots = currentBuildingCount + activeJobCount

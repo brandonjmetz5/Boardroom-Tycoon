@@ -51,7 +51,9 @@ final class ContentViewModel: ObservableObject {
             xp: 0,
             buildingSlotCount: 2,
             starterMineClaimed: false,
+            researchPoints: 0,
             createdAt: Date()
+        
         )
 
         playerProfileService.createPlayerProfileIfNeeded(for: profile) { [weak self] result in

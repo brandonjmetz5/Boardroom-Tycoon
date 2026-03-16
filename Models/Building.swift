@@ -17,7 +17,6 @@ struct Building: Identifiable {
 
     var resourceType: ResourceType?
     var abundance: Int?
-    var stability: Int?
     var isStarterMine: Bool?
 
     var isProducing: Bool?
@@ -26,6 +25,8 @@ struct Building: Identifiable {
     var pendingOutputQuantity: Double?
     var pendingOutputItemId: String? = nil
     var pendingOutputItemName: String? = nil
+    /// Optional quality tier for pending output (1 = base).
+    var pendingOutputQuality: Int? = nil
 
     var isListedOnMarket: Bool?
     var marketListingID: String?

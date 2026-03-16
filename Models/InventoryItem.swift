@@ -11,4 +11,6 @@ struct InventoryItem: Identifiable {
     let id: String
     let item: Item
     var quantity: Double
+    /// Optional quality tier for this stack (1 = default); nil means base quality.
+    var quality: Int?
 }

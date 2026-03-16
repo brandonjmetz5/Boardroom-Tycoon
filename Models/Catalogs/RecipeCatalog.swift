@@ -604,7 +604,7 @@ enum RecipeCatalog {
             ],
             outputItems: [
                 RecipeIngredient(id: "out-walls", item: Item(id: "walls", name: "Walls", category: .buildingMaterial, isFractional: false), quantity: 10)
-            ],
+         ],
             cycleTimeInMinutes: 60
         )
     }

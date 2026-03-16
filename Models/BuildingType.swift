@@ -15,6 +15,7 @@ enum BuildingType: String, CaseIterable, Identifiable {
     case shop = "Shop"
     case plant = "Plant"
     case mill = "Mill"
+    case researchAndDevelopment = "Research & Development"
 
     var id: String { rawValue }
 }

@@ -16,5 +16,5 @@ struct ProspectingJob: Identifiable {
     var isComplete: Bool
     var isRevealed: Bool
     var revealedAbundance: Int?
-    var revealedStability: Int?
+    // Stability has been removed from the design; only abundance is tracked going forward.
 }
