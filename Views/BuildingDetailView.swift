@@ -78,7 +78,64 @@ struct BuildingDetailView: View {
                 }
                 Spacer()
             }
-            .padding(AppTheme.cardPadding)
+            .padding(.horizontal, AppTheme.cardPadding)
+            .padding(.top, AppTheme.cardPadding)
+
+            // Inline building upgrade controls
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    if viewModel.currentBuilding.level < BuildingService.maxBuildingLevel {
+                        Text("Upgrade to Level \(viewModel.currentBuilding.level + 1)")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                    } else {
+                        Text("Max level reached")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppTheme.chipReady)
+                    }
+                    Spacer()
+                }
+
+                if viewModel.canUpgradeBuilding {
+                    HStack(alignment: .center, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Requires")
+                                .font(AppTheme.captionMedium())
+                                .foregroundStyle(AppTheme.textTertiary)
+                            Text("\(UpgradeCatalog.buildingUpgradeRequirementLabel(forLevel: viewModel.currentBuilding.level))")
+                                .font(AppTheme.caption())
+                                .foregroundStyle(AppTheme.textSecondary)
+                            Text(String(format: "Cash: $%.0f", viewModel.upgradeCashCost))
+                                .font(AppTheme.caption())
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            viewModel.upgradeBuildingLevel()
+                        } label: {
+                            Text("Upgrade")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.vertical, 10)
+                                .padding(.horizontal, 18)
+                                .background(
+                                    LinearGradient(
+                                        colors: [AppTheme.accent, AppTheme.accent.opacity(0.8)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(viewModel.isWorking)
+                    }
+                }
+            }
+            .padding(.horizontal, AppTheme.cardPadding)
+            .padding(.bottom, AppTheme.cardPadding)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
@@ -108,7 +165,19 @@ struct BuildingDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("Resource", icon: "cube.fill")
             VStack(alignment: .leading, spacing: 10) {
-                detailRow("Resource", viewModel.currentBuilding.resourceType?.rawValue ?? "—")
+                HStack(spacing: 10) {
+                    let resourceName = viewModel.currentBuilding.resourceType?.rawValue ?? "—"
+                    resourceIconView(name: resourceName)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Resource")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textTertiary)
+                        Text(resourceName)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    Spacer()
+                }
                 detailRow("Abundance", "\(viewModel.currentBuilding.abundance ?? 0)")
                 detailRow("Stability", "\(viewModel.currentBuilding.stability ?? 0)")
                 detailRow("Output range", viewModel.formattedOutputRange())
@@ -130,51 +199,7 @@ struct BuildingDetailView: View {
     // MARK: - Building upgrade (level + capacity)
 
     private var buildingUpgradeSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Building upgrade", icon: "building.2.fill")
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Level \(viewModel.currentBuilding.level)")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    if viewModel.currentBuilding.level < BuildingService.maxBuildingLevel {
-                        Text("→")
-                            .foregroundStyle(AppTheme.textTertiary)
-                        Text("Level \(viewModel.currentBuilding.level + 1)")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(AppTheme.accent)
-                    }
-                    Spacer()
-                }
-                if viewModel.canUpgradeBuilding {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Requires: \(UpgradeCatalog.buildingUpgradeRequirementLabel(forLevel: viewModel.currentBuilding.level)) + $\(Int(viewModel.upgradeCashCost))")
-                            .font(AppTheme.caption())
-                            .foregroundStyle(AppTheme.textTertiary)
-                        Button {
-                            viewModel.upgradeBuildingLevel()
-                        } label: {
-                            Text("Upgrade building")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(AppTheme.accent)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(viewModel.isWorking)
-                    }
-                } else if viewModel.currentBuilding.level >= BuildingService.maxBuildingLevel {
-                    Text("Max level")
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.chipReady)
-                }
-            }
-            .padding(AppTheme.cardPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .themedCard()
-        }
+        EmptyView()
     }
 
     // MARK: - Production (one Start all / Collect all)
@@ -304,7 +329,7 @@ struct BuildingDetailView: View {
 
     private func inputOutputRow(name: String, needed: Double?, have: Double, isInput: Bool) -> some View {
         HStack(spacing: 10) {
-            resourcePlaceholderIcon(name: name)
+            resourceIconView(name: name)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
                     .font(.system(size: 14, weight: .medium))
@@ -328,15 +353,86 @@ struct BuildingDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private func resourcePlaceholderIcon(name: String) -> some View {
-        ZStack {
-            Circle()
-                .fill(AppTheme.accent.opacity(0.25))
-                .frame(width: 36, height: 36)
-            Text(String(name.prefix(1)).uppercased())
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(AppTheme.accent)
+    @ViewBuilder
+    private func resourceIconView(name: String) -> some View {
+        if let assetName = resourceAssetName(for: name) {
+            Image(assetName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 32, height: 32)
+                .background(
+                    Circle()
+                        .fill(AppTheme.surfaceAlt.opacity(0.8))
+                )
+                .clipShape(Circle())
+        } else {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.accent.opacity(0.25))
+                    .frame(width: 32, height: 32)
+                Text(String(name.prefix(1)).uppercased())
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
+            }
         }
+    }
+
+    /// Map display names to ResourceIcons asset names.
+    private func resourceAssetName(for name: String) -> String? {
+        let key = name.lowercased()
+
+        // Raw resources
+        if key.contains("raw gold") { return "icon_raw_gold" }
+        if key.contains("raw silver") { return "icon_raw_silver" }
+        if key.contains("raw diamonds") || key == "diamond" { return "icon_raw_diamond" }
+        if key.contains("raw coal") { return "icon_raw_coal" }
+        if key.contains("raw iron") { return "icon_raw_iron" }
+        if key.contains("crude oil") || key.contains("raw oil") || key == "oil" { return "icon_raw_oil" }
+        if key.contains("sand quarry") || key == "sand" { return "icon_sand" }
+        if key.contains("stone quarry") || key == "stone" || key.contains("quarry") { return "icon_stone" }
+        if key.contains("gravel quarry") || key == "gravel" { return "icon_gravel" }
+
+        // Fuels & intermediates
+        if key.contains("fuel cell") { return "icon_fuel_cell" }
+        if key.contains("machinery fuel pack") { return "icon_machinery_fuel_pack" }
+        if key.contains("gasoline") { return "icon_gasoline" }
+        if key.contains("diesel") { return "icon_diesel" }
+        if key.contains("processed coal") { return "icon_processed_coal" }
+        if key.contains("industrial heat block") || key.contains("industrial heat") { return "icon_industrial_heat_block" }
+
+        // Metals / building materials
+        if key.contains("steel beam") { return "icon_steel_beam" }
+        if key == "steel" { return "icon_steel" }
+        if key.contains("iron bar") { return "icon_iron_bar" }
+        if key == "glass" { return "icon_glass" }
+        if key == "brick" || key.contains("bricks") { return "icon_brick" }
+        if key.contains("concrete mix") { return "icon_concrete_mix" }
+        if key == "foundation" || key.contains("foundations") { return "icon_foundation" }
+        if key == "window" || key.contains("windows") { return "icon_window" }
+        if key == "walls" { return "icon_brick_wall" }
+
+        // Precious outputs & jewelry
+        if key == "gold bar" || key.contains("gold bars") { return "icon_gold_bar" }
+        if key == "silver bar" || key.contains("silver bars") { return "icon_silver_bar" }
+        if key.contains("cut diamond") { return "icon_cut_diamond" }
+        if key.contains("diamond dust") { return "icon_diamond_dust" }
+        if key.contains("diamond drill bit") { return "icon_diamond_drill_bit" }
+        if key.contains("precision cutting head") { return "icon_precision_cutting_head" }
+
+        if key.contains("heat sink") || key.contains("heatsink") { return "icon_heat_sink" }
+        if key == "microchip" || key.contains("microchips") { return "icon_microchip" }
+        if key.contains("machine computer") || key.contains("machine computers") { return "icon_machine_computer" }
+        if key.contains("machine gear") || key.contains("machine gears") { return "icon_machine_gear" }
+        if key.contains("robotic machine arm") || key.contains("robotic machine arms") { return "icon_robotic_machine_arm" }
+
+        if key.contains("gold ring") || key.contains("gold rings") { return "icon_gold_ring" }
+        if key.contains("silver ring") || key.contains("silver rings") { return "icon_silver_ring" }
+        if key.contains("gold watch") || key.contains("gold watches") { return "icon_gold_watch" }
+        if key.contains("silver watch") || key.contains("silver watches") { return "icon_silver_watch" }
+        if key.contains("luxury ring") || key.contains("luxury rings") { return "icon_luxury_ring" }
+        if key.contains("luxury watch") || key.contains("luxury watches") { return "icon_luxury_watch" }
+
+        return nil
     }
 
     private func formatQty(_ q: Double) -> String {

@@ -370,6 +370,7 @@ final class OperationsViewModel: ObservableObject {
         if lowercasedName.contains("iron bar factory") { return "icon_iron_bar_factory" }
         if lowercasedName.contains("diamond processing plant") { return "icon_diamond_processing_plant" }
         if lowercasedName.contains("silver processing plant") { return "icon_silver_processing_plant" }
+        if lowercasedName.contains("gold processing plant") { return "icon_gold_refinery" }
         if lowercasedName.contains("oil rig") { return "icon_oil_rig" }
         if lowercasedName.contains("coal mine") { return "icon_raw_coal_mine" }
         if lowercasedName.contains("silver mine") { return "icon_raw_silver_mine" }
