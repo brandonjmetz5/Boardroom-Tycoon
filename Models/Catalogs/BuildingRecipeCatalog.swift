@@ -3,7 +3,7 @@
 //  Boardroom Tycoon
 //
 //  Maps building id or name to recipe id(s) for input→output production.
-//  Some buildings (e.g. Fabrication Plant) have multiple recipes.
+//  Some buildings (e.g. Fabrication Plant, Jewelry Shop) have multiple recipes.
 //
 
 import Foundation
@@ -29,15 +29,26 @@ enum BuildingRecipeCatalog {
 
     private static func recipeIdsByKey(_ key: String) -> [String] {
         switch key {
+        // Refinery buildings
         case "gold-refinery", "Gold Refinery": return ["refine-gold"]
-        case "oil-refinery", "Oil Refinery": return ["refine-oil"]
-        case "coal-refinery", "Coal Refinery": return ["refine-coal"]
+        case "oil-refinery", "Oil Refinery": return ["refine-oil-gasoline", "refine-oil-diesel"]
+        case "coal-refinery", "Coal Refinery": return ["refine-coal-processed", "refine-coal-heat-blocks"]
         case "iron-refinery", "Iron Refinery": return ["refine-iron"]
-        case "gold-processing-plant", "Gold Processing Plant": return ["process-gold"]
-        case "fuel-processing-plant", "Fuel Processing Plant": return ["process-fuel"]
-        case "fabrication-plant", "Fabrication Plant": return ["fabricate-steel-beams", "fabricate-machine-gear", "fabricate-robotic-arms"]
-        case "material-depot", "Material Depot": return ["depot-materials"]
-        case "jewelry-shop", "Jewelry Shop": return ["craft-jewelry"]
+        case "silver-refinery", "Silver Refinery": return ["refine-silver"]
+        case "diamond-refinery", "Diamond Refinery": return ["refine-diamond-cut", "refine-diamond-dust"]
+        // Steel Mill
+        case "steel-mill", "Steel Mill": return ["refine-steel"]
+        // Construction Materials Plant
+        case "construction-materials-plant", "Construction Materials Plant": return ["construct-glass", "construct-bricks", "construct-concrete"]
+        // Manufacturing
+        case "diamond-processing-plant", "Diamond Processing Plant": return ["process-diamond-drill-bits", "process-precision-cutting-heads"]
+        case "silver-processing-plant", "Silver Processing Plant": return ["process-silver-ring", "process-silver-watch", "process-heatsinks"]
+        case "gold-processing-plant", "Gold Processing Plant": return ["process-gold-ring", "process-gold-watch", "process-microchip"]
+        case "fuel-processing-plant", "Fuel Processing Plant": return ["process-fuel-cells", "process-machinery-fuel-packs"]
+        case "tech-plant", "Tech Plant": return ["tech-machine-computer"]
+        case "jewelry-shop", "Jewelry Shop": return ["craft-prem-ring", "craft-prem-watch", "craft-luxury-ring", "craft-luxury-watch"]
+        case "fabrication-plant", "Fabrication Plant": return ["fabricate-steel-beams", "fabricate-machine-gear", "fabricate-robotic-arm"]
+        case "material-depot", "Material Depot": return ["depot-window", "depot-foundation", "depot-walls"]
         default: return []
         }
     }

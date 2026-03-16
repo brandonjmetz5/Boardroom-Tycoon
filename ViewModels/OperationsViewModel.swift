@@ -23,8 +23,6 @@ final class OperationsViewModel: ObservableObject {
     // MARK: - State
 
     @Published private(set) var buildings: [Building] = []
-    /// Machines per building ID (used to show ready/producing status; production is per-machine).
-    @Published private(set) var buildingMachines: [String: [Machine]] = [:]
     @Published private(set) var profile: PlayerProfile?
     @Published private(set) var prospectingJobs: [ProspectingJob] = []
     @Published private(set) var isLoading = true
@@ -81,27 +79,10 @@ final class OperationsViewModel: ObservableObject {
                 switch result {
                 case .success(let loadedBuildings):
                     self.buildings = loadedBuildings
-                    var allMachines: [String: [Machine]] = [:]
-                    let machineGroup = DispatchGroup()
-                    for b in loadedBuildings {
-                        machineGroup.enter()
-                        self.buildingService.fetchMachines(for: self.userID, buildingID: b.id) { machineResult in
-                            DispatchQueue.main.async {
-                                if case .success(let machines) = machineResult {
-                                    allMachines[b.id] = machines
-                                }
-                                machineGroup.leave()
-                            }
-                        }
-                    }
-                    machineGroup.notify(queue: .main) {
-                        self.buildingMachines = allMachines
-                        group.leave()
-                    }
                 case .failure(let error):
                     self.loadingErrorMessage = error.localizedDescription
-                    group.leave()
                 }
+                group.leave()
             }
         }
 
@@ -274,26 +255,15 @@ final class OperationsViewModel: ObservableObject {
 
     // MARK: - Display helpers (status, labels, asset names)
 
-    /// True if any machine in this building has finished production and is ready to collect.
+    /// True if building has finished production and is ready to collect.
     func isReadyToCollect(building: Building, now: Date) -> Bool {
-        if let machines = buildingMachines[building.id], !machines.isEmpty {
-            return machines.contains { machine in
-                (machine.isProducing ?? false) && (machine.productionEndsAt ?? .distantFuture) <= now
-            }
-        }
-        // Legacy: building-level production
         guard building.isProducing == true, let productionEndsAt = building.productionEndsAt else { return false }
         return productionEndsAt <= now
     }
 
-    /// True if any machine is currently producing and not yet ready to collect.
+    /// True if building is currently producing and not yet ready to collect.
     private func hasAnyMachineProducingNotReady(building: Building, now: Date) -> Bool {
-        if let machines = buildingMachines[building.id], !machines.isEmpty {
-            return machines.contains { machine in
-                (machine.isProducing ?? false) && (machine.productionEndsAt ?? .distantFuture) > now
-            }
-        }
-        return building.isProducing == true && !isReadyToCollect(building: building, now: now)
+        building.isProducing == true && !isReadyToCollect(building: building, now: now)
     }
 
     func buildingStatus(for building: Building, now: Date) -> BuildingStatusDisplay {
@@ -323,17 +293,7 @@ final class OperationsViewModel: ObservableObject {
             return "Level \(building.level)"
         }
         if isReadyToCollect(building: building, now: now) {
-            let readyCount = buildingMachines[building.id]?.filter { ($0.isProducing ?? false) && (($0.productionEndsAt) ?? .distantFuture) <= now }.count ?? 0
-            return readyCount > 1 ? "\(readyCount) ready to collect" : "Ready to collect"
-        }
-        if let machines = buildingMachines[building.id] {
-            let producingEnds = machines.compactMap { m -> Date? in
-                guard m.isProducing == true, let end = m.productionEndsAt, end > now else { return nil }
-                return end
-            }
-            if let nextEnd = producingEnds.min() {
-                return formattedTimeRemaining(until: nextEnd, now: now)
-            }
+            return "Ready to collect"
         }
         if building.isProducing == true, let productionEndsAt = building.productionEndsAt, productionEndsAt > now {
             return formattedTimeRemaining(until: productionEndsAt, now: now)
@@ -341,11 +301,12 @@ final class OperationsViewModel: ObservableObject {
         return "Level \(building.level)"
     }
 
-    /// Input required to start production (e.g. "2 Fuel Cells" for extractors).
+    /// Input required to start production (scaled by level for extractors).
     func productionInputHint(for building: Building) -> String? {
         let isExtractor = building.type == .mine || building.type == .rig || building.type == .quarry
         if isExtractor {
-            let n = Int(ProductionService.fuelRequiredPerCycle)
+            let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: building.level)
+            let n = Int(BuildingLevelCatalog.scaleQuantity(ProductionService.baseFuelPerExtractorCycle, throughputMultiplier: mult))
             return n == 1 ? "1 Fuel Cell" : "\(n) Fuel Cells"
         }
         return nil

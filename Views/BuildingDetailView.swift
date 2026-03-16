@@ -33,8 +33,6 @@ struct BuildingDetailView: View {
                     }
                     buildingUpgradeSection
                     productionSection
-                    machinesSection
-                    addMachineSection
                     managementSection
                     seedFirestoreSection
                 }
@@ -73,12 +71,10 @@ struct BuildingDetailView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppTheme.accent)
                         .textCase(.uppercase)
-                    HStack(spacing: 16) {
-                        labelValue("Level", "\(viewModel.currentBuilding.level)")
-                        labelValue("Capacity", "\(viewModel.machines.count)/\(viewModel.currentBuilding.capacity)")
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppTheme.textSecondary)
+                    labelValue("Level", "\(viewModel.currentBuilding.level)")
+                    Text("Throughput ×\(String(format: "%.2f", viewModel.throughputMultiplier))")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
                 Spacer()
             }
@@ -152,7 +148,7 @@ struct BuildingDetailView: View {
                 }
                 if viewModel.canUpgradeBuilding {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Requires: \(UpgradeCatalog.buildingUpgradeRequirementLabel(forLevel: viewModel.currentBuilding.level))")
+                        Text("Requires: \(UpgradeCatalog.buildingUpgradeRequirementLabel(forLevel: viewModel.currentBuilding.level)) + $\(Int(viewModel.upgradeCashCost))")
                             .font(AppTheme.caption())
                             .foregroundStyle(AppTheme.textTertiary)
                         Button {
@@ -211,16 +207,17 @@ struct BuildingDetailView: View {
                         }
                     }
 
-                    if let recipe = viewModel.selectedRecipeForBuilding ?? viewModel.recipe {
+                    let scaledInputs = viewModel.scaledInputsForDisplay()
+                    if !scaledInputs.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Inputs needed (\(viewModel.machines.count) machine\(viewModel.machines.count == 1 ? "" : "s"))")
+                            Text("Inputs needed (Level \(viewModel.currentBuilding.level) throughput)")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(AppTheme.textTertiary)
-                            ForEach(recipe.inputItems, id: \.item.id) { input in
+                            ForEach(Array(scaledInputs.enumerated()), id: \.offset) { _, item in
                                 inputOutputRow(
-                                    name: input.item.name,
-                                    needed: input.quantity * Double(viewModel.machines.count),
-                                    have: viewModel.inventoryQuantity(for: input.item.id),
+                                    name: item.name,
+                                    needed: item.needed,
+                                    have: viewModel.inventoryQuantity(for: item.itemId),
                                     isInput: true
                                 )
                             }
@@ -228,25 +225,19 @@ struct BuildingDetailView: View {
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(AppTheme.textTertiary)
                                 .padding(.top, 4)
-                            if let out = recipe.outputItems.first {
+                            if let outQty = viewModel.scaledOutputQuantityForDisplay(), let outName = viewModel.scaledOutputItemName() {
                                 inputOutputRow(
-                                    name: out.item.name,
+                                    name: outName,
                                     needed: nil,
-                                    have: out.quantity * Double(viewModel.machines.count),
+                                    have: outQty,
                                     isInput: false
                                 )
+                            } else if viewModel.isExtractor {
+                                Text("Output: Raw \(viewModel.currentBuilding.resourceType?.rawValue ?? "resource") (variable)")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(AppTheme.textSecondary)
                             }
                         }
-                    } else if viewModel.isExtractor {
-                        inputOutputRow(
-                            name: "Fuel Cells",
-                            needed: ProductionService.fuelRequiredPerCycle * Double(viewModel.machines.count),
-                            have: viewModel.inventoryQuantity(for: "fuel-cell"),
-                            isInput: true
-                        )
-                        Text("Output: Raw \(viewModel.currentBuilding.resourceType?.rawValue ?? "resource") (varies by machine)")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppTheme.textSecondary)
                     }
 
                     if let errorMessage = viewModel.errorMessage {
@@ -260,13 +251,13 @@ struct BuildingDetailView: View {
                             .tint(AppTheme.accent)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                    } else if viewModel.hasAnyMachineReadyToCollect {
+                    } else if viewModel.isReadyToCollect(at: Date()) {
                         Button {
-                            viewModel.collectAllProduction()
+                            viewModel.collectProduction()
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "checkmark.circle.fill")
-                                Text("Collect all")
+                                Text("Collect")
                             }
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.white)
@@ -276,19 +267,19 @@ struct BuildingDetailView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.plain)
-                    } else if viewModel.hasAnyMachineProducing, let nextEnd = viewModel.nextProductionEndTime() {
+                    } else if viewModel.currentBuilding.isProducing == true, let nextEnd = viewModel.nextProductionEndTime() {
                         TimelineView(.periodic(from: .now, by: 1)) { context in
-                            Text("Next ready: \(viewModel.formattedTimeRemaining(until: nextEnd, now: context.date))")
+                            Text("Ready in: \(viewModel.formattedTimeRemaining(until: nextEnd, now: context.date))")
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(AppTheme.chipProducing)
                         }
-                    } else if viewModel.canStartAllMachines {
+                    } else if viewModel.canStartProduction {
                         Button {
-                            viewModel.startProductionForAllMachines()
+                            viewModel.startProduction()
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "play.fill")
-                                Text("Start production (all \(viewModel.machines.count) machine\(viewModel.machines.count == 1 ? "" : "s"))")
+                                Text("Start production")
                             }
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.white)
@@ -298,8 +289,8 @@ struct BuildingDetailView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.plain)
-                    } else if !viewModel.machines.isEmpty && !viewModel.canStartAllMachines && !viewModel.hasAnyMachineProducing {
-                        Text("Need more resources to start all machines.")
+                    } else if !viewModel.canStartProduction && viewModel.currentBuilding.isProducing != true {
+                        Text("Need more resources to start production.")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppTheme.textTertiary)
                     }
@@ -352,88 +343,6 @@ struct BuildingDetailView: View {
         q.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(q))" : String(format: "%.1f", q)
     }
 
-    // MARK: - Machines (stats + machine upgrade only)
-
-    private var machinesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Machines", icon: "cpu.fill")
-            Text("\(viewModel.machines.count) / \(viewModel.currentBuilding.capacity) installed")
-                .font(AppTheme.caption())
-                .foregroundStyle(AppTheme.textTertiary)
-
-            ForEach(viewModel.machines) { machine in
-                machineRow(machine)
-            }
-        }
-    }
-
-    private func machineRow(_ machine: Machine) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(machine.name)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                Spacer()
-                if viewModel.isExtractor, let a = machine.abundance, let s = machine.stability {
-                    Text("A:\(a) S:\(s)")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundStyle(AppTheme.textSecondary)
-                } else if let out = machine.outputValuePerCycle {
-                    Text(String(format: "%.1f/cycle", out))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-            }
-            HStack(spacing: 12) {
-                Text("Level \(machine.level)")
-                    .font(AppTheme.caption())
-                    .foregroundStyle(AppTheme.textTertiary)
-                if viewModel.canUpgradeMachine(machine) {
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(UpgradeCatalog.machineUpgradeRequirementLabel(for: viewModel.currentBuilding.type))
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(AppTheme.textTertiary)
-                        Button("Upgrade") {
-                            viewModel.upgradeMachine(machine)
-                        }
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.accent)
-                        .disabled(viewModel.isWorking)
-                    }
-                }
-            }
-        }
-        .padding(AppTheme.cardPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .themedCard()
-    }
-
-    private var addMachineSection: some View {
-        Group {
-            if viewModel.canAddMachine {
-                Button {
-                    viewModel.addMachine()
-                } label: {
-                    HStack {
-                        Text("Add machine")
-                        Spacer()
-                        Text(String(format: "$%.0f", viewModel.addMachineCost))
-                            .font(AppTheme.captionMedium())
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .padding(AppTheme.cardPadding)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .themedCard()
-                }
-                .buttonStyle(.plain)
-                .disabled(viewModel.isWorking)
-            }
-        }
-    }
-
     // MARK: - Management
 
     private var managementSection: some View {
@@ -460,12 +369,12 @@ struct BuildingDetailView: View {
                         Button("List on marketplace") { viewModel.openListingSheet() }
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppTheme.accent)
-                            .disabled(viewModel.isWorking || viewModel.hasAnyMachineProducing)
+                            .disabled(viewModel.isWorking || viewModel.currentBuilding.isProducing == true)
                     }
                     Button("Sell to system") { viewModel.sellToSystem() }
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppTheme.textError)
-                        .disabled(viewModel.isWorking || viewModel.hasAnyMachineProducing)
+                        .disabled(viewModel.isWorking || viewModel.currentBuilding.isProducing == true)
                 }
             }
             .padding(AppTheme.cardPadding)

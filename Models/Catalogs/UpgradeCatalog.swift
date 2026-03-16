@@ -19,8 +19,8 @@ enum UpgradeCatalog {
         "window"
     ]
 
-    /// Required items for upgrading FROM currentLevel TO (currentLevel + 1). One item type per tier.
-    static func buildingUpgradeRequirement(forLevel currentLevel: Int) -> [(itemID: String, quantity: Double)] {
+    /// Base required items for upgrading FROM currentLevel TO (currentLevel + 1). One item type per tier (base quantity 1).
+    private static func buildingUpgradeBaseRequirement(forLevel currentLevel: Int) -> [(itemID: String, baseQuantity: Double)] {
         switch currentLevel {
         case 1: return [("foundation", 1)]   // 1→2
         case 2: return [("walls", 1)]         // 2→3
@@ -30,13 +30,23 @@ enum UpgradeCatalog {
         }
     }
 
+    /// Required items for upgrading FROM currentLevel TO (currentLevel + 1). Quantities scaled by upgrade cost multiplier (ceil for whole items).
+    static func buildingUpgradeRequirement(forLevel currentLevel: Int) -> [(itemID: String, quantity: Double)] {
+        let targetLevel = currentLevel + 1
+        let multiplier = BuildingLevelCatalog.upgradeCostMultiplier(forTargetLevel: targetLevel)
+        return buildingUpgradeBaseRequirement(forLevel: currentLevel).map { item in
+            let scaled = (item.baseQuantity * multiplier).rounded(.up)
+            return (item.itemID, max(1, scaled))
+        }
+    }
+
     /// Human-readable name for building upgrade requirement (for UI).
     static func buildingUpgradeRequirementLabel(forLevel currentLevel: Int) -> String {
         let req = buildingUpgradeRequirement(forLevel: currentLevel)
         return req.map { "\(Int($0.quantity)) \(itemDisplayName($0.itemID))" }.joined(separator: ", ")
     }
 
-    // MARK: - Machine upgrade (by building type)
+    // MARK: - Machine upgrade (by building type) — retained for seed/item reference only; no longer used for upgrades
     // Each building type consumes a specific upgrade item (some require 2).
 
     static func machineUpgradeRequirement(for buildingType: BuildingType) -> [(itemID: String, quantity: Double)] {

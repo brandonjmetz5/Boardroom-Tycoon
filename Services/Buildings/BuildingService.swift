@@ -174,16 +174,6 @@ final class BuildingService {
                 ]
 
                 transaction.setData(buildingData, forDocument: starterMineRef)
-                let firstMachineID = "machine-starter-1"
-                let firstMachineData: [String: Any] = [
-                    "id": firstMachineID,
-                    "name": Machine.extractorMachineName,
-                    "level": 0,
-                    "efficiencyBonus": 0,
-                    "abundance": 50,
-                    "stability": 55
-                ]
-                transaction.setData(firstMachineData, forDocument: starterMineRef.collection("machines").document(firstMachineID))
                 transaction.updateData([
                     "cash": cash,
                     "starterMineClaimed": true
@@ -284,17 +274,6 @@ final class BuildingService {
                         ]
 
                         transaction.setData(buildingData, forDocument: newBuildingRef)
-
-                        let firstMachineID = "machine-\(UUID().uuidString)"
-                        let firstMachineData: [String: Any] = [
-                            "id": firstMachineID,
-                            "name": "Machine",
-                            "level": 0,
-                            "efficiencyBonus": 0,
-                            "outputValuePerCycle": Machine.defaultOutputValuePerCycle
-                        ]
-                        transaction.setData(firstMachineData, forDocument: newBuildingRef.collection("machines").document(firstMachineID))
-
                         transaction.updateData([
                             "cash": updatedCash
                         ], forDocument: profileRef)
@@ -380,126 +359,10 @@ final class BuildingService {
         }
     }
 
-    // MARK: - Machines (subcollection: buildings/{id}/machines)
-
-    func fetchMachines(for userID: String, buildingID: String, completion: @escaping (Result<[Machine], Error>) -> Void) {
-        let machinesRef = db.collection("playerProfiles").document(userID).collection("buildings").document(buildingID).collection("machines")
-        machinesRef.getDocuments { snapshot, error in
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-            guard let documents = snapshot?.documents else {
-                completion(.success([]))
-                return
-            }
-            let machines = documents.compactMap { doc -> Machine? in
-                let data = doc.data()
-                guard let id = data["id"] as? String, let name = data["name"] as? String else { return nil }
-                let level = data["level"] as? Int ?? 0
-                let efficiencyBonus = data["efficiencyBonus"] as? Double ?? 0
-                let abundance = data["abundance"] as? Int
-                let stability = data["stability"] as? Int
-                let outputValuePerCycle = data["outputValuePerCycle"] as? Double
-                let isProducing = data["isProducing"] as? Bool
-                let productionStartedAt: Date? = (data["productionStartedAt"] as? Timestamp)?.dateValue()
-                let productionEndsAt: Date? = (data["productionEndsAt"] as? Timestamp)?.dateValue()
-                let pendingOutputQuantity = data["pendingOutputQuantity"] as? Double
-                let pendingOutputItemId = data["pendingOutputItemId"] as? String
-                let pendingOutputItemName = data["pendingOutputItemName"] as? String
-                return Machine(
-                    id: id,
-                    name: name,
-                    level: level,
-                    efficiencyBonus: efficiencyBonus,
-                    abundance: abundance,
-                    stability: stability,
-                    outputValuePerCycle: outputValuePerCycle,
-                    isProducing: isProducing,
-                    productionStartedAt: productionStartedAt,
-                    productionEndsAt: productionEndsAt,
-                    pendingOutputQuantity: pendingOutputQuantity,
-                    pendingOutputItemId: pendingOutputItemId,
-                    pendingOutputItemName: pendingOutputItemName
-                )
-            }
-            completion(.success(machines.sorted { $0.id < $1.id }))
-        }
-    }
-
-    /// Ensures a non-extractor building has at least one machine when empty (e.g. bought before we created first machine).
-    func ensureFirstNonExtractorMachine(for userID: String, building: Building, completion: @escaping (Result<Void, Error>) -> Void) {
-        guard building.type != .mine && building.type != .rig && building.type != .quarry else {
-            completion(.success(()))
-            return
-        }
-        let machinesRef = db.collection("playerProfiles").document(userID).collection("buildings").document(building.id).collection("machines")
-        machinesRef.getDocuments { [weak self] snapshot, error in
-            guard self != nil else { return }
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-            if let snapshot = snapshot, !snapshot.documents.isEmpty {
-                completion(.success(()))
-                return
-            }
-            let machineID = "machine-\(UUID().uuidString)"
-            let machineData: [String: Any] = [
-                "id": machineID,
-                "name": "Machine",
-                "level": 0,
-                "efficiencyBonus": 0,
-                "outputValuePerCycle": Machine.defaultOutputValuePerCycle
-            ]
-            machinesRef.document(machineID).setData(machineData) { err in
-                if let err = err { completion(.failure(err)) }
-                else { completion(.success(())) }
-            }
-        }
-    }
-
-    /// Ensures an extractor building has at least one machine (drill) from building's abundance/stability. Call after fetchMachines if empty.
-    func ensureFirstExtractorMachine(for userID: String, building: Building, completion: @escaping (Result<Void, Error>) -> Void) {
-        guard building.type == .mine || building.type == .rig || building.type == .quarry,
-              let abundance = building.abundance, let stability = building.stability else {
-            completion(.success(()))
-            return
-        }
-        let machinesRef = db.collection("playerProfiles").document(userID).collection("buildings").document(building.id).collection("machines")
-        machinesRef.getDocuments { [weak self] snapshot, error in
-            guard let self else { return }
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-            if let snapshot = snapshot, !snapshot.documents.isEmpty {
-                completion(.success(()))
-                return
-            }
-            let machineID = "machine-\(UUID().uuidString)"
-            let machineData: [String: Any] = [
-                "id": machineID,
-                "name": Machine.extractorMachineName,
-                "level": 0,
-                "efficiencyBonus": 0,
-                "abundance": abundance,
-                "stability": stability
-            ]
-            machinesRef.document(machineID).setData(machineData) { err in
-                if let err = err { completion(.failure(err)) }
-                else { completion(.success(())) }
-            }
-        }
-    }
-
-    /// Building level 1–5. Capacity = level. Requires 1 of each building upgrade item per level.
+    /// Building level 1–5. Throughput scales by level (see BuildingLevelCatalog). No machines.
     static let maxBuildingLevel = 5
-    static let baseMachinePrice: Double = 600
-    /// Cash for next machine = baseMachinePrice * (currentMachineCount + 1)
-    static func addMachineCashCost(currentMachineCount: Int) -> Double {
-        baseMachinePrice * Double(currentMachineCount + 1)
-    }
+    /// Base cash cost for upgrading building level; multiplied by BuildingLevelCatalog.upgradeCostMultiplier(forTargetLevel:).
+    static let baseUpgradeCashCost: Double = 200
 
     func upgradeBuildingLevel(for userID: String, buildingID: String, completion: @escaping (Result<Void, Error>) -> Void) {
         let profileRef = db.collection("playerProfiles").document(userID)
@@ -509,14 +372,23 @@ final class BuildingService {
         db.runTransaction({ transaction, errorPointer in
             do {
                 let buildingSnapshot = try transaction.getDocument(buildingRef)
+                let profileSnapshot = try transaction.getDocument(profileRef)
                 guard let buildingData = buildingSnapshot.data(),
                       let level = buildingData["level"] as? Int,
-                      let capacity = buildingData["capacity"] as? Int else {
-                    errorPointer?.pointee = NSError(domain: "BuildingService", code: 1301, userInfo: [NSLocalizedDescriptionKey: "Building not found."])
+                      let profileData = profileSnapshot.data(),
+                      let currentCash = profileData["cash"] as? Double else {
+                    errorPointer?.pointee = NSError(domain: "BuildingService", code: 1301, userInfo: [NSLocalizedDescriptionKey: "Building or profile not found."])
                     return nil
                 }
                 if level >= Self.maxBuildingLevel {
                     errorPointer?.pointee = NSError(domain: "BuildingService", code: 1302, userInfo: [NSLocalizedDescriptionKey: "Building is already max level."])
+                    return nil
+                }
+                let targetLevel = level + 1
+                let costMultiplier = BuildingLevelCatalog.upgradeCostMultiplier(forTargetLevel: targetLevel)
+                let cashCost = (Self.baseUpgradeCashCost * costMultiplier).rounded()
+                if currentCash < cashCost {
+                    errorPointer?.pointee = NSError(domain: "BuildingService", code: 1304, userInfo: [NSLocalizedDescriptionKey: "Not enough cash. Upgrade costs $\(Int(cashCost))."])
                     return nil
                 }
                 let required = UpgradeCatalog.buildingUpgradeRequirement(forLevel: level)
@@ -538,126 +410,8 @@ final class BuildingService {
                     transaction.setData(invData, forDocument: invRef)
                 }
                 let newLevel = level + 1
-                let newCapacity = newLevel
-                transaction.updateData(["level": newLevel, "capacity": newCapacity], forDocument: buildingRef)
-                return nil
-            } catch let error as NSError {
-                errorPointer?.pointee = error
-                return nil
-            }
-        }) { _, error in
-            if let error = error { completion(.failure(error)) }
-            else { completion(.success(())) }
-        }
-    }
-
-    func addMachine(for userID: String, building: Building, isExtractor: Bool, completion: @escaping (Result<Void, Error>) -> Void) {
-        let profileRef = db.collection("playerProfiles").document(userID)
-        let buildingRef = profileRef.collection("buildings").document(building.id)
-        let machinesRef = buildingRef.collection("machines")
-
-        fetchMachines(for: userID, buildingID: building.id) { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .failure(let error):
-                completion(.failure(error))
-                return
-            case .success(let machines):
-                let currentCount = machines.count
-                if currentCount >= building.capacity {
-                    completion(.failure(NSError(domain: "BuildingService", code: 1401, userInfo: [NSLocalizedDescriptionKey: "No capacity for more machines. Upgrade the building first."])))
-                    return
-                }
-                let cost = Self.addMachineCashCost(currentMachineCount: currentCount)
-                let abundance = building.abundance
-                let stability = building.stability
-
-                self.db.runTransaction({ transaction, errorPointer in
-                    do {
-                        let profileSnap = try transaction.getDocument(profileRef)
-                        guard let cash = profileSnap.data()?["cash"] as? Double else {
-                            errorPointer?.pointee = NSError(domain: "BuildingService", code: 1402, userInfo: [NSLocalizedDescriptionKey: "Invalid profile."])
-                            return nil
-                        }
-                        if cash < cost {
-                            errorPointer?.pointee = NSError(domain: "BuildingService", code: 1403, userInfo: [NSLocalizedDescriptionKey: "Not enough cash. Cost: $\(Int(cost))."])
-                            return nil
-                        }
-                        let machineID = "machine-\(UUID().uuidString)"
-                        var machineData: [String: Any] = [
-                            "id": machineID,
-                            "name": isExtractor ? Machine.extractorMachineName : "Machine",
-                            "level": 0,
-                            "efficiencyBonus": 0
-                        ]
-                        if isExtractor, let a = abundance, let s = stability {
-                            machineData["abundance"] = a
-                            machineData["stability"] = s
-                        } else {
-                            machineData["outputValuePerCycle"] = Machine.defaultOutputValuePerCycle
-                        }
-                        transaction.setData(machineData, forDocument: machinesRef.document(machineID))
-                        transaction.updateData(["cash": cash - cost], forDocument: profileRef)
-                        return nil
-                    } catch let error as NSError {
-                        errorPointer?.pointee = error
-                        return nil
-                    }
-                }) { _, error in
-                    if let error = error { completion(.failure(error)) }
-                    else { completion(.success(())) }
-                }
-            }
-        }
-    }
-
-    /// Consume machine upgrade items required for this building type; extractor: +2 abundance/stability (cap 100); non-extractor: +0.5 output (cap 5).
-    func upgradeMachine(for userID: String, buildingID: String, machineID: String, buildingType: BuildingType, isExtractor: Bool, completion: @escaping (Result<Void, Error>) -> Void) {
-        let profileRef = db.collection("playerProfiles").document(userID)
-        let buildingRef = profileRef.collection("buildings").document(buildingID)
-        let machineRef = buildingRef.collection("machines").document(machineID)
-        let inventoryRef = profileRef.collection("inventory")
-        let required = UpgradeCatalog.machineUpgradeRequirement(for: buildingType)
-
-        db.runTransaction({ transaction, errorPointer in
-            do {
-                let machineSnap = try transaction.getDocument(machineRef)
-                guard var machineData = machineSnap.data(), machineData["id"] as? String != nil else {
-                    errorPointer?.pointee = NSError(domain: "BuildingService", code: 1501, userInfo: [NSLocalizedDescriptionKey: "Machine not found."])
-                    return nil
-                }
-                guard !required.isEmpty else {
-                    errorPointer?.pointee = NSError(domain: "BuildingService", code: 1502, userInfo: [NSLocalizedDescriptionKey: "No upgrade requirement for this building type."])
-                    return nil
-                }
-                for (itemID, requiredQty) in required {
-                    let invRef = inventoryRef.document(itemID)
-                    let invSnap = try transaction.getDocument(invRef)
-                    let qty = invSnap.data()?["quantity"] as? Double ?? 0
-                    if qty < requiredQty {
-                        let label = UpgradeCatalog.machineUpgradeRequirementLabel(for: buildingType)
-                        errorPointer?.pointee = NSError(domain: "BuildingService", code: 1502, userInfo: [NSLocalizedDescriptionKey: "Need \(label). Missing or insufficient: \(itemID)."])
-                        return nil
-                    }
-                    var invData = invSnap.data() ?? [:]
-                    invData["quantity"] = qty - requiredQty
-                    transaction.setData(invData, forDocument: invRef)
-                }
-                if isExtractor {
-                    var a = (machineData["abundance"] as? Int) ?? 50
-                    var s = (machineData["stability"] as? Int) ?? 50
-                    a = min(Machine.maxAbundanceStability, a + 2)
-                    s = min(Machine.maxAbundanceStability, s + 2)
-                    machineData["abundance"] = a
-                    machineData["stability"] = s
-                } else {
-                    var out = (machineData["outputValuePerCycle"] as? Double) ?? Machine.defaultOutputValuePerCycle
-                    out = min(Machine.maxOutputValuePerCycle, out + 0.5)
-                    machineData["outputValuePerCycle"] = out
-                }
-                let lvl = (machineData["level"] as? Int) ?? 0
-                machineData["level"] = lvl + 1
-                transaction.setData(machineData, forDocument: machineRef)
+                transaction.updateData(["cash": currentCash - cashCost], forDocument: profileRef)
+                transaction.updateData(["level": newLevel], forDocument: buildingRef)
                 return nil
             } catch let error as NSError {
                 errorPointer?.pointee = error
