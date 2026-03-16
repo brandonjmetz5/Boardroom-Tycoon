@@ -375,21 +375,21 @@ struct BuildingDetailView: View {
         if let assetName = resourceAssetName(for: name) {
             ZStack {
                 Circle()
-                    .fill(AppTheme.surfaceAlt.opacity(0.9))
-                    .frame(width: 40, height: 40)
+                    .fill(AppTheme.surfaceAlt.opacity(0.95))
+                    .frame(width: 52, height: 52)
                 Image(assetName)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 36, height: 36)
+                    .frame(width: 46, height: 46)
                     .clipShape(Circle())
             }
         } else {
             ZStack {
                 Circle()
                     .fill(AppTheme.accent.opacity(0.25))
-                    .frame(width: 40, height: 40)
+                    .frame(width: 52, height: 52)
                 Text(String(name.prefix(1)).uppercased())
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(AppTheme.accent)
             }
         }
