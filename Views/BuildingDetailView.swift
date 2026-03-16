@@ -98,13 +98,30 @@ struct BuildingDetailView: View {
 
                 if viewModel.canUpgradeBuilding {
                     HStack(alignment: .center, spacing: 10) {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 6) {
                             Text("Requires")
                                 .font(AppTheme.captionMedium())
                                 .foregroundStyle(AppTheme.textTertiary)
-                            Text("\(UpgradeCatalog.buildingUpgradeRequirementLabel(forLevel: viewModel.currentBuilding.level))")
-                                .font(AppTheme.caption())
-                                .foregroundStyle(AppTheme.textSecondary)
+
+                            // Material icons with quantities
+                            let reqs = UpgradeCatalog.buildingUpgradeRequirement(forLevel: viewModel.currentBuilding.level)
+                            HStack(spacing: 8) {
+                                ForEach(reqs, id: \.itemID) { item in
+                                    ZStack(alignment: .bottomTrailing) {
+                                        resourceIconView(name: upgradeItemDisplayName(for: item.itemID))
+                                        Text("\(Int(item.quantity))")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundStyle(.white)
+                                            .padding(3)
+                                            .background(
+                                                Circle()
+                                                    .fill(Color.black.opacity(0.7))
+                                            )
+                                            .offset(x: 3, y: 3)
+                                    }
+                                }
+                            }
+
                             Text(String(format: "Cash: $%.0f", viewModel.upgradeCashCost))
                                 .font(AppTheme.caption())
                                 .foregroundStyle(AppTheme.textSecondary)
@@ -356,22 +373,23 @@ struct BuildingDetailView: View {
     @ViewBuilder
     private func resourceIconView(name: String) -> some View {
         if let assetName = resourceAssetName(for: name) {
-            Image(assetName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 32, height: 32)
-                .background(
-                    Circle()
-                        .fill(AppTheme.surfaceAlt.opacity(0.8))
-                )
-                .clipShape(Circle())
+            ZStack {
+                Circle()
+                    .fill(AppTheme.surfaceAlt.opacity(0.9))
+                    .frame(width: 40, height: 40)
+                Image(assetName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 36, height: 36)
+                    .clipShape(Circle())
+            }
         } else {
             ZStack {
                 Circle()
                     .fill(AppTheme.accent.opacity(0.25))
-                    .frame(width: 32, height: 32)
+                    .frame(width: 40, height: 40)
                 Text(String(name.prefix(1)).uppercased())
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(AppTheme.accent)
             }
         }
@@ -433,6 +451,17 @@ struct BuildingDetailView: View {
         if key.contains("luxury watch") || key.contains("luxury watches") { return "icon_luxury_watch" }
 
         return nil
+    }
+
+    /// Display name for upgrade items based on their ID, used for hero upgrade icons.
+    private func upgradeItemDisplayName(for itemID: String) -> String {
+        switch itemID {
+        case "foundation": return "Foundation"
+        case "walls": return "Walls"
+        case "window": return "Window"
+        case "steel-beams", "steel_beams": return "Steel Beams"
+        default: return itemID.replacingOccurrences(of: "-", with: " ").capitalized
+        }
     }
 
     private func formatQty(_ q: Double) -> String {
