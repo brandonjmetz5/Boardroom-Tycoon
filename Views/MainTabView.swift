@@ -44,7 +44,7 @@ struct MainTabView: View {
             .tag(Tab.operations)
 
             NavigationStack {
-                MarketView(userID: userID)
+                MarketHubView(userID: userID)
             }
             .tabItem { tabLabel(.market) }
             .tag(Tab.market)

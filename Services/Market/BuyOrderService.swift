@@ -182,6 +182,7 @@ final class BuyOrderService {
         db.runTransaction({ [weak self] transaction, errorPointer in
             guard let self else { return nil }
             do {
+                // READS: fetch all required documents before any writes.
                 let orderSnap = try transaction.getDocument(orderRef)
                 guard let orderData = orderSnap.data() else {
                     errorPointer?.pointee = NSError(domain: "BuyOrderService", code: 6020, userInfo: [NSLocalizedDescriptionKey: "Buy order not found."])
@@ -199,58 +200,67 @@ final class BuyOrderService {
                 let orderLines = self.parseLines(from: orderData)
 
                 let buyerProfRef = self.db.collection("playerProfiles").document(buyerUserID)
+                let buyerInventoryRef = self.db.collection("playerProfiles").document(buyerUserID).collection("inventory")
 
-                // Validate seller has every line
-                for line in orderLines {
-                    let sellerInvRef = sellerInventoryRef.document(line.resourceInventoryDocID)
-                    let sellerInvSnap = try transaction.getDocument(sellerInvRef)
-                    let sellerQty = (sellerInvSnap.data()?["quantity"] as? Double) ?? 0
-                    if sellerQty < line.quantity {
-                        errorPointer?.pointee = NSError(domain: "BuyOrderService", code: 6022, userInfo: [NSLocalizedDescriptionKey: "Insufficient \(line.resourceName) (Q\(line.resourceQuality)). You have \(Int(sellerQty)), need \(Int(line.quantity))."])
-                        return nil
-                    }
-                }
-
+                // Read seller profile cash
                 let sellerProfileSnap = try transaction.getDocument(sellerProfileRef)
                 let sellerProfileData = sellerProfileSnap.data() ?? [:]
                 let sellerCash = sellerProfileData["cash"] as? Double ?? 0
 
-                // Update order
+                // Read all seller + buyer inventory docs up-front, and validate seller has enough for every line.
+                var sellerInvSnapshots: [String: (ref: DocumentReference, data: [String: Any]?, qty: Double)] = [:]
+                var buyerInvSnapshots: [String: (ref: DocumentReference, data: [String: Any]?, qty: Double)] = [:]
+
+                for line in orderLines {
+                    let docID = line.resourceInventoryDocID
+                    let sellerInvRef = sellerInventoryRef.document(docID)
+                    let buyerInvRef = buyerInventoryRef.document(docID)
+
+                    let sellerInvSnap = try transaction.getDocument(sellerInvRef)
+                    let sellerInvData = sellerInvSnap.data()
+                    let sellerQty = (sellerInvData?["quantity"] as? Double) ?? 0
+                    if sellerQty < line.quantity {
+                        errorPointer?.pointee = NSError(domain: "BuyOrderService", code: 6022, userInfo: [NSLocalizedDescriptionKey: "Insufficient \(line.resourceName) (Q\(line.resourceQuality)). You have \(Int(sellerQty)), need \(Int(line.quantity))."])
+                        return nil
+                    }
+                    sellerInvSnapshots[docID] = (sellerInvRef, sellerInvData, sellerQty)
+
+                    let buyerInvSnap = try transaction.getDocument(buyerInvRef)
+                    let buyerInvData = buyerInvSnap.data()
+                    let buyerQty = (buyerInvData?["quantity"] as? Double) ?? 0
+                    buyerInvSnapshots[docID] = (buyerInvRef, buyerInvData, buyerQty)
+                }
+
+                // WRITES: now that all reads are done, update order, move inventory, and credit seller.
                 transaction.updateData([
                     "status": "filled",
                     "filledAt": Timestamp(date: Date()),
                     "filledByUserID": sellerUserID
                 ], forDocument: orderRef)
 
-                // For each line: deduct from seller, add to buyer
                 for line in orderLines {
-                    let sellerInvRef = sellerInventoryRef.document(line.resourceInventoryDocID)
-                    let buyerInvRef = buyerProfRef.collection("inventory").document(line.resourceInventoryDocID)
-                    let sellerInvSnap = try transaction.getDocument(sellerInvRef)
-                    let sellerInvData = sellerInvSnap.data()
-                    let sellerQty = (sellerInvData?["quantity"] as? Double) ?? 0
-                    let newSellerQty = sellerQty - line.quantity
+                    let docID = line.resourceInventoryDocID
+                    guard let s = sellerInvSnapshots[docID], let b = buyerInvSnapshots[docID] else { continue }
+
+                    let newSellerQty = s.qty - line.quantity
                     if newSellerQty <= 0 {
-                        transaction.deleteDocument(sellerInvRef)
+                        transaction.deleteDocument(s.ref)
                     } else {
-                        var updated = sellerInvData ?? ["id": line.resourceInventoryDocID, "name": line.resourceName, "category": line.resourceCategory, "isFractional": line.isFractional]
+                        var updated = s.data ?? ["id": docID, "name": line.resourceName, "category": line.resourceCategory, "isFractional": line.isFractional]
                         updated["quantity"] = newSellerQty
-                        transaction.setData(updated, forDocument: sellerInvRef)
+                        transaction.setData(updated, forDocument: s.ref)
                     }
-                    let buyerInvSnap = try transaction.getDocument(buyerInvRef)
-                    let buyerInvData = buyerInvSnap.data()
-                    let buyerQty = (buyerInvData?["quantity"] as? Double) ?? 0
-                    let newBuyerQty = buyerQty + line.quantity
-                    let buyerDoc: [String: Any] = (buyerInvData ?? [
-                        "id": line.resourceInventoryDocID,
+
+                    let newBuyerQty = b.qty + line.quantity
+                    let buyerDoc: [String: Any] = (b.data ?? [
+                        "id": docID,
                         "name": line.resourceName,
                         "category": line.resourceCategory,
                         "isFractional": line.isFractional
                     ]).merging(["quantity": newBuyerQty]) { _, new in new }
-                    transaction.setData(buyerDoc, forDocument: buyerInvRef)
+                    transaction.setData(buyerDoc, forDocument: b.ref)
                 }
 
-                // Seller cash
                 transaction.updateData(["cash": sellerCash + netToSeller], forDocument: sellerProfileRef)
 
                 return nil

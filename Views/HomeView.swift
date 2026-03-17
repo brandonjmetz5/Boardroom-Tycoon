@@ -160,7 +160,7 @@ struct HomeView: View {
             DashboardCard(
                 title: "Market",
                 systemImage: "cart",
-                destination: MarketView(userID: userID)
+                destination: MarketHubView(userID: userID)
             )
             DashboardCard(
                 title: "Stocks",

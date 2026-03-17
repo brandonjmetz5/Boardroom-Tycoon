@@ -50,18 +50,74 @@ final class MarketViewModel: ObservableObject {
     @Published private(set) var resourceListingsLoading = false
     @Published private(set) var resourceListingsErrorMessage: String?
     @Published var selectedListingToBuy: MarketListing?
-    @Published var buyQuantityText = ""
     @Published private(set) var buyListingInProgress = false
     @Published var buyListingErrorMessage: String?
+
+    // MARK: - Aggregates / deal indicators
+
+    @Published private(set) var aggregates: [String: MarketAggregate] = [:] // key: resourceID-qQuality
+    @Published private(set) var aggregatesLoaded = false
+    @Published private(set) var aggregatesErrorMessage: String?
 
     private let mineMarketService = MineMarketService()
     private let buyOrderService = BuyOrderService()
     private let marketListingService = MarketListingService()
     private let playerProfileService = PlayerProfileService()
     private let inventoryService = InventoryService()
+    private let analyticsService = MarketAnalyticsService()
 
     init(userID: String) {
         self.userID = userID
+    }
+
+    private func aggregateKey(resourceID: String, quality: Int) -> String {
+        "\(resourceID)-q\(max(1, quality))"
+    }
+
+    func loadAggregatesIfNeeded() {
+        if aggregatesLoaded { return }
+        analyticsService.fetchAggregates { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let list):
+                    var dict: [String: MarketAggregate] = [:]
+                    for agg in list {
+                        let key = self.aggregateKey(resourceID: agg.resourceID, quality: agg.quality)
+                        dict[key] = agg
+                    }
+                    self.aggregates = dict
+                    self.aggregatesLoaded = true
+                    self.aggregatesErrorMessage = nil
+                case .failure(let error):
+                    self.aggregatesErrorMessage = error.localizedDescription
+                    self.aggregatesLoaded = true
+                }
+            }
+        }
+    }
+
+    func dealDeltaForListing(_ listing: MarketListing) -> Double? {
+        let key = aggregateKey(resourceID: listing.item.id, quality: listing.quality)
+        guard let agg = aggregates[key], let avg = agg.avgListingPrice, avg > 0 else { return nil }
+        let delta = (listing.pricePerUnit - avg) / avg * 100.0
+        return delta
+    }
+
+    func dealDeltaForBuyOrder(_ order: BuyOrder) -> Double? {
+        // Compare netToSeller against blended fair value of selling each line individually at avgListingPrice.
+        var fairValue: Double = 0
+        var totalQty: Double = 0
+        for line in order.lines {
+            let key = aggregateKey(resourceID: line.resourceID, quality: line.resourceQuality)
+            guard let agg = aggregates[key], let avg = agg.avgListingPrice, avg > 0 else { continue }
+            fairValue += avg * line.quantity
+            totalQty += line.quantity
+        }
+        guard fairValue > 0 else { return nil }
+        let actual = order.netToSeller
+        let delta = (actual - fairValue) / fairValue * 100.0
+        return delta
     }
 
     func loadListings() {
@@ -393,30 +449,19 @@ final class MarketViewModel: ObservableObject {
 
     func openBuyListingSheet(_ listing: MarketListing) {
         buyListingErrorMessage = nil
-        buyQuantityText = listing.item.isFractional ? String(format: "%.2f", listing.quantity) : String(Int(listing.quantity))
         selectedListingToBuy = listing
     }
 
     func closeBuyListingSheet() {
         selectedListingToBuy = nil
-        buyQuantityText = ""
         buyListingErrorMessage = nil
     }
 
     func confirmBuyFromListing() {
         guard let listing = selectedListingToBuy else { return }
-        let qty = Double(buyQuantityText.replacingOccurrences(of: ",", with: "."))
-        guard let quantity = qty, quantity > 0 else {
-            buyListingErrorMessage = "Enter a valid quantity."
-            return
-        }
-        if quantity > listing.quantity {
-            buyListingErrorMessage = "Only \(listing.item.isFractional ? String(format: "%.2f", listing.quantity) : String(Int(listing.quantity))) available."
-            return
-        }
         buyListingInProgress = true
         buyListingErrorMessage = nil
-        marketListingService.buyFromListing(listingID: listing.id, quantity: quantity, buyerUserID: userID) { [weak self] result in
+        marketListingService.buyFromListing(for: userID, listing: listing) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.buyListingInProgress = false

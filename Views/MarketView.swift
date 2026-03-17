@@ -7,13 +7,22 @@
 
 import SwiftUI
 
+enum MarketScreenMode {
+    case all
+    case auctions
+    case buyOrders
+    case resources
+}
+
 struct MarketView: View {
     let userID: String
+    let mode: MarketScreenMode
 
     @StateObject private var viewModel: MarketViewModel
 
-    init(userID: String) {
+    init(userID: String, mode: MarketScreenMode = .all) {
         self.userID = userID
+        self.mode = mode
         _viewModel = StateObject(wrappedValue: MarketViewModel(userID: userID))
     }
 
@@ -23,22 +32,35 @@ struct MarketView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Picker("Market", selection: $viewModel.marketSegment) {
-                    Text("Auctions").tag(0)
-                    Text("Buy Orders").tag(1)
-                    Text("Resources").tag(2)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, AppTheme.horizontalPadding)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
+                if mode == .all {
+                    Picker("Market", selection: $viewModel.marketSegment) {
+                        Text("Auctions").tag(0)
+                        Text("Buy Orders").tag(1)
+                        Text("Resources").tag(2)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, AppTheme.horizontalPadding)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
 
-                if viewModel.marketSegment == 0 {
-                    auctionsContent
-                } else if viewModel.marketSegment == 1 {
-                    buyOrdersContent
+                    if viewModel.marketSegment == 0 {
+                        auctionsContent
+                    } else if viewModel.marketSegment == 1 {
+                        buyOrdersContent
+                    } else {
+                        resourceListingsContent
+                    }
                 } else {
-                    resourceListingsContent
+                    switch mode {
+                    case .auctions:
+                        auctionsContent
+                    case .buyOrders:
+                        buyOrdersContent
+                    case .resources:
+                        resourceListingsContent
+                    case .all:
+                        EmptyView()
+                    }
                 }
             }
         }
@@ -59,9 +81,17 @@ struct MarketView: View {
             }
         }
         .onAppear {
-            viewModel.loadListings()
+            switch mode {
+            case .all, .auctions:
+                viewModel.loadListings()
+            case .buyOrders:
+                viewModel.loadBuyOrders()
+            case .resources:
+                viewModel.loadResourceListings()
+            }
         }
         .onChange(of: viewModel.marketSegment) { _, newValue in
+            guard mode == .all else { return }
             if newValue == 1 { viewModel.loadBuyOrders() }
             if newValue == 2 { viewModel.loadResourceListings() }
         }
@@ -70,9 +100,6 @@ struct MarketView: View {
         }
         .sheet(isPresented: $viewModel.showNewBuyOrderSheet) {
             newBuyOrderSheet
-        }
-        .sheet(item: $viewModel.selectedListingToBuy) { listing in
-            buyListingSheet(listing: listing)
         }
         .alert("Fulfill Buy Order?", isPresented: Binding(
             get: { viewModel.selectedOrderForFulfillConfirm != nil },
@@ -85,6 +112,19 @@ struct MarketView: View {
         } message: {
             if let order = viewModel.selectedOrderForFulfillConfirm {
                 Text("Deliver \(order.lines.map { "\(Int($0.quantity)) \($0.resourceName) (Q\($0.resourceQuality))" }.joined(separator: ", ")) and receive \(String(format: "$%.2f", order.netToSeller)) (3% fee applied).")
+            }
+        }
+        .alert("Buy this listing?", isPresented: Binding(
+            get: { viewModel.selectedListingToBuy != nil },
+            set: { if !$0 { viewModel.closeBuyListingSheet() } }
+        )) {
+            Button("Cancel", role: .cancel) { viewModel.closeBuyListingSheet() }
+            Button("Buy") { viewModel.confirmBuyFromListing() }
+        } message: {
+            if let listing = viewModel.selectedListingToBuy {
+                let qtyText = listing.item.isFractional ? String(format: "%.2f", listing.quantity) : String(Int(listing.quantity))
+                let total = listing.quantity * listing.pricePerUnit
+                Text("\(listing.item.name) (Q\(listing.quality))\nQuantity: \(qtyText)\nTotal: \(String(format: "$%.2f", total)) (3% fee applied)")
             }
         }
     }
@@ -242,10 +282,14 @@ struct MarketView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            viewModel.loadAggregatesIfNeeded()
+        }
     }
 
     private func buyOrderCard(order: BuyOrder) -> some View {
         let canFulfill = viewModel.canFulfill(order)
+        let delta = viewModel.dealDeltaForBuyOrder(order)
         return VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(order.lines) { line in
@@ -277,6 +321,19 @@ struct MarketView: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
+                    if let delta {
+                        let text = String(format: "%+.0f%% vs selling", delta)
+                        Text(text)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(delta >= 0 ? AppTheme.chipPositive : AppTheme.textError)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                (delta >= 0 ? AppTheme.chipPositive : AppTheme.textError)
+                                    .opacity(0.15)
+                            )
+                            .clipShape(Capsule())
+                    }
                     Text("You receive: \(String(format: "$%.2f", order.netToSeller))")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
@@ -329,50 +386,70 @@ struct MarketView: View {
     private var resourceListingsContent: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Menu {
-                    Button("All resources") {
-                        viewModel.filterResourceListingsID = nil
-                    }
-                    ForEach(MarketCatalog.tradeableItems(), id: \.id) { item in
-                        Button(item.name) {
-                            viewModel.filterResourceListingsID = item.id
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Filters")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    HStack(spacing: 8) {
+                        Menu {
+                            Button("All resources") {
+                                viewModel.filterResourceListingsID = nil
+                            }
+                            ForEach(MarketCatalog.tradeableItems(), id: \.id) { item in
+                                Button(item.name) {
+                                    viewModel.filterResourceListingsID = item.id
+                                }
+                            }
+                        } label: {
+                            Text(resourceFilterLabel)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .lineLimit(1)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(AppTheme.cardBackgroundAlt)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        Menu {
+                            Button("All quality") {
+                                viewModel.minQualityForListings = 0
+                            }
+                            ForEach(1...5, id: \.self) { q in
+                                Button("Q\(q)+") {
+                                    viewModel.minQualityForListings = q
+                                }
+                            }
+                        } label: {
+                            Text(viewModel.minQualityForListings == 0 ? "All quality" : "Q\(viewModel.minQualityForListings)+")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(AppTheme.cardBackgroundAlt)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
                     }
-                } label: {
-                    Text(resourceFilterLabel)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .lineLimit(1)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(AppTheme.cardBackgroundAlt)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                Menu {
-                    Button("All quality") {
-                        viewModel.minQualityForListings = 0
-                    }
-                    ForEach(1...5, id: \.self) { q in
-                        Button("Q\(q)+") {
-                            viewModel.minQualityForListings = q
-                        }
-                    }
-                } label: {
-                    Text(viewModel.minQualityForListings == 0 ? "All quality" : "Q\(viewModel.minQualityForListings)+")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(AppTheme.cardBackgroundAlt)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 Spacer()
-                Text("Cheapest first")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(AppTheme.textTertiary)
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Sort")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Text("Cheapest first")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppTheme.textTertiary)
+                }
             }
             .padding(.horizontal, AppTheme.horizontalPadding)
             .padding(.vertical, 8)
+
+            if let err = viewModel.buyListingErrorMessage {
+                Text(err)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppTheme.textError)
+                    .padding(.horizontal, AppTheme.horizontalPadding)
+                    .padding(.bottom, 8)
+            }
 
             if viewModel.resourceListingsLoading {
                 Spacer()
@@ -407,6 +484,9 @@ struct MarketView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            viewModel.loadAggregatesIfNeeded()
+        }
     }
 
     private var resourceFilterLabel: String {
@@ -417,7 +497,9 @@ struct MarketView: View {
     private func resourceListingRow(listing: MarketListing) -> some View {
         let isMine = listing.sellerUserID == userID
         let qtyText = listing.item.isFractional ? String(format: "%.2f", listing.quantity) : String(Int(listing.quantity))
+        let delta = viewModel.dealDeltaForListing(listing)
         return HStack(alignment: .center, spacing: 12) {
+            resourceIconView(name: listing.item.name)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(listing.item.name)
@@ -430,6 +512,19 @@ struct MarketView: View {
                         .padding(.vertical, 2)
                         .background(AppTheme.cardBackgroundAlt)
                         .clipShape(Capsule())
+                    if let delta {
+                        let text = String(format: "%+.0f%%", delta)
+                        Text(text)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(delta <= 0 ? AppTheme.chipPositive : AppTheme.textError)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                (delta <= 0 ? AppTheme.chipPositive : AppTheme.textError)
+                                    .opacity(0.15)
+                            )
+                            .clipShape(Capsule())
+                    }
                 }
                 Text("\(qtyText) available · \(String(format: "$%.2f", listing.pricePerUnit))/unit")
                     .font(.system(size: 12, weight: .regular))
@@ -460,68 +555,79 @@ struct MarketView: View {
         .themedCard()
     }
 
-    private func buyListingSheet(listing: MarketListing) -> some View {
-        let maxQty = listing.quantity
-        let qty = Double(viewModel.buyQuantityText.replacingOccurrences(of: ",", with: ".")) ?? 0
-        let total = qty * listing.pricePerUnit
-        return NavigationStack {
+    // MARK: - Resource icons
+
+    @ViewBuilder
+    private func resourceIconView(name: String) -> some View {
+        if let assetName = resourceAssetName(for: name) {
             ZStack {
-                AppTheme.background.ignoresSafeArea()
-                VStack(alignment: .leading, spacing: 16) {
-                    if let err = viewModel.buyListingErrorMessage {
-                        Text(err)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppTheme.textError)
-                    }
-                    Text(listing.item.name)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text("Q\(listing.quality) · \(String(format: "$%.2f", listing.pricePerUnit))/unit")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(AppTheme.textSecondary)
-                    Text("Quantity to buy (max \(listing.item.isFractional ? String(format: "%.2f", maxQty) : String(Int(maxQty))))")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppTheme.textSecondary)
-                    TextField("Quantity", text: $viewModel.buyQuantityText)
-                        .keyboardType(listing.item.isFractional ? .decimalPad : .numberPad)
-                        .textFieldStyle(.roundedBorder)
-                    if total > 0 {
-                        Text("Total: \(String(format: "$%.2f", total)) (3% fee at checkout)")
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(AppTheme.textTertiary)
-                    }
-                }
-                .padding(AppTheme.cardPadding)
+                Circle()
+                    .fill(AppTheme.cardBackgroundAlt.opacity(0.95))
+                    .frame(width: 40, height: 40)
+                Image(assetName)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFill()
+                    .frame(width: 38, height: 38)
+                    .clipShape(Circle())
             }
-            .navigationTitle("Buy \(listing.item.name)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(AppTheme.cardBackground, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
-                        viewModel.closeBuyListingSheet()
-                    }
-                    .foregroundStyle(AppTheme.textSecondary)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Confirm") {
-                        viewModel.confirmBuyFromListing()
-                    }
-                    .fontWeight(.semibold)
-                    .foregroundStyle(AppTheme.chipReady)
-                    .disabled(viewModel.buyListingInProgress)
-                }
-            }
-            .overlay {
-                if viewModel.buyListingInProgress {
-                    ProgressView("Buying...")
-                        .padding(24)
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(12)
-                }
+        } else {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.accent.opacity(0.22))
+                    .frame(width: 40, height: 40)
+                Text(String(name.prefix(1)).uppercased())
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppTheme.accent)
             }
         }
+    }
+
+    private func resourceAssetName(for name: String) -> String? {
+        // Keep mapping consistent with BuildingDetailView / R&D.
+        let key = name.lowercased()
+        if key.contains("raw gold") { return "icon_raw_gold" }
+        if key.contains("raw silver") { return "icon_raw_silver" }
+        if key.contains("raw diamonds") || key == "diamond" { return "icon_raw_diamond" }
+        if key.contains("raw coal") { return "icon_raw_coal" }
+        if key.contains("raw iron") { return "icon_raw_iron" }
+        if key.contains("crude oil") || key.contains("raw oil") || key == "oil" { return "icon_raw_oil" }
+        if key.contains("sand") { return "icon_sand" }
+        if key.contains("stone") || key.contains("quarry") { return "icon_stone" }
+        if key.contains("gravel") { return "icon_gravel" }
+        if key.contains("fuel cell") { return "icon_fuel_cell" }
+        if key.contains("machinery fuel pack") { return "icon_machinery_fuel_pack" }
+        if key.contains("gasoline") { return "icon_gasoline" }
+        if key.contains("diesel") { return "icon_diesel" }
+        if key.contains("processed coal") { return "icon_processed_coal" }
+        if key.contains("industrial heat block") || key.contains("industrial heat") { return "icon_industrial_heat_block" }
+        if key.contains("steel beam") { return "icon_steel_beam" }
+        if key == "steel" { return "icon_steel" }
+        if key.contains("iron bar") { return "icon_iron_bar" }
+        if key == "glass" { return "icon_glass" }
+        if key.contains("brick") { return "icon_brick" }
+        if key.contains("concrete mix") { return "icon_concrete_mix" }
+        if key.contains("foundation") { return "icon_foundation" }
+        if key.contains("window") { return "icon_window" }
+        if key.contains("walls") { return "icon_brick_wall" }
+        if key.contains("gold bar") { return "icon_gold_bar" }
+        if key.contains("silver bar") { return "icon_silver_bar" }
+        if key.contains("cut diamond") { return "icon_cut_diamond" }
+        if key.contains("diamond dust") { return "icon_diamond_dust" }
+        if key.contains("diamond drill bit") { return "icon_diamond_drill_bit" }
+        if key.contains("precision cutting head") { return "icon_precision_cutting_head" }
+        if key.contains("heat sink") || key.contains("heatsink") { return "icon_heat_sink" }
+        if key.contains("microchip") { return "icon_microchip" }
+        if key.contains("machine computer") { return "icon_machine_computer" }
+        if key.contains("machine gear") { return "icon_machine_gear" }
+        if key.contains("robotic machine arm") { return "icon_robotic_machine_arm" }
+        if key.contains("gold ring") { return "icon_gold_ring" }
+        if key.contains("silver ring") { return "icon_silver_ring" }
+        if key.contains("gold watch") { return "icon_gold_watch" }
+        if key.contains("silver watch") { return "icon_silver_watch" }
+        if key.contains("luxury ring") { return "icon_luxury_ring" }
+        if key.contains("luxury watch") { return "icon_luxury_watch" }
+        return nil
     }
 
     private var newBuyOrderSheet: some View {

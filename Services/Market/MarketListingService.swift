@@ -101,36 +101,32 @@ final class MarketListingService {
         }
     }
 
-    // MARK: - Buy (partial: transfer quantity from listing to buyer, 3% fee)
+    // MARK: - Buy (full listing: transfer all quantity from listing to buyer, 3% fee)
 
     func buyFromListing(
-        listingID: String,
-        quantity: Double,
-        buyerUserID: String,
+        for buyerUserID: String,
+        listing: MarketListing,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        guard quantity > 0 else {
-            completion(.failure(NSError(domain: "MarketListingService", code: 7010, userInfo: [NSLocalizedDescriptionKey: "Quantity must be positive."])))
-            return
-        }
-
-        let listingRef = listingsRef.document(listingID)
+        let listingRef = listingsRef.document(listing.id)
         let feePercent = MarketCatalog.buyOrderFeePercent
 
         db.runTransaction({ [weak self] transaction, errorPointer in
             guard let self else { return nil }
             do {
+                // ---- READS: listing, profiles, and buyer inventory ----
                 let listSnap = try transaction.getDocument(listingRef)
                 guard let listData = listSnap.data() else {
                     errorPointer?.pointee = NSError(domain: "MarketListingService", code: 7011, userInfo: [NSLocalizedDescriptionKey: "Listing not found."])
                     return nil
                 }
                 let available = listData["quantity"] as? Double ?? 0
-                if available < quantity {
-                    errorPointer?.pointee = NSError(domain: "MarketListingService", code: 7012, userInfo: [NSLocalizedDescriptionKey: "Only \(Int(available)) available. You requested \(Int(quantity))."])
+                if available <= 0 {
+                    errorPointer?.pointee = NSError(domain: "MarketListingService", code: 7012, userInfo: [NSLocalizedDescriptionKey: "Listing has already been sold."])
                     return nil
                 }
                 let pricePerUnit = listData["pricePerUnit"] as? Double ?? 0
+                let quantity = available
                 let total = quantity * pricePerUnit
                 let sellerUserID = listData["sellerUserID"] as? String ?? ""
                 let resourceID = listData["resourceID"] as? String ?? ""
@@ -146,6 +142,8 @@ final class MarketListingService {
 
                 let buyerProfileSnap = try transaction.getDocument(buyerProfileRef)
                 let sellerProfileSnap = try transaction.getDocument(sellerProfileRef)
+                let buyerInvSnap = try transaction.getDocument(buyerInvRef)
+
                 let buyerData = buyerProfileSnap.data() ?? [:]
                 let sellerData = sellerProfileSnap.data() ?? [:]
                 let buyerCash = buyerData["cash"] as? Double ?? 0
@@ -159,14 +157,11 @@ final class MarketListingService {
                 let fee = total * (feePercent / 100)
                 let netToSeller = total - fee
 
-                let newAvailable = available - quantity
-                if newAvailable <= 0 {
-                    transaction.deleteDocument(listingRef)
-                } else {
-                    transaction.updateData(["quantity": newAvailable], forDocument: listingRef)
-                }
+                // ---- WRITES: all reads are above ----
+                // Full fill: delete listing.
+                transaction.deleteDocument(listingRef)
 
-                let buyerInvSnap = try transaction.getDocument(buyerInvRef)
+                // Buyer inventory
                 let buyerInvData = buyerInvSnap.data()
                 let buyerQty = (buyerInvData?["quantity"] as? Double) ?? 0
                 let newBuyerQty = buyerQty + quantity

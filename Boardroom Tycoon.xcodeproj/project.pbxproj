@@ -26,6 +26,8 @@
 		A883C3572F68B74800511E8F /* BuyOrderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3562F68B74800511E8F /* BuyOrderService.swift */; };
 		A883C3592F68B75500511E8F /* MarketCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3582F68B75500511E8F /* MarketCatalog.swift */; };
 		A883C35B2F68B76700511E8F /* BuyOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C35A2F68B76700511E8F /* BuyOrder.swift */; };
+		A883C3632F69DEB100511E8F /* MarketHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3622F69DEB100511E8F /* MarketHubView.swift */; };
+		A883C3652F69DF1C00511E8F /* MarketAnalyticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3642F69DF1C00511E8F /* MarketAnalyticsService.swift */; };
 		A8AB73742F61B7D00012C9BC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */; };
 		A8AB73772F61B7F70012C9BC /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB73762F61B7F70012C9BC /* FirebaseAuth */; };
 		A8AB73792F61B7F70012C9BC /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB73782F61B7F70012C9BC /* FirebaseCore */; };
@@ -115,6 +117,8 @@
 		A883C3562F68B74800511E8F /* BuyOrderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuyOrderService.swift; sourceTree = "<group>"; };
 		A883C3582F68B75500511E8F /* MarketCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketCatalog.swift; sourceTree = "<group>"; };
 		A883C35A2F68B76700511E8F /* BuyOrder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuyOrder.swift; sourceTree = "<group>"; };
+		A883C3622F69DEB100511E8F /* MarketHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketHubView.swift; sourceTree = "<group>"; };
+		A883C3642F69DF1C00511E8F /* MarketAnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketAnalyticsService.swift; sourceTree = "<group>"; };
 		A8AB73652F61B7B20012C9BC /* Boardroom Tycoon.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Boardroom Tycoon.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A8AB73842F61D4CD0012C9BC /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -276,6 +280,7 @@
 			children = (
 				A8AB74002F630000012C9BC /* Components */,
 				A8AB74102F63000C012C9BC /* MainTabView.swift */,
+				A883C3622F69DEB100511E8F /* MarketHubView.swift */,
 				A8AB74122F63000D012C9BC /* DashboardView.swift */,
 				A8AB74142F63000E012C9BC /* PortfolioView.swift */,
 				A8AB73842F61D4CD0012C9BC /* HomeView.swift */,
@@ -378,6 +383,7 @@
 		A8AB74062F630006012C9BC /* Market */ = {
 			isa = PBXGroup;
 			children = (
+				A883C3642F69DF1C00511E8F /* MarketAnalyticsService.swift */,
 				A883C3562F68B74800511E8F /* BuyOrderService.swift */,
 				A8AB73C22F62939D0012C9BC /* MarketListingService.swift */,
 				A8AB73D02F62FB880012C9BC /* MarketOrderService.swift */,
@@ -500,6 +506,7 @@
 				A86577522F634F0B0029071D /* MineMarketListing.swift in Sources */,
 				A8AB73B72F620B8A0012C9BC /* OwnedMineService.swift in Sources */,
 				A8AB73B12F61F20F0012C9BC /* ProspectingJob.swift in Sources */,
+				A883C3652F69DF1C00511E8F /* MarketAnalyticsService.swift in Sources */,
 				A8AB739D2F61E6EB0012C9BC /* InventoryItem.swift in Sources */,
 				A8AB73932F61E3200012C9BC /* PlayerProfile.swift in Sources */,
 				A8AB73AD2F61EF570012C9BC /* Stock.swift in Sources */,
@@ -511,6 +518,7 @@
 				A8AB73DB2F62FCE10012C9BC /* AppNotification.swift in Sources */,
 				A8AB73BB2F6276340012C9BC /* Building.swift in Sources */,
 				A8AB738F2F61D5960012C9BC /* ProfileView.swift in Sources */,
+				A883C3632F69DEB100511E8F /* MarketHubView.swift in Sources */,
 				A8AB73B92F6275F80012C9BC /* BuildingType.swift in Sources */,
 				A8AB73E32F62FF6F0012C9BC /* ProductionService.swift in Sources */,
 				A8AB73C12F62911A0012C9BC /* ProspectingService.swift in Sources */,
