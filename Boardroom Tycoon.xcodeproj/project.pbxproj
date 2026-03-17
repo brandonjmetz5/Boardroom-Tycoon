@@ -28,6 +28,9 @@
 		A883C35B2F68B76700511E8F /* BuyOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C35A2F68B76700511E8F /* BuyOrder.swift */; };
 		A883C3632F69DEB100511E8F /* MarketHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3622F69DEB100511E8F /* MarketHubView.swift */; };
 		A883C3652F69DF1C00511E8F /* MarketAnalyticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3642F69DF1C00511E8F /* MarketAnalyticsService.swift */; };
+		A883C3692F69E38400511E8F /* BuyOrderMarketView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3672F69E38400511E8F /* BuyOrderMarketView.swift */; };
+		A883C36A2F69E38400511E8F /* BuildingMarketView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3662F69E38400511E8F /* BuildingMarketView.swift */; };
+		A883C36B2F69E38400511E8F /* ResourceMarketView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3682F69E38400511E8F /* ResourceMarketView.swift */; };
 		A8AB73742F61B7D00012C9BC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */; };
 		A8AB73772F61B7F70012C9BC /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB73762F61B7F70012C9BC /* FirebaseAuth */; };
 		A8AB73792F61B7F70012C9BC /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB73782F61B7F70012C9BC /* FirebaseCore */; };
@@ -119,6 +122,9 @@
 		A883C35A2F68B76700511E8F /* BuyOrder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuyOrder.swift; sourceTree = "<group>"; };
 		A883C3622F69DEB100511E8F /* MarketHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketHubView.swift; sourceTree = "<group>"; };
 		A883C3642F69DF1C00511E8F /* MarketAnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketAnalyticsService.swift; sourceTree = "<group>"; };
+		A883C3662F69E38400511E8F /* BuildingMarketView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildingMarketView.swift; sourceTree = "<group>"; };
+		A883C3672F69E38400511E8F /* BuyOrderMarketView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuyOrderMarketView.swift; sourceTree = "<group>"; };
+		A883C3682F69E38400511E8F /* ResourceMarketView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceMarketView.swift; sourceTree = "<group>"; };
 		A8AB73652F61B7B20012C9BC /* Boardroom Tycoon.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Boardroom Tycoon.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A8AB73842F61D4CD0012C9BC /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -293,6 +299,9 @@
 				A8AB738E2F61D5960012C9BC /* ProfileView.swift */,
 				A8AB73A82F61EE0E0012C9BC /* OperationDetailView.swift */,
 				A8AB73BC2F6277730012C9BC /* BuildingDetailView.swift */,
+				A883C3662F69E38400511E8F /* BuildingMarketView.swift */,
+				A883C3672F69E38400511E8F /* BuyOrderMarketView.swift */,
+				A883C3682F69E38400511E8F /* ResourceMarketView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -524,6 +533,9 @@
 				A8AB73C12F62911A0012C9BC /* ProspectingService.swift in Sources */,
 				A883C3432F6877CA00511E8F /* ResourceQuality.swift in Sources */,
 				A8AB73AB2F61EEEB0012C9BC /* MarketListing.swift in Sources */,
+				A883C3692F69E38400511E8F /* BuyOrderMarketView.swift in Sources */,
+				A883C36A2F69E38400511E8F /* BuildingMarketView.swift in Sources */,
+				A883C36B2F69E38400511E8F /* ResourceMarketView.swift in Sources */,
 				A8AB73A92F61EE0E0012C9BC /* OperationDetailView.swift in Sources */,
 				A8AB73852F61D4CD0012C9BC /* HomeView.swift in Sources */,
 				A8AB73A12F61E7E80012C9BC /* Recipe.swift in Sources */,

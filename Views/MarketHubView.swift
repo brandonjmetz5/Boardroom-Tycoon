@@ -24,21 +24,21 @@ struct MarketHubView: View {
                         title: "Building Market",
                         subtitle: "Buy and sell mines and rigs.",
                         systemImage: "building.2.crop.circle",
-                        destination: MarketView(userID: userID, mode: .auctions)
+                        destination: BuildingMarketView(userID: userID)
                     )
 
                     hubCard(
                         title: "Resource Market",
                         subtitle: "Trade individual resources and materials.",
                         systemImage: "cube.box.fill",
-                        destination: MarketView(userID: userID, mode: .resources)
+                        destination: ResourceMarketView(userID: userID)
                     )
 
                     hubCard(
                         title: "Buy Orders",
                         subtitle: "Fill large contracts for instant cash.",
                         systemImage: "doc.text.fill",
-                        destination: MarketView(userID: userID, mode: .buyOrders)
+                        destination: BuyOrderMarketView(userID: userID)
                     )
                 }
                 .padding(AppTheme.horizontalPadding)

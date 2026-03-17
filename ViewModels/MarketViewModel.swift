@@ -98,26 +98,38 @@ final class MarketViewModel: ObservableObject {
     }
 
     func dealDeltaForListing(_ listing: MarketListing) -> Double? {
-        let key = aggregateKey(resourceID: listing.item.id, quality: listing.quality)
-        guard let agg = aggregates[key], let avg = agg.avgListingPrice, avg > 0 else { return nil }
-        let delta = (listing.pricePerUnit - avg) / avg * 100.0
-        return delta
+        guard let avg = averageListingPrice(resourceID: listing.item.id, quality: listing.quality), avg > 0 else { return nil }
+        return (listing.pricePerUnit - avg) / avg * 100.0
     }
 
     func dealDeltaForBuyOrder(_ order: BuyOrder) -> Double? {
         // Compare netToSeller against blended fair value of selling each line individually at avgListingPrice.
         var fairValue: Double = 0
-        var totalQty: Double = 0
         for line in order.lines {
-            let key = aggregateKey(resourceID: line.resourceID, quality: line.resourceQuality)
-            guard let agg = aggregates[key], let avg = agg.avgListingPrice, avg > 0 else { continue }
+            guard let avg = averageListingPrice(resourceID: line.resourceID, quality: line.resourceQuality), avg > 0 else { continue }
             fairValue += avg * line.quantity
-            totalQty += line.quantity
         }
         guard fairValue > 0 else { return nil }
         let actual = order.netToSeller
         let delta = (actual - fairValue) / fairValue * 100.0
         return delta
+    }
+
+    private func averageListingPrice(resourceID: String, quality: Int) -> Double? {
+        // Prefer server-aggregated average if available.
+        let key = aggregateKey(resourceID: resourceID, quality: quality)
+        if let agg = aggregates[key], let avg = agg.avgListingPrice, avg > 0 {
+            return avg
+        }
+
+        // Fallback: compute a volume-weighted average from currently loaded listings.
+        let bucket = allResourceListings.filter { $0.item.id == resourceID && $0.quality == max(1, quality) }
+        if bucket.isEmpty { return nil }
+        let qtySum = bucket.reduce(0.0) { $0 + $1.quantity }
+        if qtySum <= 0 { return nil }
+        let valueSum = bucket.reduce(0.0) { $0 + ($1.pricePerUnit * $1.quantity) }
+        let avg = valueSum / qtySum
+        return avg > 0 ? avg : nil
     }
 
     func loadListings() {
