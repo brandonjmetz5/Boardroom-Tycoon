@@ -23,6 +23,9 @@
 		A883C3412F68774600511E8F /* ResourceQualityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3402F68774600511E8F /* ResourceQualityService.swift */; };
 		A883C3432F6877CA00511E8F /* ResourceQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3422F6877CA00511E8F /* ResourceQuality.swift */; };
 		A883C3452F6878AF00511E8F /* ResearchAndDevelopmentViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3442F6878AF00511E8F /* ResearchAndDevelopmentViewModel.swift */; };
+		A883C3572F68B74800511E8F /* BuyOrderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3562F68B74800511E8F /* BuyOrderService.swift */; };
+		A883C3592F68B75500511E8F /* MarketCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C3582F68B75500511E8F /* MarketCatalog.swift */; };
+		A883C35B2F68B76700511E8F /* BuyOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A883C35A2F68B76700511E8F /* BuyOrder.swift */; };
 		A8AB73742F61B7D00012C9BC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */; };
 		A8AB73772F61B7F70012C9BC /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB73762F61B7F70012C9BC /* FirebaseAuth */; };
 		A8AB73792F61B7F70012C9BC /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A8AB73782F61B7F70012C9BC /* FirebaseCore */; };
@@ -109,6 +112,9 @@
 		A883C3402F68774600511E8F /* ResourceQualityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceQualityService.swift; sourceTree = "<group>"; };
 		A883C3422F6877CA00511E8F /* ResourceQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceQuality.swift; sourceTree = "<group>"; };
 		A883C3442F6878AF00511E8F /* ResearchAndDevelopmentViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchAndDevelopmentViewModel.swift; sourceTree = "<group>"; };
+		A883C3562F68B74800511E8F /* BuyOrderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuyOrderService.swift; sourceTree = "<group>"; };
+		A883C3582F68B75500511E8F /* MarketCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketCatalog.swift; sourceTree = "<group>"; };
+		A883C35A2F68B76700511E8F /* BuyOrder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuyOrder.swift; sourceTree = "<group>"; };
 		A8AB73652F61B7B20012C9BC /* Boardroom Tycoon.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Boardroom Tycoon.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8AB73732F61B7D00012C9BC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A8AB73842F61D4CD0012C9BC /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -234,6 +240,7 @@
 			children = (
 				A8AB74012F630001012C9BC /* Catalogs */,
 				A8AB73922F61E3200012C9BC /* PlayerProfile.swift */,
+				A883C35A2F68B76700511E8F /* BuyOrder.swift */,
 				A8AB73942F61E4AF0012C9BC /* Mine.swift */,
 				A883C3422F6877CA00511E8F /* ResourceQuality.swift */,
 				A8AB73962F61E4E20012C9BC /* ResourceType.swift */,
@@ -336,6 +343,7 @@
 		A8AB74012F630001012C9BC /* Catalogs */ = {
 			isa = PBXGroup;
 			children = (
+				A883C3582F68B75500511E8F /* MarketCatalog.swift */,
 				A865774F2F631D340029071D /* BuildingCatalog.swift */,
 				A86577552F631D350029071D /* BuildingRecipeCatalog.swift */,
 				A86577572F631D360029071D /* ItemValueCatalog.swift */,
@@ -370,6 +378,7 @@
 		A8AB74062F630006012C9BC /* Market */ = {
 			isa = PBXGroup;
 			children = (
+				A883C3562F68B74800511E8F /* BuyOrderService.swift */,
 				A8AB73C22F62939D0012C9BC /* MarketListingService.swift */,
 				A8AB73D02F62FB880012C9BC /* MarketOrderService.swift */,
 			);
@@ -496,6 +505,7 @@
 				A8AB73AD2F61EF570012C9BC /* Stock.swift in Sources */,
 				A8AB73B32F61FEC30012C9BC /* PlayerProfileService.swift in Sources */,
 				A8AB739F2F61E7DA0012C9BC /* RecipeIngredient.swift in Sources */,
+				A883C35B2F68B76700511E8F /* BuyOrder.swift in Sources */,
 				A86577542F6353440029071D /* MineMarketService.swift in Sources */,
 				A865774E2F631D020029071D /* PurchasableBuilding.swift in Sources */,
 				A8AB73DB2F62FCE10012C9BC /* AppNotification.swift in Sources */,
@@ -554,6 +564,7 @@
 				A86577502F631D340029071D /* BuildingCatalog.swift in Sources */,
 				A86577562F631D350029071D /* BuildingRecipeCatalog.swift in Sources */,
 				A86577582F631D360029071D /* ItemValueCatalog.swift in Sources */,
+				A883C3572F68B74800511E8F /* BuyOrderService.swift in Sources */,
 				A865775A2F631D370029071D /* UpgradeCatalog.swift in Sources */,
 				A865775C2F631D380029071D /* RecipeCatalog.swift in Sources */,
 				A865775E2F631D390029071D /* BuildingLevelCatalog.swift in Sources */,
@@ -562,6 +573,7 @@
 				A8AB73D12F62FB880012C9BC /* MarketOrderService.swift in Sources */,
 				A8AB73872F61D5090012C9BC /* OperationsView.swift in Sources */,
 				A8AB73952F61E4AF0012C9BC /* Mine.swift in Sources */,
+				A883C3592F68B75500511E8F /* MarketCatalog.swift in Sources */,
 				A8AB73D72F62FC9C0012C9BC /* StockPosition.swift in Sources */,
 				A8AB73CF2F62FB5B0012C9BC /* MarketOrder.swift in Sources */,
 				A8AB73A72F61EDEA0012C9BC /* Machine.swift in Sources */,

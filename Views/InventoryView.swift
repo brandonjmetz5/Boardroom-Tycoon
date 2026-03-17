@@ -77,6 +77,9 @@ struct InventoryView: View {
         .onAppear {
             viewModel.loadInventory()
         }
+        .sheet(item: $viewModel.selectedItemForListing) { item in
+            listOnMarketSheet(item: item)
+        }
     }
 
     private func inventoryItemCard(inventoryItem: InventoryItem) -> some View {
@@ -101,10 +104,83 @@ struct InventoryView: View {
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(AppTheme.textPrimary)
                 .monospacedDigit()
+
+            Button("List") {
+                viewModel.openListSheet(for: inventoryItem)
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(AppTheme.chipReady)
+            .clipShape(Capsule())
         }
         .padding(AppTheme.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .themedCard()
+    }
+
+    private func listOnMarketSheet(item: InventoryItem) -> some View {
+        let (_, quality) = viewModel.resourceBaseIDAndQuality(for: item)
+        return NavigationStack {
+            ZStack {
+                AppTheme.background.ignoresSafeArea()
+                VStack(alignment: .leading, spacing: 16) {
+                    if let err = viewModel.listErrorMessage {
+                        Text(err)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textError)
+                    }
+                    Text(item.item.name)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text("Q\(quality) · You have \(viewModel.formattedQuantity(for: item))")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Text("Quantity to list")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    TextField("Quantity", text: $viewModel.listQuantityText)
+                        .keyboardType(item.item.isFractional ? .decimalPad : .numberPad)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Price per unit ($)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    TextField("Price per unit", text: $viewModel.listPricePerUnitText)
+                        .keyboardType(.decimalPad)
+                        .textFieldStyle(.roundedBorder)
+                }
+                .padding(AppTheme.cardPadding)
+            }
+            .navigationTitle("List on Market")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(AppTheme.cardBackground, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        viewModel.closeListSheet()
+                    }
+                    .foregroundStyle(AppTheme.textSecondary)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Post") {
+                        viewModel.postListing()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(AppTheme.chipReady)
+                    .disabled(viewModel.isPostingListing)
+                }
+            }
+            .overlay {
+                if viewModel.isPostingListing {
+                    ProgressView("Posting...")
+                        .padding(24)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(12)
+                }
+            }
+        }
     }
 }
 

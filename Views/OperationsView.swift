@@ -64,6 +64,13 @@ struct OperationsView: View {
                     .font(AppTheme.titleMedium())
                     .foregroundStyle(AppTheme.textPrimary)
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(destination: InventoryView(userID: userID)) {
+                    Image(systemName: "building.2")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+            }
         }
         .onAppear {
             viewModel.loadData()
