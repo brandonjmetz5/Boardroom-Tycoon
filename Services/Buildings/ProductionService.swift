@@ -333,6 +333,17 @@ final class ProductionService {
                     inventoryData["baseItemId"] = baseInventoryDocID
                     transaction.setData(inventoryData, forDocument: inventoryRef)
                     transaction.updateData(["xp": updatedXP, "level": updatedLevel, "buildingSlotCount": updatedBuildingSlotCount], forDocument: profileRef)
+
+                    // Emit a production event for backend tick-driven stocks.
+                    let eventRef = profileRef.collection("productionEvents").document()
+                    transaction.setData([
+                        "id": eventRef.documentID,
+                        "resourceID": baseInventoryDocID,
+                        "quantity": pendingOutputQuantity,
+                        "quality": quality,
+                        "buildingID": buildingID,
+                        "createdAt": Timestamp(date: Date())
+                    ], forDocument: eventRef)
                 } else if let outputItemId = buildingData["pendingOutputItemId"] as? String,
                           let outputItemName = buildingData["pendingOutputItemName"] as? String {
                     let quality = pendingOutputQuality ?? 1

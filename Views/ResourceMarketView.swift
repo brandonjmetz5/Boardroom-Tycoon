@@ -4,13 +4,28 @@ struct ResourceMarketView: View {
     let userID: String
 
     @StateObject private var viewModel: MarketViewModel
+
+    // Single entry point into a full filter suite.
     @State private var showFilterSheet = false
+
+    // Local filter UI state that feeds into the view model.
+    @State private var selectedResourceID: String?
+    @State private var minQuality: Int = 0
     @State private var priceMinText: String = ""
     @State private var priceMaxText: String = ""
     @State private var showOnlyCPUListings = false
     @State private var showOnlyPlayerListings = false
     @State private var showOnlyGoodDeals = false
     @State private var hideOverpriced = false
+
+    // Local sort preference for how players like to browse.
+    enum SortMode: String, CaseIterable, Identifiable {
+        case bestDeals = "Best deals"
+        case cheapest = "Cheapest first"
+
+        var id: String { rawValue }
+    }
+    @State private var sortMode: SortMode = .bestDeals
 
     init(userID: String) {
         self.userID = userID
@@ -19,28 +34,39 @@ struct ResourceMarketView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.background.ignoresSafeArea()
+            LinearGradient(
+                colors: [AppTheme.background, AppTheme.cardBackground],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
-            resourceListingsContent
+            content
         }
-        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Resource Market")
-                    .font(AppTheme.titleMedium())
-                    .foregroundStyle(AppTheme.textPrimary)
+                VStack(spacing: 2) {
+                    Text("Global Resource Exchange")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text("Hunt for edges, not scraps.")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(destination: InventoryView(userID: userID)) {
-                    Image(systemName: "building.2")
-                        .font(.system(size: 18, weight: .medium))
+                    Image(systemName: "shippingbox.fill")
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
                 }
             }
         }
         .onAppear {
             viewModel.loadResourceListings()
+            viewModel.loadAggregatesIfNeeded()
+            syncFilterStateFromViewModel()
         }
         .sheet(isPresented: $showFilterSheet) {
             filterSheet
@@ -60,244 +86,366 @@ struct ResourceMarketView: View {
         }
     }
 
-    // MARK: - Content
+    // MARK: - Main content
 
-    private var resourceListingsContent: some View {
-        let baseListings = viewModel.resourceListings
-        let filteredListings = baseListings.filter { listing in
-            // Local advanced filters on top of view model filters.
+    private var content: some View {
+        let base = viewModel.resourceListings
+        let filtered = base.filter { listing in
             if showOnlyCPUListings && listing.sellerUserID != "CPU" { return false }
             if showOnlyPlayerListings && listing.sellerUserID == "CPU" { return false }
 
-            if let minPrice = Double(priceMinText.replacingOccurrences(of: ",", with: ".")),
-               listing.pricePerUnit < minPrice {
+            if let minPrice = parsePrice(priceMinText), listing.pricePerUnit < minPrice {
                 return false
             }
-            if let maxPrice = Double(priceMaxText.replacingOccurrences(of: ",", with: ".")),
-               listing.pricePerUnit > maxPrice {
+            if let maxPrice = parsePrice(priceMaxText), listing.pricePerUnit > maxPrice {
                 return false
             }
 
-            let delta = viewModel.dealDeltaForListing(listing) ?? 0
-            if showOnlyGoodDeals && delta > -10 { return false }
-            if hideOverpriced && delta >= 15 { return false }
+            if let delta = viewModel.dealDeltaForListing(listing) {
+                if showOnlyGoodDeals && delta > -10 { return false }
+                if hideOverpriced && delta >= 15 { return false }
+            } else if showOnlyGoodDeals {
+                return false
+            }
 
             return true
         }
 
-        let totalCount = filteredListings.count
-        let goodDealsCount = filteredListings.filter { (viewModel.dealDeltaForListing($0) ?? 0) <= -10 }.count
-        let overheatedCount = filteredListings.filter { (viewModel.dealDeltaForListing($0) ?? 0) >= 15 }.count
+        // Precompute deal deltas once per render pass to avoid repeated heavy work
+        let listingsWithDelta: [(listing: MarketListing, delta: Double?)] = filtered.map { listing in
+            (listing, viewModel.dealDeltaForListing(listing))
+        }
+
+        let sorted: [MarketListing] = {
+            switch sortMode {
+            case .cheapest:
+                return listingsWithDelta
+                    .map { $0.listing }
+                    .sorted { $0.pricePerUnit < $1.pricePerUnit }
+            case .bestDeals:
+                return listingsWithDelta
+                    .sorted { lhs, rhs in
+                        let l = lhs.delta ?? 0
+                        let r = rhs.delta ?? 0
+                        return l < r
+                    }
+                    .map { $0.listing }
+            }
+        }()
+
+        let goodDealsCount = listingsWithDelta.filter { ($0.delta ?? 0) <= -10 }.count
+        let overheatedCount = listingsWithDelta.filter { ($0.delta ?? 0) >= 15 }.count
 
         return VStack(spacing: 0) {
-            // Hero stats header
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Live resource market")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppTheme.textPrimary)
-                HStack(spacing: 10) {
-                    statPill(title: "Listings", value: "\(totalCount)")
-                    statPill(title: "Good deals", value: "\(goodDealsCount)")
-                    statPill(title: "Overpriced", value: "\(overheatedCount)")
-                    Spacer()
-                }
-            }
-            .padding(.horizontal, AppTheme.horizontalPadding)
-            .padding(.top, 8)
-
-            // Filters row
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Filters")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.textSecondary)
-                    HStack(spacing: 8) {
-                        Menu {
-                            Button("All resources") {
-                                viewModel.filterResourceListingsID = nil
-                            }
-                            ForEach(MarketCatalog.tradeableItems(), id: \.id) { item in
-                                Button(item.name) {
-                                    viewModel.filterResourceListingsID = item.id
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(resourceFilterLabel)
-                                    .lineLimit(1)
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 11, weight: .medium))
-                            }
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(AppTheme.cardBackgroundAlt)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-                        Menu {
-                            Button("All quality") {
-                                viewModel.minQualityForListings = 0
-                            }
-                            ForEach(1...5, id: \.self) { q in
-                                Button("Q\(q)+") {
-                                    viewModel.minQualityForListings = q
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(viewModel.minQualityForListings == 0 ? "All quality" : "Q\(viewModel.minQualityForListings)+")
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 11, weight: .medium))
-                            }
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(AppTheme.cardBackgroundAlt)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-                    }
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 6) {
-                    Button {
-                        showFilterSheet = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                            Text("Advanced")
-                        }
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.accent)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(AppTheme.cardBackgroundAlt)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
-                    Text("Cheapest first")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(AppTheme.textTertiary)
-                }
-            }
-            .padding(.horizontal, AppTheme.horizontalPadding)
-            .padding(.vertical, 8)
+            headerSection(
+                total: filtered.count,
+                good: goodDealsCount,
+                overheated: overheatedCount
+            )
 
             if let err = viewModel.buyListingErrorMessage {
                 Text(err)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppTheme.textError)
                     .padding(.horizontal, AppTheme.horizontalPadding)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 6)
             }
 
             if viewModel.resourceListingsLoading {
                 Spacer()
-                ProgressView("Loading listings...")
+                ProgressView("Scanning live offers…")
                     .controlSize(.large)
                     .tint(.white)
                     .foregroundStyle(AppTheme.textPrimary)
+                Spacer()
             } else if let err = viewModel.resourceListingsErrorMessage {
                 Spacer()
                 Text(err)
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(AppTheme.textError)
-                    .padding()
-            } else if filteredListings.isEmpty {
-                Spacer()
-                Text("No listings\(viewModel.filterResourceListingsID != nil || viewModel.minQualityForListings > 0 ? " matching filters" : ""). Try changing filters or list items from Inventory.")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding()
+                Spacer()
+            } else if sorted.isEmpty {
+                Spacer()
+                VStack(spacing: 10) {
+                    Text("No listings match your filters.")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text("Try loosening filters or list items from your inventory to seed the market.")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, AppTheme.horizontalPadding)
+                Spacer()
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(filteredListings) { listing in
-                            resourceListingRow(listing: listing)
+                    LazyVStack(spacing: 12) {
+                        ForEach(sorted) { listing in
+                            resourceListingCard(listing: listing)
                         }
                     }
                     .padding(.horizontal, AppTheme.horizontalPadding)
-                    .padding(.top, 4)
-                    .padding(.bottom, 24)
+                    .padding(.vertical, 10)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            viewModel.loadAggregatesIfNeeded()
-        }
     }
 
-    private var resourceFilterLabel: String {
-        guard let id = viewModel.filterResourceListingsID else { return "All resources" }
-        return MarketCatalog.tradeableItems().first(where: { $0.id == id })?.name ?? id
-    }
+    // MARK: - Header
 
-    private func resourceListingRow(listing: MarketListing) -> some View {
-        let isMine = listing.sellerUserID == userID
-        let qtyText = listing.item.isFractional ? String(format: "%.2f", listing.quantity) : String(Int(listing.quantity))
-        let delta = viewModel.dealDeltaForListing(listing)
-        return HStack(alignment: .center, spacing: 12) {
-            resourceIconView(name: listing.item.name)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(listing.item.name)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text("Q\(listing.quality)")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(AppTheme.cardBackgroundAlt)
-                        .clipShape(Capsule())
-                    if let delta {
-                        let text = String(format: "%+.0f%%", delta)
-                        Text(text)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(delta <= 0 ? AppTheme.chipPositive : AppTheme.textError)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                (delta <= 0 ? AppTheme.chipPositive : AppTheme.textError)
-                                    .opacity(0.15)
-                            )
-                            .clipShape(Capsule())
+    private func headerSection(total: Int, good: Int, overheated: Int) -> some View {
+        VStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                AppTheme.cardBackground.opacity(0.9),
+                                AppTheme.cardBackgroundAlt.opacity(0.9)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(AppTheme.accent.opacity(0.25), lineWidth: 1)
+                    )
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .center, spacing: 10) {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(AppTheme.accent)
+                            .frame(width: 40, height: 40)
+                            .background(AppTheme.accent.opacity(0.18))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Live order book")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppTheme.textPrimary)
+                            Text("Swipe through live liquidity, spot mispriced edges, and snipe value.")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer()
+                    }
+
+                    HStack(spacing: 8) {
+                        statPill(title: "LISTINGS", value: "\(total)")
+                        statPill(title: "VALUE PLAYS", value: "\(good)")
+                        statPill(title: "OVERHEATED", value: "\(overheated)")
+                        Spacer()
                     }
                 }
-                Text("\(qtyText) available · \(String(format: "$%.2f", listing.pricePerUnit))/unit")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(AppTheme.textTertiary)
+                .padding(AppTheme.cardPadding)
             }
-            Spacer()
-            if isMine {
-                Button("Cancel listing") {
-                    viewModel.cancelMyListing(listing)
+
+            HStack(spacing: 10) {
+                Button {
+                    syncFilterStateFromViewModel()
+                    showFilterSheet = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                        Text("Filters")
+                        if hasActiveFiltersSummary {
+                            Text(filtersSummaryText)
+                                .font(.system(size: 11, weight: .medium))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(AppTheme.cardBackgroundAlt.opacity(0.7))
+                                .clipShape(Capsule())
+                        }
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.accent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(AppTheme.cardBackgroundAlt.opacity(0.9))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(AppTheme.textError)
-                .disabled(viewModel.isSubmitting)
-            } else {
-                Button("Buy") {
-                    viewModel.openBuyListingSheet(listing)
+
+                Spacer()
+
+                Picker("Sort", selection: $sortMode) {
+                    ForEach(SortMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
                 }
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(AppTheme.chipReady)
-                .clipShape(Capsule())
+                .pickerStyle(.segmented)
+                .frame(width: 210)
             }
         }
-        .padding(AppTheme.cardPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .themedCard()
+        .padding(.horizontal, AppTheme.horizontalPadding)
+        .padding(.top, 4)
+    }
+
+    private var hasActiveFiltersSummary: Bool {
+        if selectedResourceID != nil { return true }
+        if minQuality > 0 { return true }
+        if !priceMinText.isEmpty || !priceMaxText.isEmpty { return true }
+        if showOnlyCPUListings || showOnlyPlayerListings { return true }
+        if showOnlyGoodDeals || hideOverpriced { return true }
+        return false
+    }
+
+    private var filtersSummaryText: String {
+        var parts: [String] = []
+        if let id = selectedResourceID,
+           let item = MarketCatalog.tradeableItems().first(where: { $0.id == id }) {
+            parts.append(item.name)
+        }
+        if minQuality > 0 {
+            parts.append("Q\(minQuality)+")
+        }
+        if showOnlyCPUListings { parts.append("CPU only") }
+        if showOnlyPlayerListings { parts.append("Players only") }
+        if showOnlyGoodDeals { parts.append("Good deals") }
+        if hideOverpriced { parts.append("Hide overheated") }
+        return parts.joined(separator: " · ")
+    }
+
+    // MARK: - Listing cards
+
+    private func resourceListingCard(listing: MarketListing) -> some View {
+        let isMyListing = listing.sellerUserID == userID
+        let qtyText = listing.item.isFractional ? String(format: "%.2f", listing.quantity) : String(Int(listing.quantity))
+        let delta = viewModel.dealDeltaForListing(listing)
+        let total = listing.quantity * listing.pricePerUnit
+
+        return ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(AppTheme.cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(AppTheme.cardBackgroundAlt.opacity(0.6), lineWidth: 1)
+                )
+
+            // Slim accent bar on the left to show deal quality without heavy gradients.
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(
+                    (delta ?? 0) <= -10
+                    ? AppTheme.chipPositive
+                    : (delta ?? 0) >= 15
+                      ? AppTheme.textError
+                      : AppTheme.cardBackgroundAlt
+                )
+                .frame(width: 4)
+                .padding(.vertical, 10)
+                .padding(.leading, 3)
+
+            HStack(alignment: .center, spacing: 12) {
+                resourceIconView(name: listing.item.name)
+                    .frame(width: 44, height: 44)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Text(listing.item.name)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .lineLimit(1)
+
+                        Text("Q\(listing.quality)")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(AppTheme.cardBackgroundAlt.opacity(0.9))
+                            .clipShape(Capsule())
+
+                        if let delta {
+                            dealChip(delta: delta)
+                        }
+                    }
+
+                    Text("\(qtyText) available · \(String(format: "$%.2f", listing.pricePerUnit))/unit")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppTheme.textTertiary)
+
+                    HStack(spacing: 6) {
+                        if listing.sellerUserID == "CPU" {
+                            Text("CPU liquidity")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(AppTheme.cardBackgroundAlt.opacity(0.9))
+                                .clipShape(Capsule())
+                        } else {
+                            Text(listing.sellerName ?? "Player listing")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        Text("Total \(String(format: "$%.2f", total))")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+
+                    // Keep only the chip here; bar was visually nice but heavy. The hero stats + chip give enough signal.
+                }
+
+                Spacer(minLength: 6)
+
+                VStack(alignment: .trailing, spacing: 6) {
+                    if isMyListing {
+                        Button {
+                            viewModel.cancelMyListing(listing)
+                        } label: {
+                            Text("Cancel")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppTheme.textError)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(AppTheme.cardBackgroundAlt.opacity(0.8))
+                                .clipShape(Capsule())
+                        }
+                        .disabled(viewModel.isSubmitting)
+
+                        Text("Your listing")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(AppTheme.textTertiary)
+                    } else {
+                        Button {
+                            viewModel.openBuyListingSheet(listing)
+                        } label: {
+                            HStack(spacing: 6) {
+                                if viewModel.buyListingInProgress && viewModel.selectedListingToBuy?.id == listing.id {
+                                    ProgressView()
+                                        .tint(.white)
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "cart.fill.badge.plus")
+                                }
+                                Text("Buy")
+                            }
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(AppTheme.chipReady)
+                            .clipShape(Capsule())
+                        }
+                        .disabled(viewModel.buyListingInProgress)
+                    }
+                }
+            }
+            .padding(AppTheme.cardPadding)
+        }
     }
 
     private func statPill(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title.uppercased())
+            Text(title)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(AppTheme.textTertiary)
             Text(value)
@@ -306,24 +454,120 @@ struct ResourceMarketView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(AppTheme.cardBackgroundAlt)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .background(AppTheme.cardBackgroundAlt.opacity(0.9))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    // MARK: - Filter sheet
+    private func dealChip(delta: Double) -> some View {
+        let text = String(format: "%+.0f%%", delta)
+        let isValue = delta <= 0
+        let color = isValue ? AppTheme.chipPositive : AppTheme.textError
+
+        return Text(text)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.18))
+            .clipShape(Capsule())
+    }
+
+    private func dealBar(delta: Double) -> some View {
+        let clamped = max(-40, min(40, delta))
+        let normalized = (clamped + 40) / 80
+
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(delta <= 0 ? "Below market" : "Above market")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AppTheme.textTertiary)
+                Spacer()
+                Text(String(format: "%+.0f%%", delta))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(delta <= 0 ? AppTheme.chipPositive : AppTheme.textError)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(AppTheme.cardBackgroundAlt.opacity(0.9))
+
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [AppTheme.chipPositive, AppTheme.textError],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: max(4, geo.size.width * normalized))
+                }
+            }
+            .frame(height: 6)
+        }
+    }
+
+    // MARK: - Filter sheet (single entry)
 
     private var filterSheet: some View {
         NavigationStack {
             ZStack {
                 AppTheme.background.ignoresSafeArea()
+
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        Text("Filter listings")
-                            .font(.system(size: 18, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 24) {
+                        Text("Tune the order book")
+                            .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(AppTheme.textPrimary)
 
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Price range (per unit)")
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Resource")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppTheme.textSecondary)
+
+                            let items = MarketCatalog.tradeableItems()
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    filterChip(
+                                        title: "All",
+                                        isSelected: selectedResourceID == nil
+                                    ) {
+                                        selectedResourceID = nil
+                                    }
+
+                                    ForEach(items, id: \.id) { item in
+                                        filterChip(
+                                            title: item.name,
+                                            isSelected: selectedResourceID == item.id
+                                        ) {
+                                            selectedResourceID = item.id
+                                        }
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Minimum quality")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppTheme.textSecondary)
+
+                            HStack {
+                                Slider(value: Binding(
+                                    get: { Double(minQuality) },
+                                    set: { minQuality = Int($0.rounded()) }
+                                ), in: 0...5, step: 1)
+                                Text(minQuality == 0 ? "All" : "Q\(minQuality)+")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                    .frame(width: 44)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Price per unit")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(AppTheme.textSecondary)
                             HStack(spacing: 12) {
@@ -337,22 +581,23 @@ struct ResourceMarketView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Seller type")
+                            Text("Seller")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(AppTheme.textSecondary)
-                            Toggle("Only CPU liquidity", isOn: $showOnlyCPUListings)
+
+                            Toggle("CPU liquidity only", isOn: $showOnlyCPUListings)
                                 .tint(AppTheme.accent)
-                            Toggle("Only player listings", isOn: $showOnlyPlayerListings)
+                            Toggle("Player listings only", isOn: $showOnlyPlayerListings)
                                 .tint(AppTheme.accent)
                         }
 
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Deal quality")
+                            Text("Deal quality vs market")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(AppTheme.textSecondary)
-                            Toggle("Show only good deals (≤ -10% vs market)", isOn: $showOnlyGoodDeals)
+                            Toggle("Only show strong value (≤ -10%)", isOn: $showOnlyGoodDeals)
                                 .tint(AppTheme.accent)
-                            Toggle("Hide overpriced listings (≥ +15% vs market)", isOn: $hideOverpriced)
+                            Toggle("Hide overheated (≥ +15%)", isOn: $hideOverpriced)
                                 .tint(AppTheme.accent)
                         }
                     }
@@ -366,23 +611,35 @@ struct ResourceMarketView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Reset") {
-                        priceMinText = ""
-                        priceMaxText = ""
-                        showOnlyCPUListings = false
-                        showOnlyPlayerListings = false
-                        showOnlyGoodDeals = false
-                        hideOverpriced = false
+                        resetFilters()
                     }
                     .foregroundStyle(AppTheme.textSecondary)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
+                    Button("Apply") {
+                        applyFiltersToViewModel()
                         showFilterSheet = false
                     }
                     .fontWeight(.semibold)
                     .foregroundStyle(AppTheme.chipReady)
                 }
             }
+        }
+    }
+
+    private func filterChip(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isSelected ? .black : AppTheme.textPrimary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    isSelected
+                    ? AppTheme.accent
+                    : AppTheme.cardBackgroundAlt.opacity(0.9)
+                )
+                .clipShape(Capsule())
         }
     }
 
@@ -394,19 +651,16 @@ struct ResourceMarketView: View {
             ZStack {
                 Circle()
                     .fill(AppTheme.cardBackgroundAlt.opacity(0.95))
-                    .frame(width: 40, height: 40)
                 Image(assetName)
                     .resizable()
                     .interpolation(.high)
                     .scaledToFill()
-                    .frame(width: 38, height: 38)
                     .clipShape(Circle())
             }
         } else {
             ZStack {
                 Circle()
                     .fill(AppTheme.accent.opacity(0.22))
-                    .frame(width: 40, height: 40)
                 Text(String(name.prefix(1)).uppercased())
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(AppTheme.accent)
@@ -458,6 +712,36 @@ struct ResourceMarketView: View {
         if key.contains("luxury ring") { return "icon_luxury_ring" }
         if key.contains("luxury watch") { return "icon_luxury_watch" }
         return nil
+    }
+
+    // MARK: - Helpers
+
+    private func parsePrice(_ text: String) -> Double? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let normalized = trimmed.replacingOccurrences(of: ",", with: ".")
+        return Double(normalized)
+    }
+
+    private func resetFilters() {
+        selectedResourceID = nil
+        minQuality = 0
+        priceMinText = ""
+        priceMaxText = ""
+        showOnlyCPUListings = false
+        showOnlyPlayerListings = false
+        showOnlyGoodDeals = false
+        hideOverpriced = false
+    }
+
+    private func syncFilterStateFromViewModel() {
+        selectedResourceID = viewModel.filterResourceListingsID
+        minQuality = viewModel.minQualityForListings
+    }
+
+    private func applyFiltersToViewModel() {
+        viewModel.filterResourceListingsID = selectedResourceID
+        viewModel.minQualityForListings = minQuality
     }
 }
 

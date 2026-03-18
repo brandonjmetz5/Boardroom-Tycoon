@@ -280,13 +280,15 @@ struct PortfolioView: View {
     }
 
     private func chartTitleForTimeFrame(_ tf: ChartTimeFrame) -> String {
+        tf.displayName
+    }
+
+    private func timeFrameIcon(_ tf: ChartTimeFrame) -> String {
         switch tf {
-        case .oneMin: return "1 min"
-        case .fiveMin: return "5 min"
-        case .fifteenMin: return "15 min"
-        case .oneHour: return "1 hour"
-        case .oneDay: return "1 day"
-        case .all: return "30 days"
+        case .oneHour: return "clock"
+        case .oneDay: return "sun.max"
+        case .oneWeek: return "calendar"
+        case .allTime: return "infinity"
         }
     }
 
@@ -368,13 +370,27 @@ struct PortfolioView: View {
                                         Button {
                                             stocksVM.changeChartTimeFrame(to: tf)
                                         } label: {
-                                            Text(tf.displayName)
-                                                .font(AppTheme.captionMedium())
-                                                .foregroundStyle(stocksVM.selectedChartTimeFrame == tf ? AppTheme.background : AppTheme.textSecondary)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 8)
-                                                .background(stocksVM.selectedChartTimeFrame == tf ? AppTheme.accent : Color.clear)
-                                                .clipShape(Capsule())
+                                            let selected = stocksVM.selectedChartTimeFrame == tf
+                                            HStack(spacing: 8) {
+                                                Image(systemName: timeFrameIcon(tf))
+                                                    .font(.system(size: 12, weight: .semibold))
+                                                    .foregroundStyle(selected ? AppTheme.background : AppTheme.textSecondary)
+                                                Text(tf.displayName)
+                                                    .font(AppTheme.captionMedium())
+                                                    .foregroundStyle(selected ? AppTheme.background : AppTheme.textSecondary)
+                                            }
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 8)
+                                            .background(
+                                                selected
+                                                ? AppTheme.accent.opacity(0.92)
+                                                : Color.clear
+                                            )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 999)
+                                                    .stroke(selected ? AppTheme.accent.opacity(0.2) : AppTheme.border, lineWidth: 1)
+                                            )
+                                            .clipShape(Capsule())
                                         }
                                         .buttonStyle(.plain)
                                     }
@@ -411,10 +427,19 @@ struct PortfolioView: View {
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
 
-                        TextField("Shares", text: $stocksVM.tradeQuantityText)
-                            .keyboardType(.decimalPad)
-                            .textFieldStyle(.roundedBorder)
-                            .padding(.vertical, 4)
+                            TextField("Shares", text: $stocksVM.tradeQuantityText)
+                                .keyboardType(.decimalPad)
+                                .tint(AppTheme.accent)
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .font(AppTheme.monoNumber())
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 14)
+                                .background(AppTheme.surfaceAlt)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(AppTheme.border, lineWidth: 1)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                         if let total = stocksVM.tradeTotal() {
                             Text(stocksVM.tradeSegment == 0 ? "Cost: \(String(format: "$%.2f", total))" : "Proceeds: \(String(format: "$%.2f", total))")
@@ -444,7 +469,8 @@ struct PortfolioView: View {
                     }
                     .padding(AppTheme.horizontalPadding)
                     .padding(.vertical, 16)
-                    .background(AppTheme.background)
+                    .background(AppTheme.surfaceAlt.opacity(0.65))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
                 }
 
                 if stocksVM.isSubmitting {

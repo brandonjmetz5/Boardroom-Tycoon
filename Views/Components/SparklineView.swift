@@ -32,8 +32,17 @@ struct SparklineView: View {
                 let padding: CGFloat = 1
                 let drawW = width - padding * 2
                 let drawH = height - padding * 2
+                let baselineY = height - padding
+                let last = pts.last!
+                let tLast = last.timestamp.timeIntervalSince1970
+                let xLast = padding + CGFloat((tLast - minT) / tRange) * drawW
+                let yLast = height - padding - CGFloat((last.price - minP) / range) * drawH
+                let prev = pts[pts.count - 2]
+                let tPrev = prev.timestamp.timeIntervalSince1970
+                let xPrev = padding + CGFloat((tPrev - minT) / tRange) * drawW
+                let yPrev = height - padding - CGFloat((prev.price - minP) / range) * drawH
 
-                Path { path in
+                let linePath = Path { path in
                     for (i, pt) in pts.enumerated() {
                         let t = pt.timestamp.timeIntervalSince1970
                         let x = padding + CGFloat((t - minT) / tRange) * drawW
@@ -42,7 +51,47 @@ struct SparklineView: View {
                         else { path.addLine(to: CGPoint(x: x, y: y)) }
                     }
                 }
-                .stroke(lineColor.opacity(0.9), lineWidth: 1.5)
+
+                let fillPath = Path { path in
+                    path.addPath(linePath)
+                    path.addLine(to: CGPoint(x: xLast, y: baselineY))
+                    path.addLine(to: CGPoint(x: padding, y: baselineY))
+                    path.closeSubpath()
+                }
+
+                ZStack(alignment: .topLeading) {
+                    fillPath
+                        .fill(
+                            LinearGradient(
+                                colors: [lineColor.opacity(0.25), lineColor.opacity(0.02)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                    linePath
+                        .stroke(lineColor.opacity(0.95), lineWidth: 1.6)
+                        .shadow(color: lineColor.opacity(0.35), radius: 4, x: 0, y: 0)
+
+                    // Emphasize the most recent move so direction matches priceChange.
+                    Path { p in
+                        p.move(to: CGPoint(x: xPrev, y: yPrev))
+                        p.addLine(to: CGPoint(x: xLast, y: yLast))
+                    }
+                    .stroke(lineColor, lineWidth: 2.6)
+                    .shadow(color: lineColor.opacity(0.45), radius: 6, x: 0, y: 0)
+
+                    // Last point marker for direction.
+                    Circle()
+                        .fill(AppTheme.background.opacity(0.98))
+                        .frame(width: 6, height: 6)
+                        .overlay(
+                            Circle()
+                                .stroke(lineColor, lineWidth: 2)
+                        )
+                        .position(x: xLast, y: yLast)
+                }
+                .animation(.easeInOut(duration: 0.25), value: pts.count)
             }
         }
         .frame(height: height)

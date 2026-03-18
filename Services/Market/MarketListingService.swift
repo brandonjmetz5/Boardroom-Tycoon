@@ -158,7 +158,11 @@ final class MarketListingService {
                 let netToSeller = total - fee
 
                 // ---- WRITES: all reads are above ----
-                // Full fill: delete listing.
+                // Mark sold (so backend can distinguish from cancel), then delete listing.
+                transaction.updateData([
+                    "soldAt": Timestamp(date: Date()),
+                    "soldToUserID": buyerUserID
+                ], forDocument: listingRef)
                 transaction.deleteDocument(listingRef)
 
                 // Buyer inventory
@@ -228,6 +232,12 @@ final class MarketListingService {
                     "isFractional": isFractional
                 ]).merging(["quantity": newQty]) { _, new in new }
                 transaction.setData(doc, forDocument: sellerInvRef)
+
+                // Mark cancelled (so backend can ignore this delete), then delete listing.
+                transaction.updateData([
+                    "cancelledAt": Timestamp(date: Date()),
+                    "cancelledByUserID": sellerUserID
+                ], forDocument: listingRef)
                 transaction.deleteDocument(listingRef)
                 return nil
             } catch let e as NSError {

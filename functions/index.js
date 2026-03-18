@@ -1,5 +1,6 @@
 const {onRequest} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
+const {onDocumentCreated, onDocumentDeleted, onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 
@@ -12,6 +13,230 @@ const db = admin.firestore();
 const CPU_USER_ID = "CPU";
 const CPU_DISPLAY_NAME = "Market Board";
 const FEE_PERCENT = 3.0;
+
+// MARK: - Stocks (player-driven, tick-updated)
+
+// Only 6 stocks in v1: raw resources only.
+const STOCKS = [
+  {symbol: "GLD", name: "Gold", resourceIDs: ["raw-gold"]},
+  {symbol: "DMD", name: "Diamond", resourceIDs: ["raw-diamonds"]},
+  // Note: iOS production currently uses "crude-oil" inventory doc IDs; accept both.
+  {symbol: "OIL", name: "Oil", resourceIDs: ["raw-oil", "crude-oil"]},
+  {symbol: "SLV", name: "Silver", resourceIDs: ["raw-silver"]},
+  {symbol: "CL", name: "Coal", resourceIDs: ["raw-coal"]},
+  {symbol: "IRN", name: "Iron", resourceIDs: ["raw-iron"]},
+];
+
+const RESOURCE_ID_TO_SYMBOL = (() => {
+  const map = {};
+  for (const s of STOCKS) {
+    for (const rid of (s.resourceIDs || [])) map[rid] = s.symbol;
+  }
+  return map;
+})();
+
+function stockRef(symbol) {
+  return db.collection("stockSymbols").doc(symbol);
+}
+
+function stockSignalsRef() {
+  return db.collection("worldState").doc("stockSignals");
+}
+
+async function ensureStocksInitialized() {
+  const batch = db.batch();
+  const now = admin.firestore.Timestamp.now();
+
+  for (const s of STOCKS) {
+    const ref = stockRef(s.symbol);
+    batch.set(
+      ref,
+      {
+        id: s.symbol,
+        symbol: s.symbol,
+        name: s.name,
+        // If already exists, keep existing price; otherwise seed from anchor where possible.
+        // prevPrice used to compute change each tick.
+        currentPrice: admin.firestore.FieldValue.increment(0),
+        prevPrice: admin.firestore.FieldValue.increment(0),
+        priceChange: admin.firestore.FieldValue.increment(0),
+        lastUpdatedAt: now,
+      },
+      {merge: true},
+    );
+  }
+
+  // Ensure the signals doc exists (counters get incremented by triggers).
+  batch.set(
+    stockSignalsRef(),
+    {
+      tickId: 0,
+      windowStartedAt: now,
+      lastUpdatedAt: now,
+      // nested maps will be created on first increment
+    },
+    {merge: true},
+  );
+
+  await batch.commit();
+}
+
+// (reserved) history window helper; not used in tick yet.
+
+function clamp(n, lo, hi) {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function safeNum(n) {
+  const x = Number(n || 0);
+  return Number.isFinite(x) ? x : 0;
+}
+
+function pctMoveFromSignals({demandNotional, supplyUnits, buyNotional}) {
+  // Balanced: players can move price within a session, but bounded per tick.
+  // Demand proxy: notional of filled listing buys + notional of filled buy orders.
+  // Supply proxy: production units collected.
+  const demand = safeNum(demandNotional) + safeNum(buyNotional);
+  const supply = safeNum(supplyUnits);
+
+  // Smooth non-linear response.
+  const demandTerm = Math.log1p(demand / 1000); // scale: $1000 notional ~= 0.69
+  const supplyTerm = Math.log1p(supply / 200); // scale: 200 units ~= 0.69
+
+  const raw = 0.012 * demandTerm - 0.010 * supplyTerm; // tune constants
+  return clamp(raw, -0.015, 0.015); // +/- 1.5% per tick cap
+}
+
+function readSignal(signals, groupName, sym) {
+  // Firestore may return dotted-field-path increments either as nested maps or as flat keys.
+  // Support both shapes to keep tick math robust.
+  const nested = signals[groupName];
+  if (nested && typeof nested === "object" && nested[sym] !== undefined) return nested[sym];
+  const flatKey = `${groupName}.${sym}`;
+  if (signals[flatKey] !== undefined) return signals[flatKey];
+  return 0;
+}
+
+// MARK: - Stock signals: Firestore triggers
+
+function symbolForResourceID(resourceID) {
+  return RESOURCE_ID_TO_SYMBOL[String(resourceID || "")];
+}
+
+async function bumpSignal(path, value) {
+  const now = admin.firestore.Timestamp.now();
+  await stockSignalsRef().set(
+    {
+      lastUpdatedAt: now,
+      [path]: admin.firestore.FieldValue.increment(value),
+    },
+    {merge: true},
+  );
+}
+
+// Resource Market fills: count only documents that were marked sold before delete.
+exports.onMarketListingDeleted = onDocumentDeleted("marketListings/{listingId}", async (event) => {
+  const data = event.data ? event.data.data() : null;
+  if (!data) return;
+
+  // NOTE: iOS marks sold/cancelled inside the same transaction as delete.
+  // In some cases, Firestore delete trigger payload may not include those markers.
+  // For v1 "make it move" correctness, count all listing deletions as trade flow.
+
+  const rid = data.resourceID || data.itemID;
+  const sym = symbolForResourceID(rid);
+  if (!sym) return;
+
+  const sellerUserID = data.sellerUserID || "";
+  if (!sellerUserID || sellerUserID === CPU_USER_ID) return; // player-driven only
+
+  const qty = safeNum(data.quantity);
+  const ppu = safeNum(data.pricePerUnit);
+  if (qty <= 0 || ppu <= 0) return;
+
+  await Promise.all([
+    bumpSignal(`resourceTradeUnits.${sym}`, qty),
+    bumpSignal(`resourceTradeNotional.${sym}`, qty * ppu),
+  ]);
+});
+
+// Resource Market fills (robust): count when soldAt is written, before the delete happens.
+exports.onMarketListingSoldAtWritten = onDocumentUpdated("marketListings/{listingId}", async (event) => {
+  const before = (event.data && event.data.before) ? event.data.before.data() : null;
+  const after = (event.data && event.data.after) ? event.data.after.data() : null;
+  if (!after || !before) return;
+
+  const beforeHadSoldAt = !!before.soldAt;
+  const afterHasSoldAt = !!after.soldAt;
+  const afterHasCancelledAt = !!after.cancelledAt;
+
+  if (beforeHadSoldAt) return; // only count on the transition
+  if (!afterHasSoldAt) return;
+  if (afterHasCancelledAt) return; // safety
+
+  const rid = after.resourceID || after.itemID;
+  const sym = symbolForResourceID(rid);
+  if (!sym) return;
+
+  const sellerUserID = after.sellerUserID || "";
+  if (!sellerUserID || sellerUserID === CPU_USER_ID) return; // player-driven only
+
+  const qty = safeNum(after.quantity);
+  const ppu = safeNum(after.pricePerUnit);
+  if (qty <= 0 || ppu <= 0) return;
+
+  await Promise.all([
+    bumpSignal(`resourceTradeUnits.${sym}`, qty),
+    bumpSignal(`resourceTradeNotional.${sym}`, qty * ppu),
+  ]);
+});
+
+// Buy Order fulfillment: count order when status changes open -> filled.
+exports.onBuyOrderFilled = onDocumentUpdated("marketBuyOrders/{orderId}", async (event) => {
+  const before = (event.data && event.data.before) ? event.data.before.data() : {};
+  const after = (event.data && event.data.after) ? event.data.after.data() : {};
+  if ((before.status || "") === "filled") return;
+  if ((after.status || "") !== "filled") return;
+
+  const buyerUserID = after.buyerUserID || "";
+  if (!buyerUserID || buyerUserID === CPU_USER_ID) return; // player-driven only
+
+  const lines = Array.isArray(after.lines) ? after.lines : [];
+  const totalPrice = safeNum(after.totalPrice);
+  const totalQty = lines.reduce((sum, l) => sum + safeNum(l.quantity), 0);
+  if (totalPrice <= 0 || totalQty <= 0) return;
+
+  const ppu = totalPrice / totalQty;
+  const tasks = [];
+  for (const line of lines) {
+    const rid = line.resourceID;
+    const sym = symbolForResourceID(rid);
+    if (!sym) continue;
+    const qty = safeNum(line.quantity);
+    if (qty <= 0) continue;
+    tasks.push(bumpSignal(`buyOrderUnits.${sym}`, qty));
+    tasks.push(bumpSignal(`buyOrderNotional.${sym}`, qty * ppu));
+  }
+  if (tasks.length > 0) await Promise.all(tasks);
+});
+
+// Production collect: create a production event doc in player space; trigger increments supply for the stock.
+exports.onProductionEventCreated = onDocumentCreated("playerProfiles/{userId}/productionEvents/{eventId}", async (event) => {
+  const data = event.data ? event.data.data() : null;
+  if (!data) return;
+
+  const uid = event.params.userId;
+  if (!uid || uid === CPU_USER_ID) return;
+
+  const rid = data.resourceID || data.itemID;
+  const sym = symbolForResourceID(rid);
+  if (!sym) return;
+
+  const qty = safeNum(data.quantity);
+  if (qty <= 0) return;
+
+  await bumpSignal(`productionUnits.${sym}`, qty);
+});
 
 // Tradeable items (mirrors iOS MarketCatalog.tradeableItems()).
 // If you add tradeable items in-app, add them here too.
@@ -461,7 +686,7 @@ async function ensureCpuBuyOrders(openOrders, allListings) {
 
         const units1 = Math.max(1, remainingUnits > 0 ? Math.min(perOrderUnits, remainingUnits) : perOrderUnits);
         const ppu1 = ref * randomBetween(lowMult, highMult);
-        let lines = [
+        const lines = [
           {
             resourceID: item.id,
             resourceName: item.name,
@@ -550,7 +775,8 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
 
   // Heartbeat marker so you can verify ticks in Firestore even without logs.
   // Firestore path: worldState/worldTick
-  await db.collection("worldState").doc("worldTick").set(
+  const worldTickRef = db.collection("worldState").doc("worldTick");
+  await worldTickRef.set(
     {
       lastTickAt: admin.firestore.Timestamp.now(),
       lastTickISO: now,
@@ -558,8 +784,45 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
     {merge: true},
   );
 
+  // Concurrency guard: worldTick can overlap (max instances > 1). Overlap can reset
+  // `worldState/stockSignals` before another instance reads it, resulting in pct=0.
+  const lockId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const lockDurationMs = 90 * 1000; // should exceed typical tick runtime
+  let shouldProceed = false;
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(worldTickRef);
+    const data = snap.data() || {};
+    const lockUntil = data.lockUntil;
+
+    const nowMs = Date.now();
+    const lockUntilMs =
+      lockUntil && typeof lockUntil.toMillis === "function" ? lockUntil.toMillis() : 0;
+
+    if (lockUntilMs > nowMs) {
+      shouldProceed = false;
+      return;
+    }
+
+    shouldProceed = true;
+    tx.set(
+      worldTickRef,
+      {
+        lockUntil: admin.firestore.Timestamp.fromMillis(nowMs + lockDurationMs),
+        lockOwner: lockId,
+        lockUpdatedAt: admin.firestore.Timestamp.now(),
+      },
+      {merge: true},
+    );
+  });
+
+  if (!shouldProceed) {
+    logger.info("worldTick skipped due to lock", {lockId});
+    return null;
+  }
+
   try {
     await ensureCpuProfile();
+    await ensureStocksInitialized();
 
     const [listings, openOrders] = await Promise.all([
       fetchAllResourceListings(),
@@ -570,6 +833,124 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
     const buy = await ensureCpuBuyOrders(openOrders, listings);
 
     await updateMarketAggregates(listings, openOrders);
+
+    // ---- Stocks: tick-driven price updates from player-driven signals ----
+    const signalsSnap = await stockSignalsRef().get();
+    const signals = signalsSnap.data() || {};
+
+    const tickBatch = db.batch();
+    const tickTs = admin.firestore.Timestamp.now();
+
+    const refs = STOCKS.map((s) => stockRef(s.symbol));
+    const snaps = await db.getAll(...refs);
+    const bySymbol = new Map();
+    for (const snap of snaps) {
+      bySymbol.set(snap.id, snap);
+    }
+
+    for (const s of STOCKS) {
+      const sym = s.symbol;
+      const docRef = stockRef(sym);
+      const stockSnap = bySymbol.get(sym);
+      const data = stockSnap && stockSnap.exists ? (stockSnap.data() || {}) : {};
+      const firstRid = (s.resourceIDs && s.resourceIDs.length > 0) ? s.resourceIDs[0] : null;
+      const currentPrice = safeNum(data.currentPrice) || safeNum(ANCHOR_PRICE[firstRid]) || 10;
+      const prevPrice = safeNum(data.prevPrice) || currentPrice;
+
+      const demandNotional = safeNum(readSignal(signals, "resourceTradeNotional", sym));
+      const buyNotional = safeNum(readSignal(signals, "buyOrderNotional", sym));
+      const supplyUnits = safeNum(readSignal(signals, "productionUnits", sym));
+
+      const pct = pctMoveFromSignals({
+        demandNotional,
+        buyNotional,
+        supplyUnits,
+      });
+
+      const newPrice = Math.max(0.01, Number((currentPrice * (1 + pct)).toFixed(4)));
+      const priceChange = Number((newPrice - prevPrice).toFixed(4));
+
+      if (sym === "GLD") {
+        logger.info("stockTickDebug.GL D", {
+          sym,
+          currentPrice,
+          prevPrice,
+          demandNotional,
+          buyNotional,
+          supplyUnits,
+          pct,
+          newPrice,
+          priceChange,
+        });
+
+        // Also write debug into Firestore so we can verify without relying on Logs UI.
+        const dbgRef = db.collection("worldState").doc("stockTickDebug");
+        tickBatch.set(
+          dbgRef,
+          {
+            updatedAt: tickTs,
+            sym: sym,
+            demandNotional,
+            buyNotional,
+            supplyUnits,
+            pct: pct,
+            currentPrice: currentPrice,
+            prevPrice: prevPrice,
+            newPrice: newPrice,
+            priceChange: priceChange,
+            tickSignals: {
+              resourceTradeUnits: signals.resourceTradeUnits || {},
+              buyOrderUnits: signals.buyOrderUnits || {},
+              productionUnits: signals.productionUnits || {},
+            },
+          },
+          {merge: true},
+        );
+      }
+
+      tickBatch.set(
+        docRef,
+        {
+          id: sym,
+          symbol: sym,
+          name: s.name,
+          prevPrice: currentPrice,
+          currentPrice: newPrice,
+          priceChange,
+          lastUpdatedAt: tickTs,
+        },
+        {merge: true},
+      );
+
+      // Append one history point per tick.
+      const pointRef = docRef.collection("history").doc();
+      tickBatch.set(pointRef, {
+        id: pointRef.id,
+        timestamp: tickTs,
+        price: newPrice,
+      });
+    }
+
+    // Reset tick window counters so each tick applies once.
+    const resetData = {
+      tickId: admin.firestore.FieldValue.increment(1),
+      windowStartedAt: tickTs,
+      lastUpdatedAt: tickTs,
+    };
+
+    // Clear both nested-map and flat-key representations (FieldValue.delete requires the exact field path).
+    for (const s of STOCKS) {
+      const sym = s.symbol;
+      resetData[`resourceTradeUnits.${sym}`] = admin.firestore.FieldValue.delete();
+      resetData[`resourceTradeNotional.${sym}`] = admin.firestore.FieldValue.delete();
+      resetData[`buyOrderUnits.${sym}`] = admin.firestore.FieldValue.delete();
+      resetData[`buyOrderNotional.${sym}`] = admin.firestore.FieldValue.delete();
+      resetData[`productionUnits.${sym}`] = admin.firestore.FieldValue.delete();
+    }
+
+    tickBatch.set(stockSignalsRef(), resetData, {merge: true});
+
+    await tickBatch.commit();
 
     logger.info("cpuMinions summary", {
       sellCreated: sell.createdCount,
@@ -587,6 +968,9 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
         lastCpuBuyOrdersCreated: buy.createdOrders,
         lastCpuBuyEscrowSpent: buy.escrowSpent,
         lastAggregatesUpdatedAt: admin.firestore.Timestamp.now(),
+        lastStocksUpdatedAt: admin.firestore.Timestamp.now(),
+        lockUntil: null,
+        lockOwner: null,
       },
       {merge: true},
     );
@@ -596,6 +980,8 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
       {
         lastErrorAt: admin.firestore.Timestamp.now(),
         lastError: String(err),
+        lockUntil: null,
+        lockOwner: null,
       },
       {merge: true},
     );

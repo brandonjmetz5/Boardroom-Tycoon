@@ -141,11 +141,32 @@ final class StocksViewModel: ObservableObject {
     }
 
     private func loadSparklines() {
-        var data: [String: [StockPricePoint]] = [:]
+        // Prefer real history for sparklines (so portfolio rows match chart direction).
+        var data = sparklineData
+        let group = DispatchGroup()
+
         for stock in stocks {
-            data[stock.symbol] = StockService.generateFakeHistory(symbol: stock.symbol, currentPrice: stock.currentPrice, count: 7)
+            if data[stock.symbol] != nil { continue }
+
+            group.enter()
+            stockService.fetchRecentHistoryPoints(symbol: stock.symbol, count: 7) { [weak self] points in
+                let final: [StockPricePoint]
+                if points.isEmpty {
+                    final = StockService.generateFakeHistory(symbol: stock.symbol, currentPrice: stock.currentPrice, count: 7)
+                } else {
+                    final = points
+                }
+
+                Task { @MainActor in
+                    data[stock.symbol] = final
+                    group.leave()
+                }
+            }
         }
-        sparklineData = data
+
+        group.notify(queue: .main) { [weak self] in
+            self?.sparklineData = data
+        }
     }
 
     func sparklinePoints(for symbol: String) -> [StockPricePoint] {

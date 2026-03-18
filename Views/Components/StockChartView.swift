@@ -88,21 +88,47 @@ struct StockChartView: View {
             }
 
             HStack(alignment: .top, spacing: 6) {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(priceLabels.enumerated().reversed()), id: \.offset) { _, value in
+                // Price key: position labels evenly so the lowest label hits the bottom of the chart.
+                ZStack(alignment: .topLeading) {
+                    let pad: CGFloat = 2
+                    let interval = (Self.chartHeight - pad * 2) / CGFloat(Self.axisLabelCount - 1)
+                    ForEach(0..<Self.axisLabelCount, id: \.self) { i in
+                        // Top label is max, bottom label is min.
+                        let idx = max(0, min(priceLabels.count - 1, priceLabels.count - 1 - i))
+                        let value = priceLabels[idx]
                         Text(Self.formatPrice(value))
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
                             .foregroundStyle(AppTheme.textTertiary)
+                            .offset(y: pad + CGFloat(i) * interval)
                     }
-                    Spacer(minLength: 0)
                 }
-                .frame(width: Self.yAxisWidth, height: Self.chartHeight)
+                .frame(width: Self.yAxisWidth, height: Self.chartHeight, alignment: .topLeading)
+
+                Rectangle()
+                    .fill(AppTheme.border.opacity(0.9))
+                    .frame(width: 1)
 
                 VStack(spacing: 2) {
                     GeometryReader { geo in
                         let w = geo.size.width
                         let h = geo.size.height
+                        let pad: CGFloat = 2
+                        let drawW = max(0, w - pad * 2)
+                        let drawH = max(0, h - pad * 2)
+                        let last = pts.last
+
                         ZStack(alignment: .bottomLeading) {
+                            // Grid lines behind the chart line.
+                            ForEach(0..<Self.axisLabelCount, id: \.self) { i in
+                                let frac = CGFloat(i) / CGFloat(Self.axisLabelCount - 1) // 0=min -> bottom, 1=max -> top
+                                let y = (h - pad) - frac * drawH
+                                Path { p in
+                                    p.move(to: CGPoint(x: 0, y: y))
+                                    p.addLine(to: CGPoint(x: w, y: y))
+                                }
+                                .stroke(AppTheme.border.opacity(0.35), lineWidth: 1)
+                            }
+
                             if showGradient {
                                 chartFillPath(pts: pts, width: w, height: h, minP: minP, range: range, minT: minT, tRange: tRange)
                                     .fill(
@@ -115,6 +141,22 @@ struct StockChartView: View {
                             }
                             chartLinePath(pts: pts, width: w, height: h, minP: minP, range: range, minT: minT, tRange: tRange)
                                 .stroke(lineColor, lineWidth: 2)
+
+                            // Last-point marker.
+                            if let last {
+                                let t = last.timestamp.timeIntervalSince1970
+                                let x = pad + CGFloat((t - minT) / tRange) * drawW
+                                let y = h - pad - CGFloat((last.price - minP) / range) * drawH
+                                ZStack {
+                                    Circle()
+                                        .fill(AppTheme.background.opacity(0.95))
+                                        .frame(width: 8, height: 8)
+                                    Circle()
+                                        .stroke(lineColor, lineWidth: 2)
+                                        .frame(width: 10, height: 10)
+                                }
+                                .position(x: x, y: y)
+                            }
                         }
                     }
                     .frame(height: Self.chartHeight)
@@ -135,7 +177,9 @@ struct StockChartView: View {
         }
         .padding(AppTheme.cardPadding)
         .background(AppTheme.surfaceAlt)
+        .shadow(color: lineColor.opacity(0.16), radius: 16, x: 0, y: 10)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
+        .animation(.easeInOut(duration: 0.25), value: pts.count)
     }
 
     private var chartWithoutAxes: some View {
@@ -181,11 +225,17 @@ struct StockChartView: View {
         }
         .padding(AppTheme.cardPadding)
         .background(AppTheme.surfaceAlt)
+        .shadow(color: lineColor.opacity(0.16), radius: 16, x: 0, y: 10)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
+        .animation(.easeInOut(duration: 0.25), value: pts.count)
     }
 
     private static func priceLabels(min: Double, max: Double) -> [Double] {
-        guard max > min else { return [min, max] }
+        // When prices are flat (min == max), still return axisLabelCount labels
+        // so the y-axis renderer can't index out of range.
+        if max <= min {
+            return Array(repeating: min, count: axisLabelCount)
+        }
         var labels: [Double] = []
         for i in 0..<axisLabelCount {
             let fraction = Double(i) / Double(axisLabelCount - 1)

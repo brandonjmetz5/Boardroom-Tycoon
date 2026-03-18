@@ -10,16 +10,22 @@ import FirebaseFirestore
 
 /// Chart timeframe for price history.
 enum ChartTimeFrame: String, CaseIterable, Identifiable {
-    case oneMin = "1m"
-    case fiveMin = "5m"
-    case fifteenMin = "15m"
     case oneHour = "1H"
     case oneDay = "1D"
-    case all = "All"
+    case oneWeek = "1W"
+    case allTime = "All"
 
     var id: String { rawValue }
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .oneHour: return "1H"
+        case .oneDay: return "1D"
+        case .oneWeek: return "1W"
+        case .allTime: return "All Time"
+        default: return rawValue
+        }
+    }
 }
 
 final class StockService {
@@ -52,14 +58,13 @@ final class StockService {
             let stocks: [Stock] = documents.compactMap { document in
                 let data = document.data()
                 guard
-                    let id = data["id"] as? String,
                     let name = data["name"] as? String,
                     let symbol = data["symbol"] as? String,
                     let currentPrice = data["currentPrice"] as? Double,
                     let priceChange = data["priceChange"] as? Double
                 else { return nil }
                 return Stock(
-                    id: id,
+                    id: (data["id"] as? String) ?? document.documentID,
                     name: name,
                     symbol: symbol,
                     currentPrice: currentPrice,
@@ -75,8 +80,60 @@ final class StockService {
 
     /// Returns fake price history for a stock for the given timeframe.
     func fetchPriceHistory(for stock: Stock, timeFrame: ChartTimeFrame, completion: @escaping ([StockPricePoint]) -> Void) {
-        let points = Self.generateFakeHistory(symbol: stock.symbol, currentPrice: stock.currentPrice, timeFrame: timeFrame)
-        completion(points)
+        let historyRef = db
+            .collection("stockSymbols")
+            .document(stock.symbol)
+            .collection("history")
+
+        let start = startDate(for: timeFrame)
+        // Pull newest points first so the chart always ends at "now".
+        var query: Query = historyRef.order(by: "timestamp", descending: true)
+        if let start {
+            query = query.whereField("timestamp", isGreaterThanOrEqualTo: Timestamp(date: start))
+        }
+        query = query.limit(to: maxPoints(for: timeFrame))
+
+        query.getDocuments { snapshot, _ in
+            let docs = snapshot?.documents ?? []
+            let points: [StockPricePoint] = docs.compactMap { doc in
+                let data = doc.data()
+                guard let ts = data["timestamp"] as? Timestamp,
+                      let price = data["price"] as? Double else { return nil }
+                return StockPricePoint(
+                    id: (data["id"] as? String) ?? doc.documentID,
+                    timestamp: ts.dateValue(),
+                    price: price
+                )
+            }
+            let sorted = points.sorted { $0.timestamp < $1.timestamp }
+            if sorted.isEmpty {
+                // Fallback to fake data if history isn’t seeded yet.
+                completion(Self.generateFakeHistory(symbol: stock.symbol, currentPrice: stock.currentPrice, timeFrame: timeFrame))
+            } else {
+                completion(Self.downsample(sorted, cap: Self.displayPointCap(for: timeFrame)))
+            }
+        }
+    }
+
+    func fetchRecentHistoryPoints(symbol: String, count: Int, completion: @escaping ([StockPricePoint]) -> Void) {
+        let historyRef = db.collection("stockSymbols").document(symbol).collection("history")
+        historyRef
+            .order(by: "timestamp", descending: true)
+            .limit(to: count)
+            .getDocuments { snapshot, _ in
+                let docs = snapshot?.documents ?? []
+                let points: [StockPricePoint] = docs.compactMap { doc in
+                    let data = doc.data()
+                    guard let ts = data["timestamp"] as? Timestamp,
+                          let price = data["price"] as? Double else { return nil }
+                    return StockPricePoint(
+                        id: (data["id"] as? String) ?? doc.documentID,
+                        timestamp: ts.dateValue(),
+                        price: price
+                    )
+                }
+                completion(points.sorted { $0.timestamp < $1.timestamp })
+            }
     }
 
     /// Generates fake price history for a timeframe (for testing).
@@ -117,12 +174,70 @@ extension ChartTimeFrame {
     /// (number of points, seconds between points)
     fileprivate func pointCountAndInterval() -> (Int, TimeInterval) {
         switch self {
-        case .oneMin: return (60, 1)
-        case .fiveMin: return (60, 5)
-        case .fifteenMin: return (60, 15)
         case .oneHour: return (60, 60)
-        case .oneDay: return (24, 3600)
-        case .all: return (31, 24 * 3600)
+        case .oneDay: return (48, 30 * 60)       // every 30 min
+        case .oneWeek: return (28, 6 * 3600)     // every 6 hours
+        case .allTime: return (90, 8 * 3600)     // every ~8 hours
+        }
+    }
+}
+
+extension StockService {
+    private func startDate(for tf: ChartTimeFrame) -> Date? {
+        let now = Date()
+        switch tf {
+        case .oneHour:
+            return now.addingTimeInterval(-60 * 60)
+        case .oneDay:
+            return now.addingTimeInterval(-24 * 60 * 60)
+        case .oneWeek:
+            return now.addingTimeInterval(-7 * 24 * 60 * 60)
+        case .allTime:
+            return nil
+        }
+    }
+
+    private func maxPoints(for tf: ChartTimeFrame) -> Int {
+        // Max docs to fetch from Firestore for the chosen timeframe.
+        // We downsample again before rendering so the chart stays smooth.
+        switch tf {
+        case .oneHour:
+            return 180 // ~3 hours worth if tick cadence differs
+        case .oneDay:
+            return 2000
+        case .oneWeek:
+            return 12000 // up to a full week of minute ticks
+        case .allTime:
+            return 2000
+        }
+    }
+}
+
+private extension StockService {
+    static func downsample(_ points: [StockPricePoint], cap: Int) -> [StockPricePoint] {
+        guard points.count > cap, cap > 1 else { return points }
+        let step = Double(points.count - 1) / Double(cap - 1)
+        var out: [StockPricePoint] = []
+        out.reserveCapacity(cap)
+
+        var lastIdx: Int? = nil
+        for i in 0..<cap {
+            let idx = min(points.count - 1, max(0, Int(Double(i) * step)))
+            if lastIdx != idx {
+                out.append(points[idx])
+                lastIdx = idx
+            }
+        }
+
+        return out.count >= 2 ? out : points
+    }
+
+    static func displayPointCap(for tf: ChartTimeFrame) -> Int {
+        switch tf {
+        case .oneHour: return 110
+        case .oneDay: return 240
+        case .oneWeek: return 320
+        case .allTime: return 520
         }
     }
 }
