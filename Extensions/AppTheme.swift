@@ -10,20 +10,20 @@ import SwiftUI
 enum AppTheme {
     // MARK: - Backgrounds
 
-    /// Main app background (deep navy).
-    static let background = Color(red: 0.06, green: 0.08, blue: 0.12)
+    /// Main app background (neutral charcoal).
+    static let background = Color(red: 0.16, green: 0.16, blue: 0.20)
 
     /// Card and elevated surface.
-    static let surface = Color(red: 0.10, green: 0.12, blue: 0.18)
+    static let surface = Color(red: 0.16, green: 0.16, blue: 0.20)
 
     /// Slightly lighter surface (pills, secondary cards).
-    static let surfaceAlt = Color(red: 0.12, green: 0.14, blue: 0.20)
+    static let surfaceAlt = Color(red: 0.22, green: 0.22, blue: 0.28)
 
     /// Tab bar / bottom bar background.
-    static let tabBarBackground = Color(red: 0.08, green: 0.10, blue: 0.15)
+    static let tabBarBackground = Color(red: 0.06, green: 0.06, blue: 0.08)
 
     /// Subtle border.
-    static let border = Color.white.opacity(0.06)
+    static let border = Color.white.opacity(0.20)
 
     /// Backward compatibility.
     static let cardBackground = surface
@@ -40,8 +40,9 @@ enum AppTheme {
 
     // MARK: - Accent (gold / executive)
 
-    static let accent = Color(red: 0.85, green: 0.68, blue: 0.32)
-    static let accentDim = Color(red: 0.85, green: 0.68, blue: 0.32).opacity(0.7)
+    // Executive red tuned for dark backgrounds.
+    static let accent = Color(red: 0.92, green: 0.30, blue: 0.30)
+    static let accentDim = Color(red: 0.92, green: 0.30, blue: 0.30).opacity(0.72)
 
     // MARK: - Status chips
 
@@ -52,7 +53,7 @@ enum AppTheme {
     static let chipAvailable = Color(red: 0.38, green: 0.52, blue: 0.82)
     static let chipProspecting = Color(red: 0.32, green: 0.55, blue: 0.82)
     static let chipPositive = Color(red: 0.28, green: 0.65, blue: 0.48)
-    static let chipNegative = Color(red: 0.88, green: 0.36, blue: 0.36)
+    static let chipNegative = Color(red: 0.92, green: 0.35, blue: 0.35)
 
     // MARK: - Layout
 

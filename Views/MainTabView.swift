@@ -15,7 +15,7 @@ struct MainTabView: View {
         case dashboard = "Dashboard"
         case operations = "Operations"
         case market = "Market"
-        case portfolio = "Portfolio"
+        case inventory = "Inventory"
         case profile = "Profile"
 
         var icon: String {
@@ -23,7 +23,7 @@ struct MainTabView: View {
             case .dashboard: return "square.grid.2x2.fill"
             case .operations: return "building.2.fill"
             case .market: return "cart.fill"
-            case .portfolio: return "chart.pie.fill"
+            case .inventory: return "shippingbox.fill"
             case .profile: return "person.fill"
             }
         }
@@ -50,10 +50,10 @@ struct MainTabView: View {
             .tag(Tab.market)
 
             NavigationStack {
-                PortfolioView(userID: userID)
+                InventoryView(userID: userID)
             }
-            .tabItem { tabLabel(.portfolio) }
-            .tag(Tab.portfolio)
+            .tabItem { tabLabel(.inventory) }
+            .tag(Tab.inventory)
 
             NavigationStack {
                 ProfileView(userID: userID)

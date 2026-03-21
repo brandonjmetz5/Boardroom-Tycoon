@@ -55,13 +55,6 @@ struct ResourceMarketView: View {
                         .foregroundStyle(AppTheme.textSecondary)
                 }
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(destination: InventoryView(userID: userID)) {
-                    Image(systemName: "shippingbox.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                }
-            }
         }
         .onAppear {
             viewModel.loadResourceListings()

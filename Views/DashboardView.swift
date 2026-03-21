@@ -2,7 +2,7 @@
 //  DashboardView.swift
 //  Boardroom Tycoon
 //
-//  Headquarters: command-center dashboard with key metrics and department access.
+//  Unified command-center dashboard with brighter integrated rails.
 //
 
 import SwiftUI
@@ -21,31 +21,36 @@ struct DashboardView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.background
-                .ignoresSafeArea()
+            AppTheme.background.ignoresSafeArea()
+            LinearGradient(
+                colors: [AppTheme.surface.opacity(0.12), Color.clear, AppTheme.surface.opacity(0.12)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
 
             if viewModel.isLoading {
-                VStack(spacing: 20) {
-                    ProgressView()
-                        .scaleEffect(1.2)
-                        .tint(AppTheme.accent)
-                    Text("Connecting to headquarters...")
+                VStack(spacing: 14) {
+                    ProgressView().scaleEffect(1.15).tint(AppTheme.accent)
+                    Text("Booting command center...")
                         .font(AppTheme.caption())
                         .foregroundStyle(AppTheme.textSecondary)
                 }
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        headerSection
-                        treasurySection
-                        operationsOverviewSection
-                        fieldOpsSection
-                        inventorySection
-                        departmentsSection
+                    VStack(alignment: .leading, spacing: 10) {
+                        commandHeaderPanel
+                        resourceStrip
+                        operationsPanel
+                        assetsPanel
+                        alertsPanel
+                        progressionPanel
+                        marketSnapshotPanel
+                        quickActionsPanel
                     }
                     .padding(.horizontal, AppTheme.horizontalPadding)
-                    .padding(.top, 16)
-                    .padding(.bottom, 32)
+                    .padding(.top, 12)
+                    .padding(.bottom, 28)
                 }
             }
         }
@@ -57,370 +62,385 @@ struct DashboardView: View {
                     .font(AppTheme.titleMedium())
                     .foregroundStyle(AppTheme.textPrimary)
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(destination: InventoryView(userID: userID)) {
-                    Image(systemName: "building.2")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(AppTheme.textPrimary)
+        }
+        .onAppear { viewModel.loadData() }
+    }
+
+    private var commandHeaderPanel: some View {
+        CommandRail(title: "Company Command", systemImage: "building.2.crop.circle.fill", tone: .priority) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Boardroom Tycoon")
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text("Executive operations console")
+                            .font(AppTheme.caption())
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    Spacer()
+                    statusBadge
                 }
-            }
-        }
-        .onAppear {
-            viewModel.loadData()
-        }
-    }
-
-    // MARK: - HQ header
-
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "building.2.fill")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(AppTheme.accent)
-                Text("Command Center")
-                    .font(AppTheme.titleLarge())
-                    .foregroundStyle(AppTheme.textPrimary)
-            }
-            Text("Overview of your operations and resources.")
-                .font(AppTheme.caption())
-                .foregroundStyle(AppTheme.textTertiary)
-        }
-        .padding(.bottom, AppTheme.sectionSpacing)
-    }
-
-    // MARK: - Treasury (cash, level, slots)
-
-    private var treasurySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("Treasury", icon: "dollarsign.circle.fill")
-
-            if let profile = viewModel.profile {
-                HStack(spacing: 0) {
-                    treasuryStat(value: String(format: "$%.0f", profile.cash), label: "Liquid assets")
-                    Rectangle()
-                        .fill(AppTheme.border)
-                        .frame(width: 1)
-                        .frame(maxHeight: .infinity)
-                        .padding(.vertical, 8)
-                    treasuryStat(value: "\(profile.level)", label: "Executive level")
-                    Rectangle()
-                        .fill(AppTheme.border)
-                        .frame(width: 1)
-                        .frame(maxHeight: .infinity)
-                        .padding(.vertical, 8)
-                    treasuryStat(value: "\(viewModel.usedSlotsCount)/\(viewModel.totalSlotsCount)", label: "Slots used")
-                }
-                .padding(AppTheme.cardPadding)
-                .frame(maxWidth: .infinity)
-                .appCard()
-            } else if viewModel.profileErrorMessage != nil {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(AppTheme.textError)
-                    Text("Unable to load treasury data")
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.textError)
-                }
-                .padding(AppTheme.cardPadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .appCard()
-            } else {
-                Text("—")
-                    .font(AppTheme.body())
-                    .foregroundStyle(AppTheme.textMuted)
-                    .padding(AppTheme.cardPadding)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .appCard()
-            }
-        }
-        .padding(.bottom, AppTheme.sectionSpacing)
-    }
-
-    private func treasuryStat(value: String, label: String) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(AppTheme.monoNumber())
-                .foregroundStyle(AppTheme.accent)
-            Text(label)
-                .font(AppTheme.captionMedium())
-                .foregroundStyle(AppTheme.textTertiary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    // MARK: - Operations overview (producing, ready, listed)
-
-    private var operationsOverviewSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("Operations", icon: "gearshape.2.fill")
-
-            HStack(spacing: 12) {
-                opsPill(value: "\(viewModel.producingCount)", label: "Producing", color: AppTheme.chipProducing)
-                opsPill(value: "\(viewModel.readyCount)", label: "Ready", color: AppTheme.chipReady)
-                opsPill(value: "\(viewModel.listedCount)", label: "Listed", color: AppTheme.chipListed)
-            }
-            .padding(AppTheme.cardPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .appCard()
-
-            if viewModel.usedSlotsCount == 0 && (viewModel.profile?.buildingSlotCount ?? 0) > 0 {
-                Button {
-                    selectedTab = .operations
-                } label: {
-                    HStack {
-                        Text("Deploy assets in Operations")
-                            .font(AppTheme.captionMedium())
-                            .foregroundStyle(AppTheme.accent)
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppTheme.accent)
+                if let p = viewModel.profile {
+                    HStack(spacing: 10) {
+                        StatTile(label: "LEVEL", value: "\(p.level)", emphasis: .normal)
+                        StatTile(label: "XP", value: "\(p.xp)", emphasis: .normal)
+                        StatTile(label: "R&D", value: "\(p.researchPoints)", emphasis: .positive)
                     }
                 }
-                .padding(.top, 4)
-            } else if viewModel.readyCount > 0 {
-                Button {
-                    selectedTab = .operations
-                } label: {
-                    HStack {
-                        Text("\(viewModel.readyCount) ready to collect")
-                            .font(AppTheme.captionMedium())
-                            .foregroundStyle(AppTheme.chipReady)
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppTheme.chipReady)
-                    }
-                }
-                .padding(.top, 4)
             }
         }
-        .padding(.bottom, AppTheme.sectionSpacing)
     }
 
-    private func opsPill(value: String, label: String, color: Color) -> some View {
+    private var statusBadge: some View {
+        let count = dashboardAlerts.count
+        let label = count > 0 ? "\(count) ACTION ITEM\(count == 1 ? "" : "S")" : "SYSTEM STABLE"
+        let color = count > 0 ? AppTheme.chipNegative : AppTheme.chipReady
+        return Text(label)
+            .font(.system(size: 11, weight: .bold, design: .monospaced))
+            .foregroundStyle(color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 8).fill(color.opacity(0.14)))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(color.opacity(0.45), lineWidth: 1))
+    }
+
+    private var resourceStrip: some View {
+        CommandRail(title: "Treasury Strip", systemImage: "banknote.fill") {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    stripTile("Cash", String(format: "$%.0f", viewModel.profile?.cash ?? 0), AppTheme.accent)
+                    stripTile("Inventory", String(format: "$%.0f", viewModel.totalInventoryValue), AppTheme.chipAvailable)
+                    stripTile("Slots", "\(viewModel.usedSlotsCount)/\(viewModel.totalSlotsCount)", AppTheme.chipProspecting)
+                    stripTile("Producing", "\(viewModel.producingCount)", AppTheme.chipProducing)
+                    stripTile("Ready", "\(viewModel.readyCount)", AppTheme.chipReady)
+                    stripTile("Listed", "\(viewModel.listedCount)", AppTheme.chipListed)
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private func stripTile(_ title: String, _ value: String, _ color: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(AppTheme.textTertiary)
             Text(value)
                 .font(AppTheme.monoNumber())
                 .foregroundStyle(color)
-            Text(label)
-                .font(AppTheme.captionMedium())
-                .foregroundStyle(AppTheme.textTertiary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(RoundedRectangle(cornerRadius: 9).fill(AppTheme.surfaceAlt.opacity(0.55)))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(AppTheme.border.opacity(0.95), lineWidth: 1))
     }
 
-    // MARK: - Field ops (prospecting)
+    private var operationsPanel: some View {
+        CommandRail(title: "Operations Matrix", systemImage: "gearshape.2.fill") {
+            VStack(spacing: 10) {
+                HStack(spacing: 10) {
+                    StatTile(label: "PRODUCING", value: "\(viewModel.producingCount)", emphasis: .normal)
+                    StatTile(label: "READY", value: "\(viewModel.readyCount)", emphasis: .positive)
+                    StatTile(label: "LISTED", value: "\(viewModel.listedCount)", emphasis: .warning)
+                }
+                HStack(spacing: 10) {
+                    StatTile(label: "BUILDINGS", value: "\(viewModel.buildings.count)", emphasis: .normal)
+                    StatTile(label: "CAPACITY", value: "\(viewModel.usedSlotsCount)/\(viewModel.totalSlotsCount)", emphasis: .normal)
+                }
+                if let profileError = viewModel.profileErrorMessage {
+                    AlertRow(icon: "exclamationmark.triangle.fill", title: "Profile load issue", detail: profileError, tone: .danger)
+                }
+            }
+        }
+    }
 
-    private var fieldOpsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("Field operations", icon: "magnifyingglass")
+    private var assetsPanel: some View {
+        CommandRail(title: "Asset Command", systemImage: "shippingbox.fill") {
+            let grouped = Dictionary(grouping: viewModel.buildings, by: { $0.type.rawValue })
+            let rows = grouped.keys.sorted().prefix(4)
+            if rows.isEmpty {
+                AlertRow(icon: "cube.box", title: "No assets deployed", detail: "Acquire or prospect new buildings from Operations.", tone: .neutral)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(Array(rows), id: \.self) { key in
+                        HStack {
+                            Text(key.uppercased())
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundStyle(AppTheme.textSecondary)
+                            Spacer()
+                            Text("\(grouped[key]?.count ?? 0)")
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                        .padding(.vertical, 6)
+                        if key != rows.last { Divider().overlay(AppTheme.border) }
+                    }
+                }
+            }
+        }
+    }
 
-            if viewModel.isLoadingProspecting {
-                HStack(spacing: 12) {
-                    ProgressView()
-                        .scaleEffect(0.9)
-                        .tint(AppTheme.accent)
-                    Text("Checking field reports...")
+    private var alertsPanel: some View {
+        CommandRail(title: "Command Alerts", systemImage: "bell.badge.fill", tone: .priority) {
+            if dashboardAlerts.isEmpty {
+                AlertRow(icon: "checkmark.seal.fill", title: "No critical issues", detail: "Operations are running within normal parameters.", tone: .success)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(dashboardAlerts) { alert in
+                        AlertRow(icon: alert.icon, title: alert.title, detail: alert.detail, tone: alert.tone)
+                    }
+                }
+            }
+        }
+    }
+
+    private var progressionPanel: some View {
+        CommandRail(title: "Expansion Objectives", systemImage: "flag.fill") {
+            if let p = viewModel.profile {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Level \(p.level) progression")
+                            .font(AppTheme.bodyMedium())
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Spacer()
+                        Text("\(p.xp) XP")
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                    objectiveRow("Increase slot utilization efficiency", complete: viewModel.usedSlotsCount >= max(1, viewModel.totalSlotsCount - 1))
+                    objectiveRow("Keep production lines active", complete: viewModel.producingCount > 0)
+                    objectiveRow("Maintain liquidity buffer > $10k", complete: p.cash >= 10_000)
+                }
+            } else {
+                AlertRow(icon: "clock.arrow.circlepath", title: "Syncing profile", detail: "Progress objectives will populate after profile sync.", tone: .neutral)
+            }
+        }
+    }
+
+    private func objectiveRow(_ title: String, complete: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: complete ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(complete ? AppTheme.chipReady : AppTheme.textTertiary)
+            Text(title)
+                .font(AppTheme.caption())
+                .foregroundStyle(AppTheme.textSecondary)
+            Spacer()
+            Text(complete ? "DONE" : "PENDING")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(complete ? AppTheme.chipReady : AppTheme.textTertiary)
+        }
+    }
+
+    private var marketSnapshotPanel: some View {
+        CommandRail(title: "Market Situation", systemImage: "chart.xyaxis.line") {
+            VStack(alignment: .leading, spacing: 8) {
+                metricRow("Assets listed", "\(viewModel.listedCount)", AppTheme.chipListed)
+                metricRow("Inventory liquidity", String(format: "$%.0f", viewModel.totalInventoryValue), AppTheme.chipAvailable)
+                if viewModel.isLoadingProspecting {
+                    Text("Prospecting feed syncing...")
+                        .font(AppTheme.caption())
+                        .foregroundStyle(AppTheme.textSecondary)
+                } else if let job = viewModel.activeProspectingJob {
+                    Text("Prospecting: \(viewModel.prospectingLabel(for: job.resourceType))")
+                        .font(AppTheme.caption())
+                        .foregroundStyle(AppTheme.textSecondary)
+                } else {
+                    Text("No active prospecting assignment.")
                         .font(AppTheme.caption())
                         .foregroundStyle(AppTheme.textSecondary)
                 }
-                .padding(AppTheme.cardPadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .appCard()
-            } else if let err = viewModel.prospectingErrorMessage {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(AppTheme.textError)
-                    Text(err)
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.textError)
-                }
-                .padding(AppTheme.cardPadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .appCard()
-            } else if let job = viewModel.activeProspectingJob {
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text(viewModel.prospectingLabel(for: job.resourceType))
-                                .font(AppTheme.bodyMedium())
-                                .foregroundStyle(AppTheme.textPrimary)
-                            Spacer()
-                            if job.isRevealed {
-                                statusBadge("Result ready", color: AppTheme.chipReady)
-                            } else if job.endsAt <= ctx.date {
-                                statusBadge("Ready to reveal", color: AppTheme.chipReady)
-                            } else {
-                                Text(viewModel.formattedTimeRemaining(until: job.endsAt, now: ctx.date))
-                                    .font(AppTheme.monoNumber())
-                                    .foregroundStyle(AppTheme.textSecondary)
-                            }
-                        }
-                        if !job.isRevealed && job.endsAt > ctx.date {
-                            Text("Prospecting in progress. Report available when timer completes.")
-                                .font(AppTheme.caption())
-                                .foregroundStyle(AppTheme.textTertiary)
-                        }
-                    }
-                    .padding(AppTheme.cardPadding)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .appCard()
-                }
+            }
+        }
+    }
+
+    private func metricRow(_ label: String, _ value: String, _ color: Color) -> some View {
+        HStack {
+            Text(label)
+                .font(AppTheme.caption())
+                .foregroundStyle(AppTheme.textTertiary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                .foregroundStyle(color)
+        }
+    }
+
+    private var quickActionsPanel: some View {
+        CommandRail(title: "Quick Actions", systemImage: "bolt.fill") {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                TabActionButton(title: "Operations", icon: "gearshape.2.fill", tint: AppTheme.chipProspecting) { selectedTab = .operations }
+                TabActionButton(title: "Market Hub", icon: "cart.fill", tint: AppTheme.accent) { selectedTab = .market }
+                TabActionButton(title: "Inventory", icon: "shippingbox.fill", tint: AppTheme.chipAvailable) { selectedTab = .inventory }
+                TabActionButton(title: "Profile", icon: "person.fill", tint: AppTheme.chipListed) { selectedTab = .profile }
+            }
+        }
+    }
+
+    private var dashboardAlerts: [DashboardAlert] {
+        var alerts: [DashboardAlert] = []
+        if viewModel.producingCount == 0 {
+            alerts.append(.init(icon: "pause.circle.fill", title: "Production idle", detail: "No active production cycles. Start output from Operations.", tone: .danger))
+        }
+        if viewModel.readyCount > 0 {
+            alerts.append(.init(icon: "checkmark.circle.fill", title: "Collection ready", detail: "\(viewModel.readyCount) building(s) are ready to collect.", tone: .success))
+        }
+        if let job = viewModel.activeProspectingJob {
+            if job.isRevealed {
+                alerts.append(.init(icon: "sparkles", title: "Prospecting result available", detail: "\(viewModel.prospectingLabel(for: job.resourceType)) report ready.", tone: .warning))
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("No active field assignment")
-                        .font(AppTheme.bodyMedium())
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text("Assign prospecting from an empty slot in Operations.")
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.textTertiary)
-                    Button {
-                        selectedTab = .operations
-                    } label: {
-                        Text("Go to Operations")
-                            .font(AppTheme.captionMedium())
-                            .foregroundStyle(AppTheme.accent)
-                    }
-                    .padding(.top, 4)
-                }
-                .padding(AppTheme.cardPadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .appCard()
+                alerts.append(.init(icon: "scope", title: "Prospecting active", detail: "\(viewModel.prospectingLabel(for: job.resourceType)) underway.", tone: .neutral))
             }
+        } else if !viewModel.isLoadingProspecting {
+            alerts.append(.init(icon: "scope", title: "No active prospecting", detail: "Assign a new prospecting job to discover expansion options.", tone: .neutral))
         }
-        .padding(.bottom, AppTheme.sectionSpacing)
+        return alerts.prefix(4).map { $0 }
+    }
+}
+
+private enum CommandRailTone {
+    case normal
+    case priority
+}
+
+private struct CommandRail<Content: View>: View {
+    let title: String
+    let systemImage: String
+    var tone: CommandRailTone
+    private let content: Content
+
+    init(title: String, systemImage: String, tone: CommandRailTone = .normal, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.systemImage = systemImage
+        self.tone = tone
+        self.content = content()
     }
 
-    private func statusBadge(_ title: String, color: Color) -> some View {
-        Text(title)
-            .font(AppTheme.captionMedium())
-            .foregroundStyle(color)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(color.opacity(0.2)))
-    }
-
-    // MARK: - Inventory
-
-    private var inventorySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("Inventory", icon: "shippingbox.fill")
-
-            if viewModel.inventoryItems.isEmpty {
-                Text("No items yet. Produce or acquire resources to see them here.")
-                    .font(AppTheme.caption())
-                    .foregroundStyle(AppTheme.textTertiary)
-                    .padding(AppTheme.cardPadding)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .appCard()
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(viewModel.inventoryItems) { inv in
-                        HStack(alignment: .center, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(inv.item.name)
-                                    .font(AppTheme.bodyMedium())
-                                    .foregroundStyle(AppTheme.textPrimary)
-                                Text(inv.item.category.rawValue)
-                                    .font(AppTheme.captionMedium())
-                                    .foregroundStyle(AppTheme.textTertiary)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text(viewModel.formattedQuantity(for: inv))
-                                    .font(AppTheme.monoNumber())
-                                    .foregroundStyle(AppTheme.accent)
-                                if let value = ItemValueCatalog.value(quantity: inv.quantity, itemId: inv.item.id) {
-                                    Text(String(format: "≈ $%.2f", value))
-                                        .font(AppTheme.captionMedium())
-                                        .foregroundStyle(AppTheme.textSecondary)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
-                        if inv.id != viewModel.inventoryItems.last?.id {
-                            Rectangle()
-                                .fill(AppTheme.border)
-                                .frame(height: 1)
-                        }
-                    }
-                    if viewModel.totalInventoryValue > 0 {
-                        Rectangle()
-                            .fill(AppTheme.border)
-                            .frame(height: 1)
-                        HStack {
-                            Text("Total value")
-                                .font(AppTheme.bodyMedium())
-                                .foregroundStyle(AppTheme.textSecondary)
-                            Spacer()
-                            Text(String(format: "$%.2f", viewModel.totalInventoryValue))
-                                .font(AppTheme.monoNumber())
-                                .foregroundStyle(AppTheme.accent)
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
-                    }
-                }
-                .padding(AppTheme.cardPadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .appCard()
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(tone == .priority ? AppTheme.accent : AppTheme.textSecondary)
+                Text(title.uppercased())
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Rectangle().fill(AppTheme.border).frame(height: 1)
             }
+            content
         }
-        .padding(.bottom, AppTheme.sectionSpacing)
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.surface.opacity(0.82)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(tone == .priority ? AppTheme.accent.opacity(0.32) : AppTheme.border.opacity(0.95), lineWidth: 1)
+        )
     }
+}
 
-    // MARK: - Departments
+private struct StatTile: View {
+    enum Emphasis { case normal, positive, warning }
+    let label: String
+    let value: String
+    var emphasis: Emphasis = .normal
 
-    private var departmentsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("Departments", icon: "square.grid.2x2.fill")
-
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12)
-            ], spacing: 12) {
-                departmentTile(.operations, title: "Operations", subtitle: "Buildings & production", icon: "building.2.fill")
-                departmentTile(.market, title: "Market", subtitle: "Buy & sell mines", icon: "cart.fill")
-                departmentTile(.portfolio, title: "Portfolio", subtitle: "Stocks", icon: "chart.pie.fill")
-                departmentTile(.profile, title: "Profile", subtitle: "Account & stats", icon: "person.fill")
-            }
+    private var color: Color {
+        switch emphasis {
+        case .normal: return AppTheme.accent
+        case .positive: return AppTheme.chipReady
+        case .warning: return AppTheme.chipProducing
         }
     }
 
-    private func sectionLabel(_ title: String, icon: String) -> some View {
-        HStack(spacing: 8) {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(AppTheme.textTertiary)
+            Text(value)
+                .font(.system(size: 17, weight: .bold, design: .monospaced))
+                .foregroundStyle(color)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.surfaceAlt.opacity(0.60)))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppTheme.border.opacity(0.95), lineWidth: 1))
+    }
+}
+
+private struct AlertRow: View {
+    enum Tone { case neutral, success, warning, danger }
+    let icon: String
+    let title: String
+    let detail: String
+    let tone: Tone
+
+    private var color: Color {
+        switch tone {
+        case .neutral: return AppTheme.textSecondary
+        case .success: return AppTheme.chipReady
+        case .warning: return AppTheme.chipProducing
+        case .danger: return AppTheme.chipNegative
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppTheme.accent)
-            Text(title)
-                .font(AppTheme.titleSmall())
-                .foregroundStyle(AppTheme.textPrimary)
-        }
-        .padding(.bottom, 8)
-    }
-
-    private func departmentTile(_ tab: MainTabView.Tab, title: String, subtitle: String, icon: String) -> some View {
-        Button {
-            selectedTab = tab
-        } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(AppTheme.accent)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(color)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(AppTheme.bodyMedium())
+                    .font(AppTheme.captionMedium())
                     .foregroundStyle(AppTheme.textPrimary)
-                Text(subtitle)
+                Text(detail)
                     .font(AppTheme.caption())
-                    .foregroundStyle(AppTheme.textTertiary)
+                    .foregroundStyle(AppTheme.textSecondary)
             }
-            .padding(AppTheme.cardPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .appCard()
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.surfaceAlt.opacity(0.50)))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(color.opacity(0.22), lineWidth: 1))
+    }
+}
+
+private struct TabActionButton: View {
+    let title: String
+    let icon: String
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .bold))
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .foregroundStyle(AppTheme.textPrimary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.surfaceAlt.opacity(0.58)))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(tint.opacity(0.45), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
+}
+
+private struct DashboardAlert: Identifiable {
+    let id = UUID()
+    let icon: String
+    let title: String
+    let detail: String
+    let tone: AlertRow.Tone
 }
 
 #Preview {

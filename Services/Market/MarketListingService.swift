@@ -194,6 +194,137 @@ final class MarketListingService {
         }
     }
 
+    // MARK: - Buy (partial listing fill)
+    //
+    // This is used by "Buy missing" UX so we don't have to buy the whole listing.
+    // Implementation strategy:
+    // - Buy `quantityToBuy` from the listing.
+    // - Delete the original listing (so your stock signal triggers count it).
+    // - If quantity remains, create a replacement listing with the remaining quantity.
+    func buyPartialFromListing(
+        for buyerUserID: String,
+        listing: MarketListing,
+        quantityToBuy: Double,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        guard quantityToBuy > 0 else {
+            completion(.failure(NSError(domain: "MarketListingService", code: 7014, userInfo: [NSLocalizedDescriptionKey: "Quantity must be positive."])))
+            return
+        }
+
+        let listingRef = listingsRef.document(listing.id)
+        let feePercent = MarketCatalog.buyOrderFeePercent
+
+        db.runTransaction({ [weak self] transaction, errorPointer in
+            guard let self else { return nil }
+            do {
+                let listSnap = try transaction.getDocument(listingRef)
+                guard let listData = listSnap.data() else {
+                    errorPointer?.pointee = NSError(domain: "MarketListingService", code: 7011, userInfo: [NSLocalizedDescriptionKey: "Listing not found."])
+                    return nil
+                }
+
+                let available = listData["quantity"] as? Double ?? 0
+                if available < quantityToBuy {
+                    errorPointer?.pointee = NSError(domain: "MarketListingService", code: 7015, userInfo: [NSLocalizedDescriptionKey: "Listing quantity decreased; try again."])
+                    return nil
+                }
+
+                let pricePerUnit = listData["pricePerUnit"] as? Double ?? 0
+                if pricePerUnit <= 0 {
+                    errorPointer?.pointee = NSError(domain: "MarketListingService", code: 7016, userInfo: [NSLocalizedDescriptionKey: "Invalid listing price."])
+                    return nil
+                }
+
+                let total = quantityToBuy * pricePerUnit
+                let sellerUserID = listData["sellerUserID"] as? String ?? ""
+                let resourceID = listData["resourceID"] as? String ?? ""
+                let resourceName = listData["resourceName"] as? String ?? ""
+                let resourceCategory = listData["resourceCategory"] as? String ?? ""
+                let quality = (listData["quality"] as? Int) ?? 1
+                let isFractional = listData["isFractional"] as? Bool ?? false
+                let inventoryDocID = quality > 1 ? "\(resourceID)-q\(quality)" : resourceID
+
+                let buyerProfileRef = self.db.collection("playerProfiles").document(buyerUserID)
+                let sellerProfileRef = self.db.collection("playerProfiles").document(sellerUserID)
+                let buyerInvRef = buyerProfileRef.collection("inventory").document(inventoryDocID)
+
+                let buyerProfileSnap = try transaction.getDocument(buyerProfileRef)
+                let sellerProfileSnap = try transaction.getDocument(sellerProfileRef)
+                let buyerInvSnap = try transaction.getDocument(buyerInvRef)
+
+                let buyerData = buyerProfileSnap.data() ?? [:]
+                let sellerData = sellerProfileSnap.data() ?? [:]
+                let buyerCash = buyerData["cash"] as? Double ?? 0
+
+                if buyerCash < total {
+                    errorPointer?.pointee = NSError(
+                        domain: "MarketListingService",
+                        code: 7013,
+                        userInfo: [NSLocalizedDescriptionKey: "Not enough cash. Need \(String(format: "$%.2f", total)), have \(String(format: "$%.2f", buyerCash))."]
+                    )
+                    return nil
+                }
+
+                let fee = total * (feePercent / 100)
+                let netToSeller = total - fee
+
+                // Buyer inventory
+                let buyerInvData = buyerInvSnap.data()
+                let buyerQty = (buyerInvData?["quantity"] as? Double) ?? 0
+                let newBuyerQty = buyerQty + quantityToBuy
+
+                let buyerDoc: [String: Any] = (buyerInvData ?? [
+                    "id": inventoryDocID,
+                    "name": resourceName,
+                    "category": resourceCategory,
+                    "isFractional": isFractional
+                ]).merging(["quantity": newBuyerQty]) { _, new in new }
+
+                transaction.setData(buyerDoc, forDocument: buyerInvRef)
+                transaction.updateData(["cash": buyerCash - total], forDocument: buyerProfileRef)
+                let sellerCash = sellerData["cash"] as? Double ?? 0
+                transaction.updateData(["cash": sellerCash + netToSeller], forDocument: sellerProfileRef)
+
+                // Listing handling: ensure deleted listing reflects the purchased quantity.
+                transaction.updateData(["quantity": quantityToBuy], forDocument: listingRef)
+
+                let remaining = available - quantityToBuy
+                if remaining > 0.0000001 {
+                    let newRef = self.listingsRef.document()
+                    let createdAt = (listData["createdAt"] as? Timestamp) ?? Timestamp(date: Date())
+                    let newListingData: [String: Any] = [
+                        "id": newRef.documentID,
+                        "sellerUserID": sellerUserID,
+                        "sellerName": listData["sellerName"] as Any,
+                        "resourceID": resourceID,
+                        "resourceName": resourceName,
+                        "resourceCategory": resourceCategory,
+                        "quality": max(1, quality),
+                        "quantity": remaining,
+                        "pricePerUnit": pricePerUnit,
+                        "isFractional": isFractional,
+                        "createdAt": createdAt
+                    ]
+                    transaction.setData(newListingData, forDocument: newRef)
+                }
+
+                // Mark as deleted (stock signal triggers count this deletion).
+                transaction.deleteDocument(listingRef)
+                return nil
+            } catch let e as NSError {
+                errorPointer?.pointee = e
+                return nil
+            }
+        }) { _, error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
+
     // MARK: - Cancel (return quantity to seller, delete listing)
 
     func cancelListing(listingID: String, sellerUserID: String, completion: @escaping (Result<Void, Error>) -> Void) {

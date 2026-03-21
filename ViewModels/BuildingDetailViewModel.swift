@@ -32,6 +32,8 @@ final class BuildingDetailViewModel: ObservableObject {
 
     @Published var showListingSheet = false
     @Published var buyNowPriceText = ""
+    @Published private(set) var isBuyingMissing = false
+    @Published var buyMissingErrorMessage: String?
 
     private let productionService = ProductionService()
     private let buildingService = BuildingService()
@@ -39,6 +41,7 @@ final class BuildingDetailViewModel: ObservableObject {
     private let recipeService = RecipeService()
     private let inventoryService = InventoryService()
     private let resourceQualityService = ResourceQualityService()
+    private let marketListingService = MarketListingService()
 
     var onDismiss: (() -> Void)?
 
@@ -353,17 +356,20 @@ final class BuildingDetailViewModel: ObservableObject {
         }
         guard let r = selectedRecipeForBuilding ?? recipe else { return false }
         let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)
+        let targetQ = max(1, min(maxOutputQuality, selectedOutputQuality))
         for input in r.inputItems {
             let need = input.item.isFractional
                 ? BuildingLevelCatalog.scaleQuantityFractional(input.quantity, throughputMultiplier: mult)
                 : BuildingLevelCatalog.scaleQuantity(input.quantity, throughputMultiplier: mult)
-            if inventoryQuantity(for: input.item.id) < need { return false }
+            let requiredDocId = targetQ > 1 ? "\(input.item.id)-q\(targetQ)" : input.item.id
+            if inventoryQuantity(for: requiredDocId) < need { return false }
         }
         return true
     }
 
     func inventoryQuantity(for itemId: String) -> Double {
-        inventoryItems.first(where: { $0.item.id == itemId })?.quantity ?? 0
+        // `itemId` may be either the inventory documentID (with "-qX" suffix) or the stored `item.id`.
+        inventoryItems.first(where: { $0.id == itemId || $0.item.id == itemId })?.quantity ?? 0
     }
 
     /// Scaled input items for display (name, itemId, needed quantity).
@@ -377,11 +383,240 @@ final class BuildingDetailViewModel: ObservableObject {
         }
         guard let r = selectedRecipeForBuilding ?? recipe else { return [] }
         let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)
+        let targetQ = max(1, min(maxOutputQuality, selectedOutputQuality))
         return r.inputItems.map { ing in
+            let requiredDocId = targetQ > 1 ? "\(ing.item.id)-q\(targetQ)" : ing.item.id
             let qty = ing.item.isFractional
                 ? BuildingLevelCatalog.scaleQuantityFractional(ing.quantity, throughputMultiplier: mult)
                 : BuildingLevelCatalog.scaleQuantity(ing.quantity, throughputMultiplier: mult)
-            return (ing.item.name, ing.item.id, qty)
+            return (ing.item.name, requiredDocId, qty)
+        }
+    }
+
+    struct ScaledInputLine: Identifiable {
+        let id: String
+        let name: String
+        let baseItemId: String
+        let requiredDocId: String
+        let quality: Int
+        let neededQty: Double
+        let haveQty: Double
+        let missingQty: Double
+    }
+
+    /// Scaled input lines for an arbitrary recipe at the current building level and selectedOutputQuality.
+    func scaledInputs(for recipe: Recipe) -> [ScaledInputLine] {
+        let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)
+        let targetQ = max(1, min(maxOutputQuality, selectedOutputQuality))
+
+        return recipe.inputItems.map { ing in
+            let needed = ing.item.isFractional
+                ? BuildingLevelCatalog.scaleQuantityFractional(ing.quantity, throughputMultiplier: mult)
+                : BuildingLevelCatalog.scaleQuantity(ing.quantity, throughputMultiplier: mult)
+
+            let requiredDocId = targetQ > 1 ? "\(ing.item.id)-q\(targetQ)" : ing.item.id
+            let have = inventoryQuantity(for: requiredDocId)
+            let missing = max(0, needed - have)
+
+            return ScaledInputLine(
+                id: "\(ing.item.id)-q\(targetQ)",
+                name: ing.item.name,
+                baseItemId: ing.item.id,
+                requiredDocId: requiredDocId,
+                quality: targetQ,
+                neededQty: needed,
+                haveQty: have,
+                missingQty: missing
+            )
+        }
+    }
+
+    /// Scaled first output (for UI). First output only.
+    func scaledOutput(for recipe: Recipe) -> (name: String, qty: Double)? {
+        guard let out = recipe.outputItems.first else { return nil }
+        let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)
+        let targetQ = max(1, min(maxOutputQuality, selectedOutputQuality))
+
+        let qty = out.item.isFractional
+            ? BuildingLevelCatalog.scaleQuantityFractional(out.quantity, throughputMultiplier: mult)
+            : BuildingLevelCatalog.scaleQuantity(out.quantity, throughputMultiplier: mult)
+
+        // Keep icon lookup stable by returning the raw item name (resourceAssetName expects exact keywords).
+        _ = targetQ // quality is shown by the UI separately.
+        return (out.item.name, qty)
+    }
+
+    @MainActor
+    private func loadInventoryOnly() {
+        inventoryService.fetchInventory(for: userID) { [weak self] result in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                if case .success(let items) = result {
+                    self.inventoryItems = items
+                }
+            }
+        }
+    }
+
+    // MARK: - "Buy missing" UX
+
+    func buyMissing(for recipe: Recipe) {
+        guard !isBuyingMissing, (currentBuilding.isListedOnMarket ?? false) == false, currentBuilding.isProducing != true else { return }
+
+        let targetQ = max(1, min(maxOutputQuality, selectedOutputQuality))
+        let missingInputs = scaledInputs(for: recipe).filter { $0.missingQty > 0.0000001 }
+        guard !missingInputs.isEmpty else { return }
+
+        isBuyingMissing = true
+        buyMissingErrorMessage = nil
+
+        marketListingService.fetchAllListings { [weak self] result in
+            guard let self else { return }
+            Task { @MainActor in
+                switch result {
+                case .failure(let error):
+                    self.isBuyingMissing = false
+                    self.buyMissingErrorMessage = error.localizedDescription
+                case .success(let listings):
+                    var tasks: [(listing: MarketListing, qty: Double)] = []
+
+                    for input in missingInputs {
+                        let candidates = listings
+                            .filter { $0.item.id == input.baseItemId && $0.quality == input.quality }
+                            .sorted { $0.pricePerUnit < $1.pricePerUnit }
+
+                        var remaining = input.missingQty
+                        for l in candidates {
+                            guard remaining > 0.0000001 else { break }
+                            let buyQty = min(l.quantity, remaining)
+                            if buyQty > 0 {
+                                tasks.append((listing: l, qty: buyQty))
+                                remaining -= buyQty
+                            }
+                        }
+
+                        if remaining > 0.0000001 {
+                            self.isBuyingMissing = false
+                            self.buyMissingErrorMessage = "Not enough market supply to buy missing \(input.name) (Q\(targetQ))."
+                            return
+                        }
+                    }
+
+                    var currentIndex = 0
+
+                    @MainActor
+                    func step() {
+                        guard tasks.indices.contains(currentIndex) else {
+                            self.isBuyingMissing = false
+                            self.buyMissingErrorMessage = nil
+                            self.loadInventoryOnly()
+                            return
+                        }
+
+                        let task = tasks[currentIndex]
+                        self.marketListingService.buyPartialFromListing(
+                            for: self.userID,
+                            listing: task.listing,
+                            quantityToBuy: task.qty
+                        ) { [weak self] buyResult in
+                            guard let self else { return }
+                            Task { @MainActor in
+                                switch buyResult {
+                                case .failure(let error):
+                                    self.isBuyingMissing = false
+                                    self.buyMissingErrorMessage = error.localizedDescription
+                                case .success:
+                                    currentIndex += 1
+                                    step()
+                                }
+                            }
+                        }
+                    }
+
+                    step()
+                }
+            }
+        }
+    }
+
+    func buyMissingForExtractorFuel() {
+        guard !isBuyingMissing, (currentBuilding.isListedOnMarket ?? false) == false, currentBuilding.isProducing != true else { return }
+
+        let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)
+        let fuelNeed = BuildingLevelCatalog.scaleQuantity(ProductionService.baseFuelPerExtractorCycle, throughputMultiplier: mult)
+        let targetQ = max(1, min(maxOutputQuality, selectedOutputQuality))
+
+        let fuelDocID = ProductionService.fuelDocID(quality: targetQ)
+        let have = inventoryQuantity(for: fuelDocID)
+        let missingQty = max(0, fuelNeed - have)
+        guard missingQty > 0.0000001 else { return }
+
+        isBuyingMissing = true
+        buyMissingErrorMessage = nil
+
+        marketListingService.fetchAllListings { [weak self] result in
+            guard let self else { return }
+            Task { @MainActor in
+                switch result {
+                case .failure(let error):
+                    self.isBuyingMissing = false
+                    self.buyMissingErrorMessage = error.localizedDescription
+                case .success(let listings):
+                    let candidates = listings
+                        .filter { $0.item.id == "fuel-cell" && $0.quality == targetQ }
+                        .sorted { $0.pricePerUnit < $1.pricePerUnit }
+
+                    var remaining = missingQty
+                    var tasks: [(listing: MarketListing, qty: Double)] = []
+                    for l in candidates {
+                        guard remaining > 0.0000001 else { break }
+                        let buyQty = min(l.quantity, remaining)
+                        if buyQty > 0 {
+                            tasks.append((listing: l, qty: buyQty))
+                            remaining -= buyQty
+                        }
+                    }
+
+                    if remaining > 0.0000001 {
+                        self.isBuyingMissing = false
+                        self.buyMissingErrorMessage = "Not enough market supply to buy missing Fuel Cells (Q\(targetQ))."
+                        return
+                    }
+
+                    var currentIndex = 0
+
+                    @MainActor
+                    func step() {
+                        guard tasks.indices.contains(currentIndex) else {
+                            self.isBuyingMissing = false
+                            self.buyMissingErrorMessage = nil
+                            self.loadInventoryOnly()
+                            return
+                        }
+
+                        let task = tasks[currentIndex]
+                        self.marketListingService.buyPartialFromListing(
+                            for: self.userID,
+                            listing: task.listing,
+                            quantityToBuy: task.qty
+                        ) { [weak self] buyResult in
+                            guard let self else { return }
+                            Task { @MainActor in
+                                switch buyResult {
+                                case .failure(let error):
+                                    self.isBuyingMissing = false
+                                    self.buyMissingErrorMessage = error.localizedDescription
+                                case .success:
+                                    currentIndex += 1
+                                    step()
+                                }
+                            }
+                        }
+                    }
+
+                    step()
+                }
+            }
         }
     }
 

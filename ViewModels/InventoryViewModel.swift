@@ -12,6 +12,21 @@ import Combine
 final class InventoryViewModel: ObservableObject {
     let userID: String
 
+    struct QualityGroup: Identifiable {
+        let id: String
+        let quality: Int
+        let quantity: Double
+    }
+
+    struct ResourceGroup: Identifiable {
+        let id: String
+        let category: ItemCategory
+        let baseID: String
+        let item: Item
+        let totalQuantity: Double
+        let qualities: [QualityGroup]
+    }
+
     @Published private(set) var inventoryItems: [InventoryItem] = []
     @Published private(set) var isLoading = true
     @Published private(set) var errorMessage: String?
@@ -52,6 +67,120 @@ final class InventoryViewModel: ObservableObject {
         } else {
             return String(Int(inventoryItem.quantity))
         }
+    }
+
+    func formattedTotalQuantity() -> String {
+        // Inventory quantities can mix fractional + whole items; show a friendly overall number.
+        // If *any* fractional exists, show decimals; otherwise show integers.
+        let hasFractional = inventoryItems.contains(where: { $0.item.isFractional })
+        return formattedTotalQuantity(value: totalInventoryQuantity, isFractional: hasFractional)
+    }
+
+    func formattedTotalQuantity(value: Double, isFractional: Bool) -> String {
+        if isFractional {
+            return String(format: "%.2f", value)
+        } else {
+            return String(Int(value))
+        }
+    }
+
+    // MARK: - Insight stats
+
+    var totalInventoryValue: Double {
+        inventoryItems.reduce(0) { acc, inv in
+            (ItemValueCatalog.value(quantity: inv.quantity, itemId: inv.item.id) ?? 0) + acc
+        }
+    }
+
+    var totalInventoryQuantity: Double {
+        inventoryItems.reduce(0) { $0 + $1.quantity }
+    }
+
+    var distinctResourceCount: Int {
+        let set = Set(inventoryItems.map { resourceBaseIDAndQuality(for: $0).baseID })
+        return set.count
+    }
+
+    var highestQualityAvailable: Int {
+        let qualities = inventoryItems.map { resourceBaseIDAndQuality(for: $0).quality }
+        return qualities.max() ?? 1
+    }
+
+    var totalQualityStacks: Int {
+        let set = Set(inventoryItems.map { item in
+            let parsed = resourceBaseIDAndQuality(for: item)
+            return "\(parsed.baseID)-q\(parsed.quality)"
+        })
+        return set.count
+    }
+
+    // MARK: - Grouping
+
+    var resourceGroupsByCategory: [(category: ItemCategory, resources: [ResourceGroup])] {
+        struct TempResource {
+            var item: Item
+            var totalQuantity: Double = 0
+            var qualities: [Int: Double] = [:] // quality -> total quantity
+        }
+
+        var dict: [String: TempResource] = [:] // key: "\(category.rawValue)|\(baseID)"
+        var meta: [String: (category: ItemCategory, baseID: String)] = [:]
+
+        for inv in inventoryItems {
+            let parsed = resourceBaseIDAndQuality(for: inv)
+            let category = inv.item.category
+            let baseID = parsed.baseID
+            let quality = parsed.quality
+            let key = "\(category.rawValue)|\(baseID)"
+
+            if dict[key] == nil {
+                meta[key] = (category: category, baseID: baseID)
+                dict[key] = TempResource(item: inv.item)
+            }
+
+            dict[key]!.totalQuantity += inv.quantity
+            dict[key]!.qualities[quality, default: 0] += inv.quantity
+        }
+
+        // Build category sections; hide empty categories.
+        var out: [(category: ItemCategory, resources: [ResourceGroup])] = []
+
+        for category in ItemCategory.allCases {
+            let resourcesForCat: [ResourceGroup] = dict.compactMap { entry in
+                let (cat, baseID) = meta[entry.key] ?? (category: category, baseID: "")
+                guard cat == category, !baseID.isEmpty else { return nil }
+                let temp = entry.value
+
+                let qualities = temp.qualities
+                    .map { q, qty in
+                        QualityGroup(id: "\(baseID)-q\(q)", quality: q, quantity: qty)
+                    }
+                    .sorted { $0.quality > $1.quality } // highest quality first
+
+                let id = "\(category.rawValue)|\(baseID)"
+                return ResourceGroup(
+                    id: id,
+                    category: category,
+                    baseID: baseID,
+                    item: temp.item,
+                    totalQuantity: temp.totalQuantity,
+                    qualities: qualities
+                )
+            }
+            .sorted { a, b in
+                // Prefer value-based sorting for better UX.
+                let av = ItemValueCatalog.value(quantity: a.totalQuantity, itemId: a.item.id) ?? 0
+                let bv = ItemValueCatalog.value(quantity: b.totalQuantity, itemId: b.item.id) ?? 0
+                if av != bv { return av > bv }
+                return a.item.name < b.item.name
+            }
+
+            if !resourcesForCat.isEmpty {
+                out.append((category: category, resources: resourcesForCat))
+            }
+        }
+
+        return out
     }
 
     /// Base resource ID and quality from inventory doc ID (e.g. "raw-gold-q2" -> base "raw-gold", quality 2).
