@@ -8,6 +8,20 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
+// MARK: - Public chat retention (paths match iOS ChatService: publicChats/{room}/messages)
+
+/** Document IDs under `publicChats` that receive scheduled pruning. */
+const PUBLIC_CHAT_ROOM_IDS = ["general", "sales", "help"];
+
+/** Messages with createdAt older than this many days are deleted by purgePublicChatMessages (aligns with 24h client window + daily job). */
+const PUBLIC_CHAT_RETENTION_DAYS = 1;
+
+/** Firestore batch limit is 500; stay under it. */
+const PUBLIC_CHAT_DELETE_BATCH = 450;
+
+/** Safety cap on inner delete loops per room per invocation (avoids runaway timeouts). */
+const PUBLIC_CHAT_MAX_ROUNDS_PER_ROOM = 40;
+
 // MARK: - CPU Market Minions config
 
 const CPU_USER_ID = "CPU";
@@ -989,3 +1003,79 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
 
   return null;
 });
+
+/**
+ * Scheduled cleanup: removes old documents from public channel message subcollections only.
+ * Does not touch directChats.
+ *
+ * Query per room: createdAt < cutoff, ordered by createdAt ascending, batched deletes.
+ * If the deploy logs an index error, open the printed URL once to create the composite index.
+ */
+exports.purgePublicChatMessages = onSchedule(
+  {
+    schedule: "0 6 * * *", // 06:00 UTC daily
+    timeZone: "Etc/UTC",
+    timeoutSeconds: 540,
+    memory: "512MiB",
+  },
+  async (event) => {
+    const retentionMs = PUBLIC_CHAT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - retentionMs);
+
+    logger.info("purgePublicChatMessages start", {
+      cutoffISO: cutoff.toDate().toISOString(),
+      retentionDays: PUBLIC_CHAT_RETENTION_DAYS,
+      rooms: PUBLIC_CHAT_ROOM_IDS,
+    });
+
+    let totalDeleted = 0;
+
+    for (const roomId of PUBLIC_CHAT_ROOM_IDS) {
+      const colRef = db.collection("publicChats").doc(roomId).collection("messages");
+      let roomDeleted = 0;
+      let rounds = 0;
+
+      while (rounds < PUBLIC_CHAT_MAX_ROUNDS_PER_ROOM) {
+        rounds += 1;
+        const snap = await colRef
+          .where("createdAt", "<", cutoff)
+          .orderBy("createdAt", "asc")
+          .limit(PUBLIC_CHAT_DELETE_BATCH)
+          .get();
+
+        if (snap.empty) break;
+
+        const batch = db.batch();
+        for (const doc of snap.docs) {
+          batch.delete(doc.ref);
+        }
+        await batch.commit();
+
+        roomDeleted += snap.size;
+        totalDeleted += snap.size;
+
+        if (snap.size < PUBLIC_CHAT_DELETE_BATCH) break;
+      }
+
+      logger.info("purgePublicChatMessages room summary", {
+        roomId,
+        deleted: roomDeleted,
+        rounds,
+      });
+    }
+
+    await db.collection("worldState").doc("publicChatPurge").set(
+      {
+        lastRunAt: admin.firestore.Timestamp.now(),
+        schedule: "0 6 * * * UTC",
+        retentionDays: PUBLIC_CHAT_RETENTION_DAYS,
+        cutoffAt: cutoff,
+        totalDeleted: totalDeleted,
+      },
+      {merge: true},
+    );
+
+    logger.info("purgePublicChatMessages complete", {totalDeleted});
+    return null;
+  },
+);

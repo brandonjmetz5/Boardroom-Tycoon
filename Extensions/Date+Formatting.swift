@@ -8,6 +8,15 @@
 import Foundation
 
 extension Date {
-    // Add shared date formatting helpers as needed, e.g.:
-    // func formattedRelative() -> String { ... }
+    /// Time only (locale-aware), e.g. `3:45 PM` or `15:45` — for chat bubbles.
+    func formattedChatTimeOnly() -> String {
+        Self.chatTimeOnlyFormatter.string(from: self)
+    }
+
+    private static let chatTimeOnlyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .none
+        f.timeStyle = .short
+        return f
+    }()
 }
