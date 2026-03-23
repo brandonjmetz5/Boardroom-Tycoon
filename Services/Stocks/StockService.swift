@@ -30,15 +30,16 @@ enum ChartTimeFrame: String, CaseIterable, Identifiable {
 
 final class StockService {
     private let db = Firestore.firestore()
+    private var stocksListener: ListenerRegistration?
 
     /// Demo stocks when Firestore has none (for testing / first run).
     static let fakeStocks: [Stock] = [
-        Stock(id: "gld", name: "Gold", symbol: "GLD", currentPrice: 184.50, priceChange: 2.34),
-        Stock(id: "dmd", name: "Diamond", symbol: "DMD", currentPrice: 412.00, priceChange: -8.20),
-        Stock(id: "oil", name: "Oil", symbol: "OIL", currentPrice: 72.80, priceChange: 1.15),
-        Stock(id: "slv", name: "Silver", symbol: "SLV", currentPrice: 24.90, priceChange: 0.45),
-        Stock(id: "cl", name: "Coal", symbol: "CL", currentPrice: 56.20, priceChange: -1.80),
-        Stock(id: "irn", name: "Iron", symbol: "IRN", currentPrice: 98.40, priceChange: 3.10)
+        Stock(id: "gld", name: "Gold", symbol: "GLD", currentPrice: 184.50, priceChange: 2.34, totalShares: 1_000_000, maxOwnershipPercent: 0.25),
+        Stock(id: "dmd", name: "Diamond", symbol: "DMD", currentPrice: 412.00, priceChange: -8.20, totalShares: 1_000_000, maxOwnershipPercent: 0.25),
+        Stock(id: "oil", name: "Oil", symbol: "OIL", currentPrice: 72.80, priceChange: 1.15, totalShares: 1_000_000, maxOwnershipPercent: 0.25),
+        Stock(id: "slv", name: "Silver", symbol: "SLV", currentPrice: 24.90, priceChange: 0.45, totalShares: 1_000_000, maxOwnershipPercent: 0.25),
+        Stock(id: "cl", name: "Coal", symbol: "CL", currentPrice: 56.20, priceChange: -1.80, totalShares: 1_000_000, maxOwnershipPercent: 0.25),
+        Stock(id: "irn", name: "Iron", symbol: "IRN", currentPrice: 98.40, priceChange: 3.10, totalShares: 1_000_000, maxOwnershipPercent: 0.25)
     ]
 
     func fetchStocks(completion: @escaping (Result<[Stock], Error>) -> Void) {
@@ -56,26 +57,31 @@ final class StockService {
             }
 
             let stocks: [Stock] = documents.compactMap { document in
-                let data = document.data()
-                guard
-                    let name = data["name"] as? String,
-                    let symbol = data["symbol"] as? String,
-                    let currentPrice = data["currentPrice"] as? Double,
-                    let priceChange = data["priceChange"] as? Double
-                else { return nil }
-                return Stock(
-                    id: (data["id"] as? String) ?? document.documentID,
-                    name: name,
-                    symbol: symbol,
-                    currentPrice: currentPrice,
-                    priceChange: priceChange
-                )
+                Self.stock(from: document)
             }
 
             // Use fake stocks for testing when Firestore has none
             let result = stocks.isEmpty ? Self.fakeStocks : stocks
             completion(.success(result))
         }
+    }
+
+    func observeStocks(_ onChange: @escaping (Result<[Stock], Error>) -> Void) {
+        stopObservingStocks()
+        stocksListener = db.collection("stockSymbols").addSnapshotListener { snapshot, error in
+            if let error {
+                onChange(.failure(error))
+                return
+            }
+            let documents = snapshot?.documents ?? []
+            let stocks = documents.compactMap { Self.stock(from: $0) }
+            onChange(.success(stocks.isEmpty ? Self.fakeStocks : stocks))
+        }
+    }
+
+    func stopObservingStocks() {
+        stocksListener?.remove()
+        stocksListener = nil
     }
 
     /// Returns fake price history for a stock for the given timeframe.
@@ -167,6 +173,38 @@ final class StockService {
             price = max(0.01, price / (1 + change))
         }
         return points.sorted { $0.timestamp < $1.timestamp }
+    }
+}
+
+private extension StockService {
+    static func stock(from document: QueryDocumentSnapshot) -> Stock? {
+        let data = document.data()
+        guard
+            let name = data["name"] as? String,
+            let symbol = data["symbol"] as? String,
+            let currentPrice = numberAsDouble(data["currentPrice"]),
+            let priceChange = numberAsDouble(data["priceChange"])
+        else { return nil }
+
+        let totalShares = numberAsDouble(data["totalShares"]) ?? 1_000_000
+        let maxOwnership = numberAsDouble(data["maxOwnershipPercent"]) ?? 0.25
+
+        return Stock(
+            id: (data["id"] as? String) ?? document.documentID,
+            name: name,
+            symbol: symbol,
+            currentPrice: currentPrice,
+            priceChange: priceChange,
+            totalShares: totalShares,
+            maxOwnershipPercent: max(0.01, min(1.0, maxOwnership))
+        )
+    }
+
+    static func numberAsDouble(_ any: Any?) -> Double? {
+        if let d = any as? Double { return d }
+        if let i = any as? Int { return Double(i) }
+        if let n = any as? NSNumber { return n.doubleValue }
+        return nil
     }
 }
 

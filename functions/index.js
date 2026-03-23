@@ -40,6 +40,8 @@ const STOCKS = [
   {symbol: "CL", name: "Coal", resourceIDs: ["raw-coal"]},
   {symbol: "IRN", name: "Iron", resourceIDs: ["raw-iron"]},
 ];
+const DEFAULT_TOTAL_SHARES = 1000000;
+const DEFAULT_MAX_OWNERSHIP_PERCENT = 0.25;
 
 const RESOURCE_ID_TO_SYMBOL = (() => {
   const map = {};
@@ -75,6 +77,8 @@ async function ensureStocksInitialized() {
         prevPrice: admin.firestore.FieldValue.increment(0),
         priceChange: admin.firestore.FieldValue.increment(0),
         lastUpdatedAt: now,
+        totalShares: DEFAULT_TOTAL_SHARES,
+        maxOwnershipPercent: DEFAULT_MAX_OWNERSHIP_PERCENT,
       },
       {merge: true},
     );
@@ -114,11 +118,11 @@ function pctMoveFromSignals({demandNotional, supplyUnits, buyNotional}) {
   const supply = safeNum(supplyUnits);
 
   // Smooth non-linear response.
-  const demandTerm = Math.log1p(demand / 1000); // scale: $1000 notional ~= 0.69
-  const supplyTerm = Math.log1p(supply / 200); // scale: 200 units ~= 0.69
+  const demandTerm = Math.log1p(demand / 50000); // damped for high-volume servers
+  const supplyTerm = Math.log1p(supply / 1500); // damped for high-volume servers
 
-  const raw = 0.012 * demandTerm - 0.010 * supplyTerm; // tune constants
-  return clamp(raw, -0.015, 0.015); // +/- 1.5% per tick cap
+  const raw = 0.0045 * demandTerm - 0.0042 * supplyTerm;
+  return clamp(raw, -0.005, 0.005); // +/- 0.5% per tick cap
 }
 
 function readSignal(signals, groupName, sym) {
@@ -153,16 +157,13 @@ exports.onMarketListingDeleted = onDocumentDeleted("marketListings/{listingId}",
   const data = event.data ? event.data.data() : null;
   if (!data) return;
 
-  // NOTE: iOS marks sold/cancelled inside the same transaction as delete.
-  // In some cases, Firestore delete trigger payload may not include those markers.
-  // For v1 "make it move" correctness, count all listing deletions as trade flow.
+  // Only count true fills; if soldAt transition already counted this listing, skip.
+  if (!data.soldAt || !!data.cancelledAt) return;
+  if (data.stockSignalCountedAt) return;
 
   const rid = data.resourceID || data.itemID;
   const sym = symbolForResourceID(rid);
   if (!sym) return;
-
-  const sellerUserID = data.sellerUserID || "";
-  if (!sellerUserID || sellerUserID === CPU_USER_ID) return; // player-driven only
 
   const qty = safeNum(data.quantity);
   const ppu = safeNum(data.pricePerUnit);
@@ -192,9 +193,6 @@ exports.onMarketListingSoldAtWritten = onDocumentUpdated("marketListings/{listin
   const sym = symbolForResourceID(rid);
   if (!sym) return;
 
-  const sellerUserID = after.sellerUserID || "";
-  if (!sellerUserID || sellerUserID === CPU_USER_ID) return; // player-driven only
-
   const qty = safeNum(after.quantity);
   const ppu = safeNum(after.pricePerUnit);
   if (qty <= 0 || ppu <= 0) return;
@@ -202,6 +200,7 @@ exports.onMarketListingSoldAtWritten = onDocumentUpdated("marketListings/{listin
   await Promise.all([
     bumpSignal(`resourceTradeUnits.${sym}`, qty),
     bumpSignal(`resourceTradeNotional.${sym}`, qty * ppu),
+    event.data.after.ref.set({stockSignalCountedAt: admin.firestore.Timestamp.now()}, {merge: true}),
   ]);
 });
 
@@ -250,6 +249,47 @@ exports.onProductionEventCreated = onDocumentCreated("playerProfiles/{userId}/pr
   if (qty <= 0) return;
 
   await bumpSignal(`productionUnits.${sym}`, qty);
+});
+
+async function bumpFromStockPositionDelta(userID, symbol, deltaShares) {
+  if (!userID || userID === CPU_USER_ID) return;
+  const sym = String(symbol || "").toUpperCase();
+  if (!sym || !deltaShares) return;
+
+  const snap = await stockRef(sym).get();
+  const price = safeNum((snap.data() || {}).currentPrice);
+  if (price <= 0) return;
+
+  const notional = Math.abs(deltaShares) * price;
+  if (deltaShares > 0) {
+    await bumpSignal(`stockTradeBuyNotional.${sym}`, notional);
+  } else {
+    await bumpSignal(`stockTradeSellNotional.${sym}`, notional);
+  }
+}
+
+exports.onStockPositionCreated = onDocumentCreated("playerProfiles/{userId}/stockPositions/{symbol}", async (event) => {
+  const data = event.data ? event.data.data() : {};
+  const shares = safeNum(data.sharesOwned);
+  if (shares <= 0) return;
+  await bumpFromStockPositionDelta(event.params.userId, event.params.symbol, shares);
+});
+
+exports.onStockPositionUpdated = onDocumentUpdated("playerProfiles/{userId}/stockPositions/{symbol}", async (event) => {
+  const before = (event.data && event.data.before) ? event.data.before.data() : {};
+  const after = (event.data && event.data.after) ? event.data.after.data() : {};
+  const beforeShares = safeNum(before.sharesOwned);
+  const afterShares = safeNum(after.sharesOwned);
+  const deltaShares = afterShares - beforeShares;
+  if (!deltaShares) return;
+  await bumpFromStockPositionDelta(event.params.userId, event.params.symbol, deltaShares);
+});
+
+exports.onStockPositionDeleted = onDocumentDeleted("playerProfiles/{userId}/stockPositions/{symbol}", async (event) => {
+  const data = event.data ? event.data.data() : {};
+  const shares = safeNum(data.sharesOwned);
+  if (shares <= 0) return;
+  await bumpFromStockPositionDelta(event.params.userId, event.params.symbol, -shares);
 });
 
 // Tradeable items (mirrors iOS MarketCatalog.tradeableItems()).
@@ -874,12 +914,23 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
       const demandNotional = safeNum(readSignal(signals, "resourceTradeNotional", sym));
       const buyNotional = safeNum(readSignal(signals, "buyOrderNotional", sym));
       const supplyUnits = safeNum(readSignal(signals, "productionUnits", sym));
+      const stockBuyNotional = safeNum(readSignal(signals, "stockTradeBuyNotional", sym));
+      const stockSellNotional = safeNum(readSignal(signals, "stockTradeSellNotional", sym));
+      const effectiveStockBuyNotional = stockBuyNotional * 0.15;
+      const effectiveStockSellNotional = stockSellNotional * 0.15;
 
-      const pct = pctMoveFromSignals({
+      let pct = pctMoveFromSignals({
         demandNotional,
-        buyNotional,
+        buyNotional: buyNotional + effectiveStockBuyNotional,
         supplyUnits,
       });
+      pct -= clamp(0.0012 * Math.log1p(effectiveStockSellNotional / 120000), 0, 0.0015);
+
+      const anchor = safeNum(ANCHOR_PRICE[firstRid]) || currentPrice;
+      const anchorGap = anchor > 0 ? (currentPrice - anchor) / anchor : 0;
+      const meanReversion = clamp(-0.0007 * anchorGap, -0.0012, 0.0012);
+      const inactivityDecay = (demandNotional + buyNotional + stockBuyNotional + stockSellNotional + supplyUnits) <= 0 ? -0.00035 : 0;
+      pct = clamp(pct + meanReversion + inactivityDecay, -0.005, 0.005);
 
       const newPrice = Math.max(0.01, Number((currentPrice * (1 + pct)).toFixed(4)));
       const priceChange = Number((newPrice - prevPrice).toFixed(4));
@@ -892,6 +943,8 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
           demandNotional,
           buyNotional,
           supplyUnits,
+          stockBuyNotional,
+          stockSellNotional,
           pct,
           newPrice,
           priceChange,
@@ -907,6 +960,8 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
             demandNotional,
             buyNotional,
             supplyUnits,
+            stockBuyNotional,
+            stockSellNotional,
             pct: pct,
             currentPrice: currentPrice,
             prevPrice: prevPrice,
@@ -932,6 +987,8 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
           currentPrice: newPrice,
           priceChange,
           lastUpdatedAt: tickTs,
+          totalShares: safeNum(data.totalShares) || DEFAULT_TOTAL_SHARES,
+          maxOwnershipPercent: clamp(safeNum(data.maxOwnershipPercent) || DEFAULT_MAX_OWNERSHIP_PERCENT, 0.01, 1.0),
         },
         {merge: true},
       );
@@ -960,6 +1017,8 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
       resetData[`buyOrderUnits.${sym}`] = admin.firestore.FieldValue.delete();
       resetData[`buyOrderNotional.${sym}`] = admin.firestore.FieldValue.delete();
       resetData[`productionUnits.${sym}`] = admin.firestore.FieldValue.delete();
+      resetData[`stockTradeBuyNotional.${sym}`] = admin.firestore.FieldValue.delete();
+      resetData[`stockTradeSellNotional.${sym}`] = admin.firestore.FieldValue.delete();
     }
 
     tickBatch.set(stockSignalsRef(), resetData, {merge: true});

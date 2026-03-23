@@ -13,4 +13,8 @@ struct Stock: Identifiable {
     let symbol: String
     var currentPrice: Double
     var priceChange: Double
+    /// Global float for this stock (used for ownership caps).
+    var totalShares: Double
+    /// Max ownership ratio per player, 0...1 (e.g. 0.25 = 25%).
+    var maxOwnershipPercent: Double
 }

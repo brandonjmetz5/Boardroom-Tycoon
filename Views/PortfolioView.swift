@@ -46,6 +46,7 @@ struct PortfolioView: View {
             }
         }
         .onAppear { stocksVM.loadStocks() }
+        .onDisappear { stocksVM.stopLiveRefresh() }
     }
 
     private var segmentRail: some View {
@@ -481,8 +482,3 @@ private struct PortfolioRail<Content: View>: View {
     }
 }
 
-#Preview {
-    NavigationStack {
-        PortfolioView(userID: "preview-user")
-    }
-}

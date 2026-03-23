@@ -32,6 +32,8 @@ final class StocksViewModel: ObservableObject {
     private let positionService = StockPositionService()
     private let profileService = PlayerProfileService()
     private let transactionService = TransactionService()
+    private var refreshTimer: Timer?
+    private let refreshInterval: TimeInterval = 12
 
     init(userID: String? = nil) {
         self.userID = userID
@@ -44,6 +46,7 @@ final class StocksViewModel: ObservableObject {
     }
 
     func loadStocks() {
+        startLiveRefresh()
         isLoading = true
         errorMessage = nil
         stockService.fetchStocks { [weak self] result in
@@ -64,6 +67,38 @@ final class StocksViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func startLiveRefresh() {
+        stockService.observeStocks { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let list):
+                    self.stocks = list
+                    self.loadSparklines(forceReload: true)
+                    if self.selectedStockForTrade != nil {
+                        self.syncSelectedStockFromLatestList()
+                        self.loadPriceHistoryForSelectedStock(showLoading: false)
+                    }
+                case .failure(let error):
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshForLiveView()
+            }
+        }
+    }
+
+    func stopLiveRefresh() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        stockService.stopObservingStocks()
     }
 
     private func loadPositionsAndProfile() {
@@ -112,7 +147,7 @@ final class StocksViewModel: ObservableObject {
         tradeSegment = preferSell ? 1 : 0
         priceHistory = []
         isPriceHistoryLoading = true
-        loadPriceHistoryForSelectedStock()
+        loadPriceHistoryForSelectedStock(showLoading: true)
     }
 
     func closeTradeSheet() {
@@ -126,27 +161,31 @@ final class StocksViewModel: ObservableObject {
     /// Call when user changes timeframe; reloads chart for current stock.
     func changeChartTimeFrame(to timeFrame: ChartTimeFrame) {
         selectedChartTimeFrame = timeFrame
-        loadPriceHistoryForSelectedStock()
+        loadPriceHistoryForSelectedStock(showLoading: true)
     }
 
-    private func loadPriceHistoryForSelectedStock() {
+    private func loadPriceHistoryForSelectedStock(showLoading: Bool) {
         guard let stock = selectedStockForTrade else { return }
-        isPriceHistoryLoading = true
+        if showLoading {
+            isPriceHistoryLoading = true
+        }
         stockService.fetchPriceHistory(for: stock, timeFrame: selectedChartTimeFrame) { [weak self] points in
             DispatchQueue.main.async {
                 self?.priceHistory = points
-                self?.isPriceHistoryLoading = false
+                if showLoading {
+                    self?.isPriceHistoryLoading = false
+                }
             }
         }
     }
 
-    private func loadSparklines() {
+    private func loadSparklines(forceReload: Bool = false) {
         // Prefer real history for sparklines (so portfolio rows match chart direction).
         var data = sparklineData
         let group = DispatchGroup()
 
         for stock in stocks {
-            if data[stock.symbol] != nil { continue }
+            if !forceReload, data[stock.symbol] != nil { continue }
 
             group.enter()
             stockService.fetchRecentHistoryPoints(symbol: stock.symbol, count: 7) { [weak self] points in
@@ -205,7 +244,14 @@ final class StocksViewModel: ObservableObject {
 
         isSubmitting = true
         tradeErrorMessage = nil
-        positionService.buyStock(userID: uid, symbol: stock.symbol, shares: shares, pricePerShare: stock.currentPrice) { [weak self] result in
+        positionService.buyStock(
+            userID: uid,
+            symbol: stock.symbol,
+            shares: shares,
+            pricePerShare: stock.currentPrice,
+            totalShares: stock.totalShares,
+            maxOwnershipPercent: stock.maxOwnershipPercent
+        ) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.isSubmitting = false
@@ -288,5 +334,31 @@ final class StocksViewModel: ObservableObject {
         let absoluteChange = abs(change)
         let sign = change >= 0 ? "+" : "-"
         return "\(sign)$\(String(format: "%.2f", absoluteChange))"
+    }
+
+    private func refreshForLiveView() {
+        stockService.fetchStocks { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if case .success(let list) = result {
+                    self.stocks = list
+                    self.loadSparklines(forceReload: true)
+                    if self.selectedStockForTrade != nil {
+                        self.syncSelectedStockFromLatestList()
+                        self.loadPriceHistoryForSelectedStock(showLoading: false)
+                    }
+                }
+            }
+        }
+
+        if userID != nil {
+            loadPositionsAndProfile()
+        }
+    }
+
+    private func syncSelectedStockFromLatestList() {
+        guard let current = selectedStockForTrade else { return }
+        guard let latest = stocks.first(where: { $0.symbol == current.symbol }) else { return }
+        selectedStockForTrade = latest
     }
 }

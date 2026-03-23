@@ -62,9 +62,11 @@ final class StockPositionService {
         symbol: String,
         shares: Double,
         pricePerShare: Double,
+        totalShares: Double,
+        maxOwnershipPercent: Double,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        guard shares > 0, pricePerShare > 0 else {
+        guard shares > 0, pricePerShare > 0, totalShares > 0 else {
             completion(.failure(NSError(domain: "StockPositionService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid shares or price."])))
             return
         }
@@ -96,6 +98,16 @@ final class StockPositionService {
                 }
 
                 let newShares = existingShares + shares
+                let capRatio = max(0.01, min(1.0, maxOwnershipPercent))
+                let maxAllowedShares = totalShares * capRatio
+                if newShares > maxAllowedShares {
+                    errorPointer?.pointee = NSError(
+                        domain: "StockPositionService",
+                        code: 409,
+                        userInfo: [NSLocalizedDescriptionKey: "Ownership cap reached. Max allowed is \(String(format: "%.2f", maxAllowedShares)) shares (\(Int(capRatio * 100))%)."]
+                    )
+                    return nil
+                }
                 let newAvgCost = existingShares > 0
                     ? ((existingShares * existingAvg) + (shares * pricePerShare)) / newShares
                     : pricePerShare
