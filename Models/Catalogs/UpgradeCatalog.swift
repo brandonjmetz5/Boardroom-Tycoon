@@ -19,13 +19,14 @@ enum UpgradeCatalog {
         "window"
     ]
 
-    /// Base required items for upgrading FROM currentLevel TO (currentLevel + 1). One item type per tier (base quantity 1).
+    /// Base required items for upgrading FROM currentLevel TO (currentLevel + 1).
+    /// These are intentionally substantial so upgrades are strategic commitments, not quick taps.
     private static func buildingUpgradeBaseRequirement(forLevel currentLevel: Int) -> [(itemID: String, baseQuantity: Double)] {
         switch currentLevel {
-        case 1: return [("foundation", 1)]   // 1→2
-        case 2: return [("walls", 1)]         // 2→3
-        case 3: return [("window", 1)]       // 3→4
-        case 4: return [("steel-beams", 1)]  // 4→5
+        case 1: return [("foundation", 4)]    // 1→2
+        case 2: return [("walls", 6)]         // 2→3
+        case 3: return [("window", 8)]        // 3→4
+        case 4: return [("steel-beams", 10)]  // 4→5
         default: return []
         }
     }

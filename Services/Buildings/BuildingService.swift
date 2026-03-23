@@ -112,7 +112,6 @@ final class BuildingService {
                 let starterMineSnapshot = try transaction.getDocument(starterMineRef)
 
                 guard
-                    var cash = profileSnapshot.data()?["cash"] as? Double,
                     let starterMineClaimed = profileSnapshot.data()?["starterMineClaimed"] as? Bool
                 else {
                     let error = NSError(
@@ -123,8 +122,6 @@ final class BuildingService {
                     errorPointer?.pointee = error
                     return nil
                 }
-
-                let starterMineCost = 500.0
 
                 if starterMineClaimed {
                     let error = NSError(
@@ -146,18 +143,6 @@ final class BuildingService {
                     return nil
                 }
 
-                if cash < starterMineCost {
-                    let error = NSError(
-                        domain: "BuildingService",
-                        code: 1003,
-                        userInfo: [NSLocalizedDescriptionKey: "Not enough cash to purchase the starter mine."]
-                    )
-                    errorPointer?.pointee = error
-                    return nil
-                }
-
-                cash -= starterMineCost
-
                 let buildingData: [String: Any] = [
                     "id": "building-starter-gold-mine",
                     "name": "Starter Gold Mine",
@@ -166,7 +151,7 @@ final class BuildingService {
                     "capacity": 1,
                     "slotIndex": 0,
                     "resourceType": "Gold",
-                    "abundance": 50,
+                    "abundance": 20,
                     "isStarterMine": true,
                     "isListedOnMarket": false,
                     "marketListingID": NSNull()
@@ -174,10 +159,63 @@ final class BuildingService {
 
                 transaction.setData(buildingData, forDocument: starterMineRef)
                 transaction.updateData([
-                    "cash": cash,
                     "starterMineClaimed": true
                 ], forDocument: profileRef)
 
+                return nil
+            } catch let error as NSError {
+                errorPointer?.pointee = error
+                return nil
+            }
+        }) { _, error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
+
+    /// Idempotent grant: every player gets one low-abundance starter mine for free.
+    /// If it already exists, this call succeeds and ensures `starterMineClaimed` is true.
+    func grantStarterMineIfNeeded(for userID: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        let profileRef = db.collection("playerProfiles").document(userID)
+        let buildingsRef = profileRef.collection("buildings")
+        let starterMineRef = buildingsRef.document("building-starter-gold-mine")
+
+        db.runTransaction({ transaction, errorPointer in
+            do {
+                let profileSnapshot = try transaction.getDocument(profileRef)
+                let starterMineSnapshot = try transaction.getDocument(starterMineRef)
+
+                guard profileSnapshot.data() != nil else {
+                    let error = NSError(
+                        domain: "BuildingService",
+                        code: 1010,
+                        userInfo: [NSLocalizedDescriptionKey: "Player profile not found for starter mine grant."]
+                    )
+                    errorPointer?.pointee = error
+                    return nil
+                }
+
+                if !starterMineSnapshot.exists {
+                    let buildingData: [String: Any] = [
+                        "id": "building-starter-gold-mine",
+                        "name": "Starter Gold Mine",
+                        "type": "Mine",
+                        "level": 1,
+                        "capacity": 1,
+                        "slotIndex": 0,
+                        "resourceType": "Gold",
+                        "abundance": 20,
+                        "isStarterMine": true,
+                        "isListedOnMarket": false,
+                        "marketListingID": NSNull()
+                    ]
+                    transaction.setData(buildingData, forDocument: starterMineRef)
+                }
+
+                transaction.updateData(["starterMineClaimed": true], forDocument: profileRef)
                 return nil
             } catch let error as NSError {
                 errorPointer?.pointee = error
@@ -343,16 +381,6 @@ final class BuildingService {
                     return nil
                 }
 
-                if building.id == "building-starter-gold-mine" {
-                    let error = NSError(
-                        domain: "BuildingService",
-                        code: 1203,
-                        userInfo: [NSLocalizedDescriptionKey: "Starter mine cannot be sold to the system."]
-                    )
-                    errorPointer?.pointee = error
-                    return nil
-                }
-
                 let updatedCash = currentCash + sellValue
 
                 transaction.deleteDocument(buildingRef)
@@ -377,7 +405,7 @@ final class BuildingService {
     /// Building level 1–5. Throughput scales by level (see BuildingLevelCatalog). No machines.
     static let maxBuildingLevel = 5
     /// Base cash cost for upgrading building level; multiplied by BuildingLevelCatalog.upgradeCostMultiplier(forTargetLevel:).
-    static let baseUpgradeCashCost: Double = 200
+    static let baseUpgradeCashCost: Double = 12_000
 
     func upgradeBuildingLevel(for userID: String, buildingID: String, completion: @escaping (Result<Void, Error>) -> Void) {
         let profileRef = db.collection("playerProfiles").document(userID)

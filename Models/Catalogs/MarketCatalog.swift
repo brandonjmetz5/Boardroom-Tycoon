@@ -9,7 +9,7 @@ import Foundation
 
 enum MarketCatalog {
     /// Flat fee percentage on buy order fulfillment (e.g. 3.0 = 3%).
-    static let buyOrderFeePercent: Double = 3.0
+    static let buyOrderFeePercent: Double = 6.0
 
     /// Items that can be traded in buy orders (id, name, category, isFractional). Sorted by category then name.
     static func tradeableItems() -> [Item] {

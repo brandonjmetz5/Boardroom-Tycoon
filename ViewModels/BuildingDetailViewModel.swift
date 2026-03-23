@@ -731,28 +731,29 @@ final class BuildingDetailViewModel: ObservableObject {
     }
 
     func scrapValue() -> Double {
-        if let resourceType = currentBuilding.resourceType {
-            let baseValue: Double
-            switch resourceType {
-            case .gold: baseValue = 500
-            case .silver: baseValue = 425
-            case .diamond: baseValue = 700
-            case .oil: baseValue = 550
-            case .coal: baseValue = 400
-            case .iron: baseValue = 450
-            case .quarry, .sandQuarry, .stoneQuarry, .gravelQuarry: baseValue = 400
-            default: baseValue = 400
+        // Keep sell-to-system punitive but coherent with purchase prices.
+        // Target baseline recovery: ~24% of purchase cost, +3% per level above 1.
+        if let purchaseCost = BuildingCatalog.cost(forBuildingName: currentBuilding.name) {
+            let levelBonusPct = min(0.12, 0.03 * Double(max(0, currentBuilding.level - 1)))
+            let abundanceBonusPct: Double
+            if currentBuilding.resourceType != nil {
+                // Extractors get a small abundance sensitivity on resale.
+                abundanceBonusPct = Double((currentBuilding.abundance ?? 50) - 50) * 0.001
+            } else {
+                abundanceBonusPct = 0
             }
-            let abundanceBonus = Double((currentBuilding.abundance ?? 50) - 50) * 8.0
-            let levelBonus = Double(currentBuilding.level - 1) * 100.0
-            return max(100, baseValue + abundanceBonus + levelBonus)
+            let pct = max(0.18, min(0.45, 0.24 + levelBonusPct + abundanceBonusPct))
+            return (purchaseCost * pct).rounded()
         }
+
+        // Fallback for legacy/unmapped building names.
         switch currentBuilding.type {
-        case .refinery: return 400
-        case .plant: return 450
-        case .shop: return 500
-        case .mill: return 350
-        default: return 250
+        case .refinery: return 20_000
+        case .plant: return 28_000
+        case .shop: return 35_000
+        case .mill: return 24_000
+        case .researchAndDevelopment: return 42_000
+        default: return 15_000
         }
     }
 

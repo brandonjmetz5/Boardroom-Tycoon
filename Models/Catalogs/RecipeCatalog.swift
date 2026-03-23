@@ -9,54 +9,95 @@
 import Foundation
 
 enum RecipeCatalog {
+    // MARK: - Global Economy Tuning
+    //
+    // These multipliers let us rebalance the whole chain coherently.
+    // Goal: slower payback and higher consequence decisions for capex.
+    private static let globalInputMultiplier: Double = 1.25
+    private static let globalOutputMultiplier: Double = 0.65
+
     /// Returns a built-in recipe for known ids so production can run without Firestore recipes.
     static func recipe(forId recipeId: String) -> Recipe? {
+        let baseRecipe: Recipe?
         switch recipeId {
         // Refineries
-        case "refine-gold": return goldRefineryRecipe
-        case "refine-oil-gasoline": return oilRefineryGasolineRecipe
-        case "refine-oil-diesel": return oilRefineryDieselRecipe
-        case "refine-coal-processed": return coalRefineryProcessedRecipe
-        case "refine-coal-heat-blocks": return coalRefineryHeatBlocksRecipe
-        case "refine-iron": return ironRefineryRecipe
-        case "refine-silver": return silverRefineryRecipe
-        case "refine-diamond-cut": return diamondRefineryCutRecipe
-        case "refine-diamond-dust": return diamondRefineryDustRecipe
+        case "refine-gold": baseRecipe = goldRefineryRecipe
+        case "refine-oil-gasoline": baseRecipe = oilRefineryGasolineRecipe
+        case "refine-oil-diesel": baseRecipe = oilRefineryDieselRecipe
+        case "refine-coal-processed": baseRecipe = coalRefineryProcessedRecipe
+        case "refine-coal-heat-blocks": baseRecipe = coalRefineryHeatBlocksRecipe
+        case "refine-iron": baseRecipe = ironRefineryRecipe
+        case "refine-silver": baseRecipe = silverRefineryRecipe
+        case "refine-diamond-cut": baseRecipe = diamondRefineryCutRecipe
+        case "refine-diamond-dust": baseRecipe = diamondRefineryDustRecipe
         // Steel Mill
-        case "refine-steel": return steelMillRecipe
+        case "refine-steel": baseRecipe = steelMillRecipe
         // Construction Materials Plant
-        case "construct-glass": return constructGlassRecipe
-        case "construct-bricks": return constructBricksRecipe
-        case "construct-concrete": return constructConcreteRecipe
+        case "construct-glass": baseRecipe = constructGlassRecipe
+        case "construct-bricks": baseRecipe = constructBricksRecipe
+        case "construct-concrete": baseRecipe = constructConcreteRecipe
         // Diamond Processing Plant
-        case "process-diamond-drill-bits": return processDiamondDrillBitsRecipe
-        case "process-precision-cutting-heads": return processPrecisionCuttingHeadsRecipe
+        case "process-diamond-drill-bits": baseRecipe = processDiamondDrillBitsRecipe
+        case "process-precision-cutting-heads": baseRecipe = processPrecisionCuttingHeadsRecipe
         // Silver Processing Plant
-        case "process-silver-ring": return processSilverRingRecipe
-        case "process-silver-watch": return processSilverWatchRecipe
-        case "process-heatsinks": return processHeatsinksRecipe
+        case "process-silver-ring": baseRecipe = processSilverRingRecipe
+        case "process-silver-watch": baseRecipe = processSilverWatchRecipe
+        case "process-heatsinks": baseRecipe = processHeatsinksRecipe
         // Gold Processing Plant
-        case "process-gold-ring": return processGoldRingRecipe
-        case "process-gold-watch": return processGoldWatchRecipe
-        case "process-microchip": return processMicrochipRecipe
+        case "process-gold-ring": baseRecipe = processGoldRingRecipe
+        case "process-gold-watch": baseRecipe = processGoldWatchRecipe
+        case "process-microchip": baseRecipe = processMicrochipRecipe
         // Fuel Processing Plant
-        case "process-fuel-cells": return processFuelCellsRecipe
-        case "process-machinery-fuel-packs": return processMachineryFuelPacksRecipe
+        case "process-fuel-cells": baseRecipe = processFuelCellsRecipe
+        case "process-machinery-fuel-packs": baseRecipe = processMachineryFuelPacksRecipe
         // Tech Plant
-        case "tech-machine-computer": return techMachineComputerRecipe
+        case "tech-machine-computer": baseRecipe = techMachineComputerRecipe
         // Jewelry Shop
-        case "craft-luxury-ring": return craftLuxuryRingRecipe
-        case "craft-luxury-watch": return craftLuxuryWatchRecipe
+        case "craft-luxury-ring": baseRecipe = craftLuxuryRingRecipe
+        case "craft-luxury-watch": baseRecipe = craftLuxuryWatchRecipe
         // Fabrication Plant
-        case "fabricate-steel-beams": return fabricateSteelBeamsRecipe
-        case "fabricate-machine-gear": return fabricateMachineGearRecipe
-        case "fabricate-robotic-arm": return fabricateRoboticArmRecipe
+        case "fabricate-steel-beams": baseRecipe = fabricateSteelBeamsRecipe
+        case "fabricate-machine-gear": baseRecipe = fabricateMachineGearRecipe
+        case "fabricate-robotic-arm": baseRecipe = fabricateRoboticArmRecipe
         // Material Depot
-        case "depot-window": return depotWindowRecipe
-        case "depot-foundation": return depotFoundationRecipe
-        case "depot-walls": return depotWallsRecipe
-        default: return nil
+        case "depot-window": baseRecipe = depotWindowRecipe
+        case "depot-foundation": baseRecipe = depotFoundationRecipe
+        case "depot-walls": baseRecipe = depotWallsRecipe
+        default: baseRecipe = nil
         }
+        return baseRecipe.map(tunedRecipe)
+    }
+
+    private static func tunedRecipe(_ recipe: Recipe) -> Recipe {
+        let tunedInputs = recipe.inputItems.map { ingredient in
+            RecipeIngredient(
+                id: ingredient.id,
+                item: ingredient.item,
+                quantity: scaledQuantity(ingredient.quantity, itemIsFractional: ingredient.item.isFractional, multiplier: globalInputMultiplier)
+            )
+        }
+        let tunedOutputs = recipe.outputItems.map { ingredient in
+            RecipeIngredient(
+                id: ingredient.id,
+                item: ingredient.item,
+                quantity: scaledQuantity(ingredient.quantity, itemIsFractional: ingredient.item.isFractional, multiplier: globalOutputMultiplier)
+            )
+        }
+        return Recipe(
+            id: recipe.id,
+            name: recipe.name,
+            inputItems: tunedInputs,
+            outputItems: tunedOutputs,
+            cycleTimeInMinutes: 60
+        )
+    }
+
+    private static func scaledQuantity(_ base: Double, itemIsFractional: Bool, multiplier: Double) -> Double {
+        let scaled = max(0.1, base * multiplier)
+        if itemIsFractional {
+            return (scaled * 10).rounded() / 10
+        }
+        return max(1, scaled.rounded())
     }
 
     /// All recipes for a building (for multi-recipe buildings). Resolves ids from BuildingRecipeCatalog then local catalog.
@@ -121,7 +162,7 @@ enum RecipeCatalog {
             name: "Gold Bars",
             inputItems: [
                 RecipeIngredient(id: "in-raw-gold", item: Item(id: "raw-gold", name: "Raw Gold", category: .rawMaterial, isFractional: false), quantity: 80),
-                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 10)
+                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 2)
             ],
             outputItems: [
                 RecipeIngredient(id: "out-gold-bar", item: Item(id: "gold-bar", name: "Gold Bars", category: .refinedMaterial, isFractional: true), quantity: 80)
@@ -136,7 +177,7 @@ enum RecipeCatalog {
             name: "Gasoline",
             inputItems: [
                 RecipeIngredient(id: "in-crude-oil", item: Item(id: "crude-oil", name: "Crude Oil", category: .rawMaterial, isFractional: false), quantity: 60),
-                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 10)
+                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 2)
             ],
             outputItems: [
                 RecipeIngredient(id: "out-gasoline", item: Item(id: "gasoline", name: "Gasoline", category: .refinedMaterial, isFractional: false), quantity: 60)
@@ -151,7 +192,7 @@ enum RecipeCatalog {
             name: "Diesel",
             inputItems: [
                 RecipeIngredient(id: "in-crude-oil", item: Item(id: "crude-oil", name: "Crude Oil", category: .rawMaterial, isFractional: false), quantity: 60),
-                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 10)
+                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 2)
             ],
             outputItems: [
                 RecipeIngredient(id: "out-diesel", item: Item(id: "diesel", name: "Diesel", category: .refinedMaterial, isFractional: false), quantity: 60)
@@ -166,7 +207,7 @@ enum RecipeCatalog {
             name: "Processed Coal",
             inputItems: [
                 RecipeIngredient(id: "in-raw-coal", item: Item(id: "raw-coal", name: "Raw Coal", category: .rawMaterial, isFractional: false), quantity: 70),
-                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 10)
+                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 2)
             ],
             outputItems: [
                 RecipeIngredient(id: "out-processed-coal", item: Item(id: "processed-coal", name: "Processed Coal", category: .refinedMaterial, isFractional: false), quantity: 70)
@@ -181,7 +222,7 @@ enum RecipeCatalog {
             name: "Industrial Heat Blocks",
             inputItems: [
                 RecipeIngredient(id: "in-raw-coal", item: Item(id: "raw-coal", name: "Raw Coal", category: .rawMaterial, isFractional: false), quantity: 70),
-                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 10)
+                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 2)
             ],
             outputItems: [
                 RecipeIngredient(id: "out-heat-blocks", item: Item(id: "industrial-heat-blocks", name: "Industrial Heat Blocks", category: .refinedMaterial, isFractional: false), quantity: 35)
@@ -196,7 +237,7 @@ enum RecipeCatalog {
             name: "Iron Bars",
             inputItems: [
                 RecipeIngredient(id: "in-raw-iron", item: Item(id: "raw-iron", name: "Raw Iron", category: .rawMaterial, isFractional: false), quantity: 120),
-                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 10)
+                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 2)
             ],
             outputItems: [
                 RecipeIngredient(id: "out-iron-bars", item: Item(id: "iron-bars", name: "Iron Bars", category: .refinedMaterial, isFractional: false), quantity: 120)
@@ -211,7 +252,7 @@ enum RecipeCatalog {
             name: "Silver Bars",
             inputItems: [
                 RecipeIngredient(id: "in-raw-silver", item: Item(id: "raw-silver", name: "Raw Silver", category: .rawMaterial, isFractional: false), quantity: 100),
-                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 10)
+                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 2)
             ],
             outputItems: [
                 RecipeIngredient(id: "out-silver-bar", item: Item(id: "silver-bar", name: "Silver Bars", category: .refinedMaterial, isFractional: true), quantity: 100)
@@ -226,7 +267,7 @@ enum RecipeCatalog {
             name: "Cut Diamonds",
             inputItems: [
                 RecipeIngredient(id: "in-raw-diamonds", item: Item(id: "raw-diamonds", name: "Raw Diamonds", category: .rawMaterial, isFractional: false), quantity: 40),
-                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 10)
+                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 2)
             ],
             outputItems: [
                 RecipeIngredient(id: "out-cut-diamond", item: Item(id: "cut-diamond", name: "Cut Diamonds", category: .refinedMaterial, isFractional: false), quantity: 40)
@@ -241,7 +282,7 @@ enum RecipeCatalog {
             name: "Diamond Dust",
             inputItems: [
                 RecipeIngredient(id: "in-raw-diamonds", item: Item(id: "raw-diamonds", name: "Raw Diamonds", category: .rawMaterial, isFractional: false), quantity: 40),
-                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 10)
+                RecipeIngredient(id: "in-machinery-fuel", item: Item(id: "machinery-fuel-pack", name: "Machinery Fuel Packs", category: .fuel, isFractional: false), quantity: 2)
             ],
             outputItems: [
                 RecipeIngredient(id: "out-diamond-dust", item: Item(id: "diamond-dust", name: "Diamond Dust", category: .refinedMaterial, isFractional: false), quantity: 80)

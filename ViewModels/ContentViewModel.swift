@@ -17,6 +17,7 @@ final class ContentViewModel: ObservableObject {
 
     private let playerProfileService = PlayerProfileService()
     private let inventoryService = InventoryService()
+    private let buildingService = BuildingService()
 
     func signInAnonymouslyIfNeeded() {
         if let currentUser = Auth.auth().currentUser {
@@ -46,7 +47,7 @@ final class ContentViewModel: ObservableObject {
     private func createPlayerProfile(for uid: String) {
         let profile = PlayerProfile(
             id: uid,
-            cash: 10000,
+            cash: 90_000,
             level: 1,
             xp: 0,
             buildingSlotCount: 2,
@@ -61,13 +62,24 @@ final class ContentViewModel: ObservableObject {
                 guard let self else { return }
                 switch result {
                 case .success:
-                    self.inventoryService.createStarterInventoryIfNeeded(for: uid) { [weak self] inventoryResult in
+                    self.buildingService.grantStarterMineIfNeeded(for: uid) { [weak self] starterMineResult in
                         DispatchQueue.main.async {
                             guard let self else { return }
-                            switch inventoryResult {
+                            switch starterMineResult {
                             case .success:
-                                self.userID = uid
-                                self.isLoading = false
+                                self.inventoryService.createStarterInventoryIfNeeded(for: uid) { [weak self] inventoryResult in
+                                    DispatchQueue.main.async {
+                                        guard let self else { return }
+                                        switch inventoryResult {
+                                        case .success:
+                                            self.userID = uid
+                                            self.isLoading = false
+                                        case .failure(let error):
+                                            self.errorMessage = error.localizedDescription
+                                            self.isLoading = false
+                                        }
+                                    }
+                                }
                             case .failure(let error):
                                 self.errorMessage = error.localizedDescription
                                 self.isLoading = false

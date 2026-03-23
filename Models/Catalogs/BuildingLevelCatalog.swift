@@ -36,13 +36,14 @@ enum BuildingLevelCatalog {
     }
 
     /// Cost multiplier when upgrading TO this level. Applied to both cash and material costs.
-    /// Upgrade to 2 = 1.0, to 3 = 2.0, to 4 = 3.5, to 5 = 5.5
+    /// Steeper curve keeps late levels strategic and long-horizon.
+    /// Upgrade to 2 = 1.5, to 3 = 3.0, to 4 = 5.0, to 5 = 8.0
     static func upgradeCostMultiplier(forTargetLevel targetLevel: Int) -> Double {
         switch targetLevel {
-        case 2: return 1.0
-        case 3: return 2.0
-        case 4: return 3.5
-        case 5: return 5.5
+        case 2: return 1.5
+        case 3: return 3.0
+        case 4: return 5.0
+        case 5: return 8.0
         default: return 1.0
         }
     }

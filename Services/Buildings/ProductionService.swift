@@ -29,7 +29,7 @@ final class ProductionService {
     }
 
     /// Base cash cost per R&D cycle at level 1.
-    static let baseResearchCycleCost: Double = 500
+    static let baseResearchCycleCost: Double = 3_500
 
     /// Cash cost for an R&D cycle at the given building level.
     static func researchCycleCost(forLevel level: Int) -> Double {
@@ -513,14 +513,14 @@ final class ProductionService {
     /// Level-1 output at abundance 100 by resource type. Each abundance point maps 1:1 (abundance 99 → 99% of this).
     private static func baseOutputAt100(for resourceType: ResourceType?) -> Int {
         switch resourceType {
-        case .gold?: return 30
-        case .silver?: return 32
-        case .diamond?: return 16
-        case .oil?: return 40
-        case .coal?: return 36
-        case .iron?: return 34
-        case .quarry?, .sandQuarry?, .stoneQuarry?, .gravelQuarry?: return 28
-        default: return 30
+        case .gold?: return 10
+        case .silver?: return 11
+        case .diamond?: return 5
+        case .oil?: return 12
+        case .coal?: return 11
+        case .iron?: return 10
+        case .quarry?, .sandQuarry?, .stoneQuarry?, .gravelQuarry?: return 9
+        default: return 10
         }
     }
 

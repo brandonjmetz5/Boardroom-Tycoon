@@ -1,0 +1,100 @@
+row_type,key,name,group_or_building,input_items,input_qty,output_items,output_qty,cycle_min,current_value_or_cost,formula_notes,owner_decision
+TARGET,t1_payback_days,T1 Building Payback,meta,,,,,,,3-5 days target at normal scenario,SET
+TARGET,t2_payback_days,T2 Building Payback,meta,,,,,,,5-8 days target at normal scenario,SET
+TARGET,t3_payback_days,T3 Building Payback,meta,,,,,,,8-14 days target at normal scenario,SET
+SINK,prospecting_cost,Prospecting Cost,global,,,,,,15000,Fixed cash sink per job,ADJUST
+SINK,starter_mine_cost,Starter Mine Cost,global,,,,,,8000,One-time early game sink,ADJUST
+SINK,upgrade_cash_base,Upgrade Cash Base,global,,,,,,6000,Upgrade cash = base * target level multiplier,ADJUST
+SINK,rd_cycle_cash_base,R&D Cycle Cash Base,global,,,,,,3500,R&D cycle cash = base * level scalar,ADJUST
+SINK,buy_order_fee_percent,Buy Order Fee,global,,,,,,3.0,Percentage fee on buy order fills,ADJUST
+BUILDING,gold-refinery,Gold Refinery,refinery,,,,,,60000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,oil-refinery,Oil Refinery,refinery,,,,,,62000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,coal-refinery,Coal Refinery,refinery,,,,,,54000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,iron-refinery,Iron Refinery,refinery,,,,,,58000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,silver-refinery,Silver Refinery,refinery,,,,,,61000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,diamond-refinery,Diamond Refinery,refinery,,,,,,76000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,steel-mill,Steel Mill,mill,,,,,,70000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,construction-materials-plant,Construction Materials Plant,plant,,,,,,88000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,fuel-processing-plant,Fuel Processing Plant,plant,,,,,,92000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,gold-processing-plant,Gold Processing Plant,plant,,,,,,98000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,silver-processing-plant,Silver Processing Plant,plant,,,,,,102000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,fabrication-plant,Fabrication Plant,plant,,,,,,108000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,jewelry-shop,Jewelry Shop,shop,,,,,,118000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,diamond-processing-plant,Diamond Processing Plant,plant,,,,,,125000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,tech-plant,Tech Plant,plant,,,,,,132000,payback_days = cost / best_recipe_profit_per_day,CHECK
+BUILDING,research-and-development,Research & Development,research,,,,,,145000,payback_days = strategic not direct sales,CHECK
+BUILDING,material-depot,Material Depot,plant,,,,,,74000,payback_days = cost / best_recipe_profit_per_day,CHECK
+RECIPE,refine-gold,Gold Bars,Gold Refinery,raw-gold|machinery-fuel-pack,80|10,gold-bar,80,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,refine-oil-gasoline,Gasoline,Oil Refinery,crude-oil|machinery-fuel-pack,60|10,gasoline,60,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,refine-oil-diesel,Diesel,Oil Refinery,crude-oil|machinery-fuel-pack,60|10,diesel,60,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,refine-coal-processed,Processed Coal,Coal Refinery,raw-coal|machinery-fuel-pack,70|10,processed-coal,70,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,refine-coal-heat-blocks,Industrial Heat Blocks,Coal Refinery,raw-coal|machinery-fuel-pack,70|10,industrial-heat-blocks,35,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,refine-iron,Iron Bars,Iron Refinery,raw-iron|machinery-fuel-pack,120|10,iron-bars,120,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,refine-silver,Silver Bars,Silver Refinery,raw-silver|machinery-fuel-pack,100|10,silver-bar,100,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,refine-diamond-cut,Cut Diamonds,Diamond Refinery,raw-diamonds|machinery-fuel-pack,40|10,cut-diamond,40,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,refine-diamond-dust,Diamond Dust,Diamond Refinery,raw-diamonds|machinery-fuel-pack,40|10,diamond-dust,80,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,refine-steel,Steel,Steel Mill,iron-bars|processed-coal,60|30,steel,60,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,construct-glass,Glass,Construction Materials Plant,sand|industrial-heat-blocks,70|10,glass,70,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,construct-bricks,Bricks,Construction Materials Plant,stone|gasoline,60|20,brick,60,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,construct-concrete,Concrete Mix,Construction Materials Plant,gravel|diesel,60|20,concrete-mix,60,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,process-diamond-drill-bits,Diamond Drill Bits,Diamond Processing Plant,cut-diamond|industrial-heat-blocks,20|10,diamond-drill-bits,10,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,process-precision-cutting-heads,Precision Cutting Heads,Diamond Processing Plant,cut-diamond|industrial-heat-blocks,20|10,precision-cutting-heads,10,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,process-silver-ring,Silver Ring,Silver Processing Plant,silver-bar|processed-coal,20|10,silver-ring,10,45,,profit_cycle = out_value - in_value,TUNE
+RECIPE,process-silver-watch,Silver Watch,Silver Processing Plant,silver-bar|processed-coal,20|10,silver-watch,5,45,,profit_cycle = out_value - in_value,TUNE
+RECIPE,process-heatsinks,Heatsinks,Silver Processing Plant,silver-bar|industrial-heat-blocks,30|10,heat-sink,15,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,process-gold-ring,Gold Ring,Gold Processing Plant,gold-bar|processed-coal,20|10,gold-ring,10,45,,profit_cycle = out_value - in_value,TUNE
+RECIPE,process-gold-watch,Gold Watch,Gold Processing Plant,gold-bar|processed-coal,20|10,gold-watch,5,45,,profit_cycle = out_value - in_value,TUNE
+RECIPE,process-microchip,Microchip,Gold Processing Plant,gold-bar|industrial-heat-blocks,20|10,microchip,15,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,process-fuel-cells,Fuel Cells,Fuel Processing Plant,gasoline|industrial-heat-blocks,30|10,fuel-cell,30,45,,profit_cycle = out_value - in_value,TUNE
+RECIPE,process-machinery-fuel-packs,Machinery Fuel Packs,Fuel Processing Plant,diesel|processed-coal,30|10,machinery-fuel-pack,20,45,,profit_cycle = out_value - in_value,TUNE
+RECIPE,tech-machine-computer,Machine Computer,Tech Plant,microchip|heat-sink|cut-diamond,10|10|5,machine-computer,5,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,craft-luxury-ring,Luxury Ring,Jewelry Shop,gold-ring|silver-ring|cut-diamond,5|5|5,luxury-ring,5,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,craft-luxury-watch,Luxury Watch,Jewelry Shop,gold-watch|silver-watch|cut-diamond,3|3|5,luxury-watch,3,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,fabricate-steel-beams,Steel Beams,Fabrication Plant,steel|industrial-heat-blocks,30|10,steel-beams,20,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,fabricate-machine-gear,Machine Gear,Fabrication Plant,steel|iron-bars,20|20,machine-gear,20,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,fabricate-robotic-arm,Robotic Machine Arm,Fabrication Plant,iron-bars|gold-bar|microchip,20|10|5,robotic-machine-arms,5,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,depot-window,Window,Material Depot,glass|industrial-heat-blocks,20|10,window,10,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,depot-foundation,Foundation,Material Depot,stone|concrete-mix|processed-coal,20|20|10,foundation,10,60,,profit_cycle = out_value - in_value,TUNE
+RECIPE,depot-walls,Walls,Material Depot,brick|iron-bars,20|10,walls,10,60,,profit_cycle = out_value - in_value,TUNE
+ITEM,fuel-cell,Fuel Cell,Fuel,,,,,,8,reference floor and minion anchor,CHECK
+ITEM,raw-gold,Raw Gold,Raw Material,,,,,,42,reference floor and minion anchor,CHECK
+ITEM,raw-silver,Raw Silver,Raw Material,,,,,,0.65,reference floor and minion anchor,CHECK
+ITEM,raw-diamonds,Raw Diamonds,Raw Material,,,,,,120,reference floor and minion anchor,CHECK
+ITEM,raw-oil,Crude Oil,Raw Material,,,,,,0.85,reference floor and minion anchor,CHECK
+ITEM,raw-coal,Raw Coal,Raw Material,,,,,,0.12,reference floor and minion anchor,CHECK
+ITEM,raw-iron,Raw Iron,Raw Material,,,,,,0.08,reference floor and minion anchor,CHECK
+ITEM,raw-stone,Raw Stone,Raw Material,,,,,,0.02,reference floor and minion anchor,CHECK
+ITEM,gold-bar,Gold Bar,Refined Material,,,,,,1850,reference floor and minion anchor,CHECK
+ITEM,cut-diamond,Cut Diamond,Refined Material,,,,,,450,reference floor and minion anchor,CHECK
+ITEM,steel,Steel,Refined Material,,,,,,0.35,reference floor and minion anchor,CHECK
+ITEM,silver-bar,Silver Bar,Refined Material,,,,,,22,reference floor and minion anchor,CHECK
+ITEM,diamond-dust,Diamond Dust,Refined Material,,,,,,85,reference floor and minion anchor,CHECK
+ITEM,microchip,Microchip,Refined Material,,,,,,120,reference floor and minion anchor,CHECK
+ITEM,heat-sink,Heat Sink,Refined Material,,,,,,45,reference floor and minion anchor,CHECK
+ITEM,brick,Brick,Building Material,,,,,,1.2,reference floor and minion anchor,CHECK
+ITEM,concrete-mix,Concrete Mix,Building Material,,,,,,2.5,reference floor and minion anchor,CHECK
+ITEM,glass,Glass,Building Material,,,,,,3,reference floor and minion anchor,CHECK
+ITEM,gold-ring,Gold Ring,Luxury Good,,,,,,4200,reference floor and minion anchor,CHECK
+ITEM,gold-watch,Gold Watch,Luxury Good,,,,,,5500,reference floor and minion anchor,CHECK
+ITEM,silver-ring,Silver Ring,Luxury Good,,,,,,55,reference floor and minion anchor,CHECK
+ITEM,silver-watch,Silver Watch,Luxury Good,,,,,,85,reference floor and minion anchor,CHECK
+ITEM,luxury-ring,Luxury Ring,Luxury Good,,,,,,8000,reference floor and minion anchor,CHECK
+ITEM,luxury-watch,Luxury Watch,Luxury Good,,,,,,12000,reference floor and minion anchor,CHECK
+ITEM,processed-coal,Processed Coal,Refined Material,,,,,,0.35,reference floor and minion anchor,CHECK
+ITEM,gasoline,Gasoline,Refined Material,,,,,,2.8,reference floor and minion anchor,CHECK
+ITEM,diesel,Diesel,Refined Material,,,,,,2.6,reference floor and minion anchor,CHECK
+ITEM,iron-bars,Iron Bars,Refined Material,,,,,,1.5,reference floor and minion anchor,CHECK
+ITEM,steel-beams,Steel Beams,Building Material,,,,,,8,reference floor and minion anchor,CHECK
+ITEM,machine-gear,Machine Gear,Component,,,,,,95,reference floor and minion anchor,CHECK
+ITEM,robotic-machine-arms,Robotic Machine Arms,Component,,,,,,450,reference floor and minion anchor,CHECK
+ITEM,machinery-fuel-pack,Machinery Fuel Pack,Fuel,,,,,,25,reference floor and minion anchor,CHECK
+ITEM,industrial-heat-blocks,Industrial Heat Blocks,Refined Material,,,,,,12,reference floor and minion anchor,CHECK
+ITEM,sand,Sand,Raw Material,,,,,,,missing value in ItemValueCatalog,FILL
+ITEM,stone,Stone,Raw Material,,,,,,,missing value in ItemValueCatalog,FILL
+ITEM,gravel,Gravel,Raw Material,,,,,,,missing value in ItemValueCatalog,FILL
+ITEM,window,Window,Building Material,,,,,,,missing value in ItemValueCatalog,FILL
+ITEM,foundation,Foundation,Building Material,,,,,,,missing value in ItemValueCatalog,FILL
+ITEM,walls,Walls,Building Material,,,,,,,missing value in ItemValueCatalog,FILL
+ITEM,diamond-drill-bits,Diamond Drill Bits,Component,,,,,,,missing value in ItemValueCatalog,FILL
+ITEM,precision-cutting-heads,Precision Cutting Heads,Component,,,,,,,missing value in ItemValueCatalog,FILL
+ITEM,machine-computer,Machine Computer,Component,,,,,,,missing value in ItemValueCatalog,FILL

@@ -69,7 +69,7 @@ final class ProspectingService {
         let buildingsRef = profileRef.collection("buildings")
         let jobsRef = profileRef.collection("prospectingJobs")
 
-        let prospectingCost = 750.0
+        let prospectingCost = 25_000.0
 
         buildingsRef.getDocuments { buildingSnapshot, buildingError in
             if let buildingError = buildingError {
@@ -142,8 +142,12 @@ final class ProspectingService {
 
                         let jobRef = jobsRef.document("prospecting-\(UUID().uuidString)")
                         let startedAt = Date()
-                        let endsAt = startedAt.addingTimeInterval(10)
-                        // let endsAt = startedAt.addingTimeInterval(60 * 60 * 4)
+                        #if DEBUG
+                        let prospectingSeconds: TimeInterval = 10
+                        #else
+                        let prospectingSeconds: TimeInterval = 60 * 60 * 8
+                        #endif
+                        let endsAt = startedAt.addingTimeInterval(prospectingSeconds)
 
                         let jobData: [String: Any] = [
                             "id": jobRef.documentID,
