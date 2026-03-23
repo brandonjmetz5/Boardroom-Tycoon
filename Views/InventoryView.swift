@@ -7,6 +7,19 @@
 
 import SwiftUI
 
+/// Resource PNGs often include transparent padding; we draw larger than the visible slot and clip
+/// so the artwork reads clearly without squinting.
+private enum InventoryResourceIconMetrics {
+    /// Collapsed resource row (main list).
+    static let rowSlot: CGFloat = 54
+    /// Expanded quality sub-rows.
+    static let qualitySlot: CGFloat = 44
+    /// List-on-market sheet header.
+    static let sheetSlot: CGFloat = 64
+    /// Drawable scale before clipping (higher = more “zoom” into padded sprites).
+    static let assetZoom: CGFloat = 1.62
+}
+
 struct InventoryView: View {
     let userID: String
 
@@ -150,8 +163,8 @@ struct InventoryView: View {
             Button {
                 if isExpanded { expandedResourceIDs.remove(resource.id) } else { expandedResourceIDs.insert(resource.id) }
             } label: {
-                HStack(spacing: 12) {
-                    resourceIconView(name: resource.item.name, size: 34)
+                HStack(alignment: .center, spacing: 12) {
+                    resourceIconView(name: resource.item.name, size: InventoryResourceIconMetrics.rowSlot)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(resource.item.name)
                             .font(AppTheme.bodyMedium())
@@ -196,8 +209,8 @@ struct InventoryView: View {
         )
         let value = ItemValueCatalog.value(quantity: quality.quantity, itemId: resource.item.id)
 
-        return HStack(spacing: 10) {
-            resourceIconView(name: resource.item.name, size: 28)
+        return HStack(alignment: .center, spacing: 10) {
+            resourceIconView(name: resource.item.name, size: InventoryResourceIconMetrics.qualitySlot)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text("Q\(quality.quality)")
@@ -246,8 +259,8 @@ struct InventoryView: View {
                                     .font(AppTheme.caption())
                                     .foregroundStyle(AppTheme.textError)
                             }
-                            HStack(spacing: 10) {
-                                resourceIconView(name: item.item.name, size: 34)
+                            HStack(alignment: .center, spacing: 12) {
+                                resourceIconView(name: item.item.name, size: InventoryResourceIconMetrics.sheetSlot)
                                 Text(item.item.name)
                                     .font(AppTheme.titleSmall())
                                     .foregroundStyle(AppTheme.textPrimary)
@@ -308,26 +321,38 @@ struct InventoryView: View {
     }
 
     @ViewBuilder
-    private func resourceIconView(name: String, size: CGFloat = 30) -> some View {
+    private func resourceIconView(name: String, size: CGFloat, assetZoom: CGFloat = InventoryResourceIconMetrics.assetZoom) -> some View {
         if let assetName = resourceAssetName(for: name) {
             ZStack {
                 Circle()
                     .fill(AppTheme.surfaceAlt.opacity(0.95))
                     .frame(width: size, height: size)
+                    .overlay(
+                        Circle()
+                            .stroke(AppTheme.border.opacity(0.85), lineWidth: 1)
+                    )
                 Image(assetName)
+                    .renderingMode(.original)
                     .resizable()
                     .interpolation(.high)
-                    .scaledToFill()
-                    .frame(width: max(1, size - 2), height: max(1, size - 2))
+                    .scaledToFit()
+                    .frame(width: size * assetZoom, height: size * assetZoom)
+                    .frame(width: size, height: size)
+                    .clipped()
                     .clipShape(Circle())
             }
+            .accessibilityHidden(true)
         } else {
             ZStack {
                 Circle()
                     .fill(AppTheme.accent.opacity(0.25))
                     .frame(width: size, height: size)
+                    .overlay(
+                        Circle()
+                            .stroke(AppTheme.border.opacity(0.6), lineWidth: 1)
+                    )
                 Text(String(name.prefix(1)).uppercased())
-                    .font(.system(size: max(11, size * 0.35), weight: .bold))
+                    .font(.system(size: max(12, size * 0.38), weight: .bold))
                     .foregroundStyle(AppTheme.accent)
             }
         }
