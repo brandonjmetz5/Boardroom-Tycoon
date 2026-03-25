@@ -66,8 +66,37 @@ final class MarketViewModel: ObservableObject {
     private let inventoryService = InventoryService()
     private let analyticsService = MarketAnalyticsService()
 
+    private var resourceListingsChangedObserver: NSObjectProtocol?
+    private var resourceListingsRefreshWorkItem: DispatchWorkItem?
+
     init(userID: String) {
         self.userID = userID
+        // Keep the resource exchange UI in sync when buys happen elsewhere (e.g. production "buy missing inputs").
+        resourceListingsChangedObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name("marketResourceListingsChanged"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.scheduleResourceListingsRefresh()
+        }
+    }
+
+    deinit {
+        if let resourceListingsChangedObserver {
+            NotificationCenter.default.removeObserver(resourceListingsChangedObserver)
+        }
+        resourceListingsRefreshWorkItem?.cancel()
+    }
+
+    private func scheduleResourceListingsRefresh() {
+        resourceListingsRefreshWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.loadResourceListings()
+        }
+        resourceListingsRefreshWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
     }
 
     private func aggregateKey(resourceID: String, quality: Int) -> String {

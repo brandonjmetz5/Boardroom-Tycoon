@@ -55,6 +55,9 @@ struct BuildingDetailView: View {
         .sheet(isPresented: $viewModel.showListingSheet) {
             listingSheetView
         }
+        .sheet(isPresented: $viewModel.showBuyMissingConfirmationSheet) {
+            buyMissingConfirmationSheetView
+        }
     }
 
     // MARK: - Command panels
@@ -131,10 +134,13 @@ struct BuildingDetailView: View {
     private var liveCyclePanel: some View {
         BuildingPanel(title: "Cycle Monitor", icon: "waveform.path.ecg") {
             VStack(alignment: .leading, spacing: 10) {
-                if viewModel.isWorking || viewModel.isBuyingMissing {
+                if viewModel.isWorking || viewModel.isBuyingMissing || viewModel.isGeneratingBuyMissingConfirmation {
                     HStack(spacing: 8) {
                         ProgressView().tint(AppTheme.accent)
-                        Text(viewModel.isBuyingMissing ? "Acquiring missing inputs..." : "Executing command...")
+                        let msg: String =
+                            viewModel.isBuyingMissing ? "Acquiring missing inputs..." :
+                            (viewModel.isGeneratingBuyMissingConfirmation ? "Preparing market purchase options..." : "Executing command...")
+                        Text(msg)
                             .font(AppTheme.caption())
                             .foregroundStyle(AppTheme.textSecondary)
                     }
@@ -264,12 +270,12 @@ struct BuildingDetailView: View {
 
             if missing > 0.0000001 {
                 Button {
-                    viewModel.buyMissingForExtractorFuel()
+                    viewModel.openBuyMissingFuelConfirmation()
                 } label: {
                     commandAction(title: "Buy Missing Fuel", icon: "cart.fill.badge.plus", color: AppTheme.accent)
                 }
                 .buttonStyle(.plain)
-                .disabled(viewModel.isWorking || viewModel.isBuyingMissing || viewModel.currentBuilding.isProducing == true)
+                .disabled(viewModel.isWorking || viewModel.isBuyingMissing || viewModel.isGeneratingBuyMissingConfirmation || viewModel.currentBuilding.isProducing == true)
             } else {
                 statusTag(title: "FUEL READY", color: AppTheme.chipReady)
             }
@@ -330,12 +336,12 @@ struct BuildingDetailView: View {
 
             if hasMissing {
                 Button {
-                    viewModel.buyMissing(for: recipe)
+                    viewModel.openBuyMissingConfirmation(for: recipe)
                 } label: {
                     commandAction(title: "Buy Missing Inputs", icon: "cart.fill.badge.plus", color: AppTheme.accent)
                 }
                 .buttonStyle(.plain)
-                .disabled(viewModel.isWorking || viewModel.isBuyingMissing || viewModel.currentBuilding.isProducing == true)
+                .disabled(viewModel.isWorking || viewModel.isBuyingMissing || viewModel.isGeneratingBuyMissingConfirmation || viewModel.currentBuilding.isProducing == true)
             }
         }
         .padding(12)
@@ -479,6 +485,141 @@ struct BuildingDetailView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Buy-missing confirmation sheet
+
+    private var buyMissingConfirmationSheetView: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Each line is one full market listing (same as buying it on the Resource Exchange). You may receive more units than this cycle needs if a listing is larger than your shortfall.")
+                            .font(AppTheme.caption())
+                            .foregroundStyle(AppTheme.textSecondary)
+
+                        if let error = viewModel.buyMissingErrorMessage, viewModel.isBuyingMissing {
+                            errorStrip(error)
+                        }
+
+                        if viewModel.isGeneratingBuyMissingConfirmation {
+                            VStack(spacing: 10) {
+                                ProgressView("Scanning market offers...")
+                                    .tint(AppTheme.accent)
+                                Text("Preparing the cheapest plan that can start production.")
+                                    .font(AppTheme.caption())
+                                    .foregroundStyle(AppTheme.textTertiary)
+                            }
+                            .padding(.vertical, 12)
+                        } else if viewModel.buyMissingConfirmationOptions.isEmpty {
+                            VStack(spacing: 10) {
+                                Text("No purchase options available.")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                if let error = viewModel.buyMissingErrorMessage {
+                                    Text(error)
+                                        .font(AppTheme.caption())
+                                        .foregroundStyle(AppTheme.textError)
+                                }
+                            }
+                            .padding(.vertical, 12)
+                        } else {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(viewModel.buyMissingConfirmationOptions.indices, id: \.self) { idx in
+                                    let plan = viewModel.buyMissingConfirmationOptions[idx]
+                                    Button {
+                                        viewModel.selectedBuyMissingConfirmationOptionIndex = idx
+                                    } label: {
+                                        buyMissingPlanCard(plan: plan, selected: idx == viewModel.selectedBuyMissingConfirmationOptionIndex)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.horizontalPadding)
+                    .padding(.top, 14)
+                    .padding(.bottom, 24)
+                }
+            }
+            .navigationTitle(viewModel.buyMissingConfirmationTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        viewModel.showBuyMissingConfirmationSheet = false
+                    }
+                    .foregroundStyle(AppTheme.textSecondary)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Confirm") {
+                        viewModel.confirmBuyMissingSelection()
+                    }
+                    .disabled(viewModel.isBuyingMissing || viewModel.isGeneratingBuyMissingConfirmation || viewModel.buyMissingConfirmationOptions.isEmpty)
+                    .fontWeight(.bold)
+                    .foregroundStyle(AppTheme.chipReady)
+                }
+            }
+            .overlay {
+                if viewModel.isBuyingMissing {
+                    ProgressView("Purchasing…")
+                        .padding(20)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.surface))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.border, lineWidth: 1))
+                }
+            }
+        }
+    }
+
+    private func buyMissingPlanCard(plan: BuildingDetailViewModel.BuyMissingPlan, selected: Bool) -> some View {
+        let border = selected ? AppTheme.accent.opacity(0.8) : AppTheme.border.opacity(0.95)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(plan.title)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text("Total charged: \(NumberFormatting.currency(plan.subtotal, fractionDigits: 2))")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                Spacer()
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(AppTheme.chipReady)
+                        .font(.system(size: 16, weight: .bold))
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(plan.tasks.indices, id: \.self) { tidx in
+                    let task = plan.tasks[tidx]
+                    HStack(alignment: .center, spacing: 8) {
+                        resourceIconView(name: task.listing.item.name, size: 26)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("\(formatQty(task.quantityToBuy)) units · full listing")
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundStyle(AppTheme.textPrimary)
+                            Text("Q\(task.listing.quality) · \(NumberFormatting.currency(task.listing.pricePerUnit, fractionDigits: 2))/unit")
+                                .font(.system(size: 10, weight: .regular))
+                                .foregroundStyle(AppTheme.textTertiary)
+                        }
+                        Spacer()
+                        if let seller = task.listing.sellerName, !seller.isEmpty {
+                            Text(seller)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(AppTheme.textTertiary)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(AppTheme.surfaceAlt.opacity(0.58))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Shared helpers

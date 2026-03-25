@@ -34,6 +34,12 @@ final class BuildingDetailViewModel: ObservableObject {
     @Published var buyNowPriceText = ""
     @Published private(set) var isBuyingMissing = false
     @Published var buyMissingErrorMessage: String?
+    @Published private(set) var isGeneratingBuyMissingConfirmation = false
+
+    @Published var showBuyMissingConfirmationSheet = false
+    @Published var buyMissingConfirmationTitle: String = ""
+    @Published private(set) var buyMissingConfirmationOptions: [BuyMissingPlan] = []
+    @Published var selectedBuyMissingConfirmationOptionIndex: Int = 0
 
     private let productionService = ProductionService()
     private let buildingService = BuildingService()
@@ -404,6 +410,29 @@ final class BuildingDetailViewModel: ObservableObject {
         let missingQty: Double
     }
 
+    // MARK: - Buy-missing purchase planning
+
+    struct BuyTask {
+        let listing: MarketListing
+        let quantityToBuy: Double
+    }
+
+    struct BuyMissingPlan: Identifiable {
+        let id = UUID().uuidString
+        let title: String
+        let tasks: [BuyTask]
+        let subtotal: Double
+        let fee: Double
+        let sellerReceives: Double
+    }
+
+    private struct MissingInputLine {
+        let name: String
+        let baseItemId: String
+        let quality: Int
+        let missingQty: Double
+    }
+
     /// Scaled input lines for an arbitrary recipe at the current building level and selectedOutputQuality.
     func scaledInputs(for recipe: Recipe) -> [ScaledInputLine] {
         let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)
@@ -459,88 +488,54 @@ final class BuildingDetailViewModel: ObservableObject {
     }
 
     // MARK: - "Buy missing" UX
+    func openBuyMissingConfirmation(for recipe: Recipe) {
+        guard !isBuyingMissing,
+              !isGeneratingBuyMissingConfirmation,
+              (currentBuilding.isListedOnMarket ?? false) == false,
+              currentBuilding.isProducing != true
+        else { return }
 
-    func buyMissing(for recipe: Recipe) {
-        guard !isBuyingMissing, (currentBuilding.isListedOnMarket ?? false) == false, currentBuilding.isProducing != true else { return }
-
-        let targetQ = max(1, min(maxOutputQuality, selectedOutputQuality))
         let missingInputs = scaledInputs(for: recipe).filter { $0.missingQty > 0.0000001 }
         guard !missingInputs.isEmpty else { return }
 
-        isBuyingMissing = true
-        buyMissingErrorMessage = nil
+        let missingLines: [MissingInputLine] = missingInputs.map {
+            MissingInputLine(name: $0.name, baseItemId: $0.baseItemId, quality: $0.quality, missingQty: $0.missingQty)
+        }
 
+        buyMissingErrorMessage = nil
+        buyMissingConfirmationTitle = "Buy Missing Inputs"
+        showBuyMissingConfirmationSheet = false
+        buyMissingConfirmationOptions = []
+        selectedBuyMissingConfirmationOptionIndex = 0
+
+        isGeneratingBuyMissingConfirmation = true
         marketListingService.fetchAllListings { [weak self] result in
             guard let self else { return }
             Task { @MainActor in
+                self.isGeneratingBuyMissingConfirmation = false
                 switch result {
                 case .failure(let error):
-                    self.isBuyingMissing = false
                     self.buyMissingErrorMessage = error.localizedDescription
                 case .success(let listings):
-                    var tasks: [(listing: MarketListing, qty: Double)] = []
-
-                    for input in missingInputs {
-                        let candidates = listings
-                            .filter { $0.item.id == input.baseItemId && $0.quality == input.quality }
-                            .sorted { $0.pricePerUnit < $1.pricePerUnit }
-
-                        var remaining = input.missingQty
-                        for l in candidates {
-                            guard remaining > 0.0000001 else { break }
-                            let buyQty = min(l.quantity, remaining)
-                            if buyQty > 0 {
-                                tasks.append((listing: l, qty: buyQty))
-                                remaining -= buyQty
-                            }
-                        }
-
-                        if remaining > 0.0000001 {
-                            self.isBuyingMissing = false
-                            self.buyMissingErrorMessage = "Not enough market supply to buy missing \(input.name) (Q\(targetQ))."
-                            return
-                        }
+                    let plans = self.buildBuyPlans(for: missingLines, from: listings)
+                    guard !plans.isEmpty else {
+                        self.buyMissingErrorMessage = "Not enough market supply to buy the missing inputs to start production."
+                        return
                     }
-
-                    var currentIndex = 0
-
-                    @MainActor
-                    func step() {
-                        guard tasks.indices.contains(currentIndex) else {
-                            self.isBuyingMissing = false
-                            self.buyMissingErrorMessage = nil
-                            self.loadInventoryOnly()
-                            return
-                        }
-
-                        let task = tasks[currentIndex]
-                        self.marketListingService.buyPartialFromListing(
-                            for: self.userID,
-                            listing: task.listing,
-                            quantityToBuy: task.qty
-                        ) { [weak self] buyResult in
-                            guard let self else { return }
-                            Task { @MainActor in
-                                switch buyResult {
-                                case .failure(let error):
-                                    self.isBuyingMissing = false
-                                    self.buyMissingErrorMessage = error.localizedDescription
-                                case .success:
-                                    currentIndex += 1
-                                    step()
-                                }
-                            }
-                        }
-                    }
-
-                    step()
+                    self.buyMissingConfirmationOptions = plans
+                    self.selectedBuyMissingConfirmationOptionIndex = 0
+                    self.showBuyMissingConfirmationSheet = true
                 }
             }
         }
     }
 
-    func buyMissingForExtractorFuel() {
-        guard !isBuyingMissing, (currentBuilding.isListedOnMarket ?? false) == false, currentBuilding.isProducing != true else { return }
+    func openBuyMissingFuelConfirmation() {
+        guard !isBuyingMissing,
+              !isGeneratingBuyMissingConfirmation,
+              (currentBuilding.isListedOnMarket ?? false) == false,
+              currentBuilding.isProducing != true
+        else { return }
 
         let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: currentBuilding.level)
         let fuelNeed = BuildingLevelCatalog.scaleQuantity(ProductionService.baseFuelPerExtractorCycle, throughputMultiplier: mult)
@@ -551,73 +546,223 @@ final class BuildingDetailViewModel: ObservableObject {
         let missingQty = max(0, fuelNeed - have)
         guard missingQty > 0.0000001 else { return }
 
-        isBuyingMissing = true
-        buyMissingErrorMessage = nil
+        let missingLines = [
+            MissingInputLine(name: "Fuel Cells", baseItemId: "fuel-cell", quality: targetQ, missingQty: missingQty)
+        ]
 
+        buyMissingErrorMessage = nil
+        buyMissingConfirmationTitle = "Buy Missing Fuel"
+        showBuyMissingConfirmationSheet = false
+        buyMissingConfirmationOptions = []
+        selectedBuyMissingConfirmationOptionIndex = 0
+
+        isGeneratingBuyMissingConfirmation = true
         marketListingService.fetchAllListings { [weak self] result in
             guard let self else { return }
             Task { @MainActor in
+                self.isGeneratingBuyMissingConfirmation = false
                 switch result {
                 case .failure(let error):
-                    self.isBuyingMissing = false
                     self.buyMissingErrorMessage = error.localizedDescription
                 case .success(let listings):
-                    let candidates = listings
-                        .filter { $0.item.id == "fuel-cell" && $0.quality == targetQ }
-                        .sorted { $0.pricePerUnit < $1.pricePerUnit }
-
-                    var remaining = missingQty
-                    var tasks: [(listing: MarketListing, qty: Double)] = []
-                    for l in candidates {
-                        guard remaining > 0.0000001 else { break }
-                        let buyQty = min(l.quantity, remaining)
-                        if buyQty > 0 {
-                            tasks.append((listing: l, qty: buyQty))
-                            remaining -= buyQty
-                        }
-                    }
-
-                    if remaining > 0.0000001 {
-                        self.isBuyingMissing = false
-                        self.buyMissingErrorMessage = "Not enough market supply to buy missing Fuel Cells (Q\(targetQ))."
+                    let plans = self.buildBuyPlans(for: missingLines, from: listings)
+                    guard !plans.isEmpty else {
+                        self.buyMissingErrorMessage = "Not enough market supply to buy the missing fuel to start production."
                         return
                     }
-
-                    var currentIndex = 0
-
-                    @MainActor
-                    func step() {
-                        guard tasks.indices.contains(currentIndex) else {
-                            self.isBuyingMissing = false
-                            self.buyMissingErrorMessage = nil
-                            self.loadInventoryOnly()
-                            return
-                        }
-
-                        let task = tasks[currentIndex]
-                        self.marketListingService.buyPartialFromListing(
-                            for: self.userID,
-                            listing: task.listing,
-                            quantityToBuy: task.qty
-                        ) { [weak self] buyResult in
-                            guard let self else { return }
-                            Task { @MainActor in
-                                switch buyResult {
-                                case .failure(let error):
-                                    self.isBuyingMissing = false
-                                    self.buyMissingErrorMessage = error.localizedDescription
-                                case .success:
-                                    currentIndex += 1
-                                    step()
-                                }
-                            }
-                        }
-                    }
-
-                    step()
+                    self.buyMissingConfirmationOptions = plans
+                    self.selectedBuyMissingConfirmationOptionIndex = 0
+                    self.showBuyMissingConfirmationSheet = true
                 }
             }
         }
+    }
+
+    func confirmBuyMissingSelection() {
+        guard !isBuyingMissing,
+              selectedBuyMissingConfirmationOptionsIndexValid
+        else { return }
+
+        let selectedPlan = buyMissingConfirmationOptions[selectedBuyMissingConfirmationOptionIndex]
+
+        isBuyingMissing = true
+        buyMissingErrorMessage = nil
+
+        var currentIndex = 0
+        let tasks = selectedPlan.tasks
+
+        func step() {
+            guard tasks.indices.contains(currentIndex) else {
+                self.isBuyingMissing = false
+                self.buyMissingErrorMessage = nil
+                self.showBuyMissingConfirmationSheet = false
+                NotificationCenter.default.post(
+                    name: Notification.Name("marketResourceListingsChanged"),
+                    object: nil
+                )
+                self.loadInventoryOnly()
+                return
+            }
+
+            let task = tasks[currentIndex]
+            self.marketListingService.buyFromListing(
+                for: self.userID,
+                listing: task.listing
+            ) { [weak self] buyResult in
+                guard let self else { return }
+                Task { @MainActor in
+                    switch buyResult {
+                    case .failure(let error):
+                        self.isBuyingMissing = false
+                        self.buyMissingErrorMessage = error.localizedDescription
+                    case .success:
+                        currentIndex += 1
+                        step()
+                    }
+                }
+            }
+        }
+
+        step()
+    }
+
+    // MARK: - Buy plan building
+
+    private var selectedBuyMissingConfirmationOptionsIndexValid: Bool {
+        (0..<buyMissingConfirmationOptions.count).contains(selectedBuyMissingConfirmationOptionIndex)
+    }
+
+    private func buildBuyPlans(for missingInputs: [MissingInputLine], from listings: [MarketListing]) -> [BuyMissingPlan] {
+        // Market rule: each purchase is an entire listing (no partial fills). Plans show real listing sizes.
+        let plan1Tasks = cheapestWholeListingTasks(for: missingInputs, from: listings)
+        let plan2Tasks = fewestWholeListingTasks(for: missingInputs, from: listings)
+
+        var plans: [BuyMissingPlan] = []
+        if let t = plan1Tasks { plans.append(makePlan(title: "Cheapest full listings", tasks: t)) }
+        if let t = plan2Tasks, buyPlanSignature(t) != buyPlanSignature(plan1Tasks ?? []) {
+            plans.append(makePlan(title: "Fewest purchases", tasks: t))
+        }
+
+        return plans
+            .sorted { lhs, rhs in
+                if lhs.subtotal != rhs.subtotal { return lhs.subtotal < rhs.subtotal }
+                return lhs.tasks.count < rhs.tasks.count
+            }
+            .prefix(3)
+            .map { $0 }
+    }
+
+    private func buyPlanSignature(_ tasks: [BuyTask]) -> String {
+        tasks.map { "\($0.listing.id):\($0.quantityToBuy)" }.joined(separator: "|")
+    }
+
+    private func makePlan(title: String, tasks: [BuyTask]) -> BuyMissingPlan {
+        let subtotal = tasks.reduce(0.0) { $0 + ($1.quantityToBuy * $1.listing.pricePerUnit) }
+        let fee = subtotal * (MarketCatalog.buyOrderFeePercent / 100)
+        let sellerReceives = subtotal - fee
+        return BuyMissingPlan(title: title, tasks: tasks, subtotal: subtotal, fee: fee, sellerReceives: sellerReceives)
+    }
+
+    /// Buys whole listings only: each `BuyTask.quantityToBuy` equals that listing’s size at plan time.
+    private func cheapestWholeListingTasks(for missingInputs: [MissingInputLine], from listings: [MarketListing]) -> [BuyTask]? {
+        let epsilon = 0.0000001
+        var tasks: [BuyTask] = []
+        var usedListingIDs = Set<String>()
+
+        for input in missingInputs {
+            var remaining = input.missingQty
+            let candidates = listings
+                .filter { $0.item.id == input.baseItemId && $0.quality == input.quality && !usedListingIDs.contains($0.id) }
+                .sorted { a, b in
+                    if a.pricePerUnit != b.pricePerUnit { return a.pricePerUnit < b.pricePerUnit }
+                    return a.quantity < b.quantity
+                }
+
+            for l in candidates {
+                guard remaining > epsilon else { break }
+                let fullQty = l.quantity
+                guard fullQty > epsilon else { continue }
+                tasks.append(BuyTask(listing: l, quantityToBuy: fullQty))
+                usedListingIDs.insert(l.id)
+                remaining -= fullQty
+            }
+
+            guard remaining <= epsilon else { return nil }
+        }
+
+        return tasks
+    }
+
+    /// Minimize number of separate listings purchased; tie-break by lowest total cost. Falls back to cheapest-whole if search is skipped.
+    private func fewestWholeListingTasks(for missingInputs: [MissingInputLine], from listings: [MarketListing]) -> [BuyTask]? {
+        var tasks: [BuyTask] = []
+        var usedListingIDs = Set<String>()
+
+        for input in missingInputs {
+            let candidates = listings
+                .filter { $0.item.id == input.baseItemId && $0.quality == input.quality && !usedListingIDs.contains($0.id) }
+                .sorted { $0.id < $1.id }
+
+            guard let lineTasks = fewestListingsCoveringNeed(missingQty: input.missingQty, candidates: candidates) else { return nil }
+            for t in lineTasks {
+                usedListingIDs.insert(t.listing.id)
+            }
+            tasks.append(contentsOf: lineTasks)
+        }
+
+        return tasks.isEmpty ? nil : tasks
+    }
+
+    /// Smallest k such that some k listings sum to ≥ need; among those, cheapest total cost.
+    private func fewestListingsCoveringNeed(missingQty: Double, candidates: [MarketListing]) -> [BuyTask]? {
+        let epsilon = 0.0000001
+        let n = candidates.count
+        guard n > 0 else { return nil }
+
+        if n <= 14 {
+            for k in 1...n {
+                var bestCost: Double?
+                var bestTasks: [BuyTask]?
+
+                func dfs(_ start: Int, _ picked: [MarketListing]) {
+                    if picked.count == k {
+                        let sum = picked.reduce(0) { $0 + $1.quantity }
+                        if sum + epsilon >= missingQty {
+                            let cost = picked.reduce(0) { $0 + $1.quantity * $1.pricePerUnit }
+                            if bestCost == nil || cost < bestCost! {
+                                bestCost = cost
+                                bestTasks = picked.map { BuyTask(listing: $0, quantityToBuy: $0.quantity) }
+                            }
+                        }
+                        return
+                    }
+                    let needMore = k - picked.count
+                    for i in start..<n {
+                        if n - i < needMore { break }
+                        dfs(i + 1, picked + [candidates[i]])
+                    }
+                }
+
+                dfs(0, [])
+                if let t = bestTasks { return t }
+            }
+            return nil
+        }
+
+        // Many listings: greedy by largest quantity first (fewer purchases heuristically), then by cheaper unit price.
+        let sorted = candidates.sorted { a, b in
+            if a.quantity != b.quantity { return a.quantity > b.quantity }
+            if a.pricePerUnit != b.pricePerUnit { return a.pricePerUnit < b.pricePerUnit }
+            return a.id < b.id
+        }
+        var remaining = missingQty
+        var out: [BuyTask] = []
+        for l in sorted {
+            guard remaining > epsilon else { break }
+            out.append(BuyTask(listing: l, quantityToBuy: l.quantity))
+            remaining -= l.quantity
+        }
+        return remaining <= epsilon ? out : nil
     }
 
     /// Scaled output quantity for first output (for display).

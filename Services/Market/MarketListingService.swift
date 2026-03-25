@@ -196,7 +196,7 @@ final class MarketListingService {
 
     // MARK: - Buy (partial listing fill)
     //
-    // This is used by "Buy missing" UX so we don't have to buy the whole listing.
+    // Reserved for flows that explicitly allow splitting a listing. Production “buy missing” uses `buyFromListing` (full listing only).
     // Implementation strategy:
     // - Buy `quantityToBuy` from the listing.
     // - Delete the original listing (so your stock signal triggers count it).
@@ -286,8 +286,12 @@ final class MarketListingService {
                 let sellerCash = sellerData["cash"] as? Double ?? 0
                 transaction.updateData(["cash": sellerCash + netToSeller], forDocument: sellerProfileRef)
 
-                // Listing handling: ensure deleted listing reflects the purchased quantity.
-                transaction.updateData(["quantity": quantityToBuy], forDocument: listingRef)
+                // Listing handling: mark as sold for backend/analytics parity with full buys.
+                transaction.updateData([
+                    "quantity": quantityToBuy,
+                    "soldAt": Timestamp(date: Date()),
+                    "soldToUserID": buyerUserID
+                ], forDocument: listingRef)
 
                 let remaining = available - quantityToBuy
                 if remaining > 0.0000001 {
