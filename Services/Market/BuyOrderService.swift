@@ -57,7 +57,7 @@ final class BuyOrderService {
                     return nil
                 }
                 if currentCash < totalPrice {
-                    errorPointer?.pointee = NSError(domain: "BuyOrderService", code: 6003, userInfo: [NSLocalizedDescriptionKey: "Not enough cash. You need \(Int(totalPrice)) but have \(Int(currentCash))."])
+                    errorPointer?.pointee = NSError(domain: "BuyOrderService", code: 6003, userInfo: [NSLocalizedDescriptionKey: "Not enough cash. You need \(NumberFormatting.integer(Int(totalPrice))) but have \(NumberFormatting.integer(Int(currentCash)))."])
                     return nil
                 }
 
@@ -220,7 +220,7 @@ final class BuyOrderService {
                     let sellerInvData = sellerInvSnap.data()
                     let sellerQty = (sellerInvData?["quantity"] as? Double) ?? 0
                     if sellerQty < line.quantity {
-                        errorPointer?.pointee = NSError(domain: "BuyOrderService", code: 6022, userInfo: [NSLocalizedDescriptionKey: "Insufficient \(line.resourceName) (Q\(line.resourceQuality)). You have \(Int(sellerQty)), need \(Int(line.quantity))."])
+                        errorPointer?.pointee = NSError(domain: "BuyOrderService", code: 6022, userInfo: [NSLocalizedDescriptionKey: "Insufficient \(line.resourceName) (Q\(line.resourceQuality)). You have \(NumberFormatting.integer(Int(sellerQty))), need \(NumberFormatting.integer(Int(line.quantity)))."])
                         return nil
                     }
                     sellerInvSnapshots[docID] = (sellerInvRef, sellerInvData, sellerQty)

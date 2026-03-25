@@ -59,7 +59,7 @@ final class MarketListingService {
                     return nil
                 }
                 if currentQty < quantity {
-                    errorPointer?.pointee = NSError(domain: "MarketListingService", code: 7003, userInfo: [NSLocalizedDescriptionKey: "Insufficient quantity. You have \(Int(currentQty)), listing \(Int(quantity))."])
+                    errorPointer?.pointee = NSError(domain: "MarketListingService", code: 7003, userInfo: [NSLocalizedDescriptionKey: "Insufficient quantity. You have \(NumberFormatting.integer(Int(currentQty))), listing \(NumberFormatting.integer(Int(quantity)))."])
                     return nil
                 }
 
@@ -150,7 +150,7 @@ final class MarketListingService {
                 let sellerCash = sellerData["cash"] as? Double ?? 0
 
                 if buyerCash < total {
-                    errorPointer?.pointee = NSError(domain: "MarketListingService", code: 7013, userInfo: [NSLocalizedDescriptionKey: "Not enough cash. Need \(String(format: "$%.2f", total)), have \(String(format: "$%.2f", buyerCash))."])
+                    errorPointer?.pointee = NSError(domain: "MarketListingService", code: 7013, userInfo: [NSLocalizedDescriptionKey: "Not enough cash. Need \(NumberFormatting.currency(total, fractionDigits: 2)), have \(NumberFormatting.currency(buyerCash, fractionDigits: 2))."])
                     return nil
                 }
 
@@ -261,7 +261,7 @@ final class MarketListingService {
                     errorPointer?.pointee = NSError(
                         domain: "MarketListingService",
                         code: 7013,
-                        userInfo: [NSLocalizedDescriptionKey: "Not enough cash. Need \(String(format: "$%.2f", total)), have \(String(format: "$%.2f", buyerCash))."]
+                        userInfo: [NSLocalizedDescriptionKey: "Not enough cash. Need \(NumberFormatting.currency(total, fractionDigits: 2)), have \(NumberFormatting.currency(buyerCash, fractionDigits: 2))."]
                     )
                     return nil
                 }

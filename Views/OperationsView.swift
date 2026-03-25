@@ -330,7 +330,7 @@ struct OperationsView: View {
                                                     .foregroundStyle(AppTheme.textSecondary)
                                             }
                                             Spacer()
-                                            Text(String(format: "$%.0f", p.cost))
+                                            Text(NumberFormatting.currency(p.cost, fractionDigits: 0))
                                                 .font(.system(size: 13, weight: .bold, design: .monospaced))
                                                 .foregroundStyle(AppTheme.accent)
                                         }

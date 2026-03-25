@@ -54,7 +54,10 @@ enum MarketCatalog {
             Item(id: "brick", name: "Brick", category: .buildingMaterial, isFractional: false),
             Item(id: "concrete-mix", name: "Concrete Mix", category: .buildingMaterial, isFractional: false),
             Item(id: "glass", name: "Glass", category: .buildingMaterial, isFractional: false),
-            Item(id: "steel-beams", name: "Steel Beams", category: .buildingMaterial, isFractional: false)
+            Item(id: "steel-beams", name: "Steel Beams", category: .buildingMaterial, isFractional: false),
+            Item(id: "foundation", name: "Foundation", category: .buildingMaterial, isFractional: false),
+            Item(id: "walls", name: "Walls", category: .buildingMaterial, isFractional: false),
+            Item(id: "window", name: "Window", category: .buildingMaterial, isFractional: false)
         ],
         .component: [
             Item(id: "machine-gear", name: "Machine Gear", category: .component, isFractional: false),

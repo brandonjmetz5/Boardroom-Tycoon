@@ -7,8 +7,7 @@
 
 import SwiftUI
 
-/// Resource PNGs often include transparent padding; we draw larger than the visible slot and clip
-/// so the artwork reads clearly without squinting.
+/// Resource PNGs are drawn at `slot × assetZoom` then clipped to `slot`.
 private enum InventoryResourceIconMetrics {
     /// Collapsed resource row (main list).
     static let rowSlot: CGFloat = 54
@@ -16,8 +15,8 @@ private enum InventoryResourceIconMetrics {
     static let qualitySlot: CGFloat = 44
     /// List-on-market sheet header.
     static let sheetSlot: CGFloat = 64
-    /// Drawable scale before clipping (higher = more “zoom” into padded sprites).
-    static let assetZoom: CGFloat = 1.62
+    /// Drawable scale before clipping; under 1.0 so sprites sit slightly smaller in the circle.
+    static let assetZoom: CGFloat = 0.87
 }
 
 struct InventoryView: View {
@@ -122,7 +121,7 @@ struct InventoryView: View {
         InventoryRail(title: "Inventory Insights", systemImage: "chart.bar.xaxis") {
             VStack(spacing: 10) {
                 HStack(spacing: 10) {
-                    StatBlock(title: "Total Value", value: String(format: "$%.2f", viewModel.totalInventoryValue), accent: AppTheme.accent)
+                    StatBlock(title: "Total Value", value: NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 2), accent: AppTheme.accent)
                     StatBlock(title: "Total Qty", value: viewModel.formattedTotalQuantity(), accent: AppTheme.chipReady)
                 }
                 HStack(spacing: 10) {
@@ -220,7 +219,7 @@ struct InventoryView: View {
                         .padding(.vertical, 3)
                         .background(Capsule().fill(AppTheme.border.opacity(0.4)))
                     if let value {
-                        Text(String(format: "$%.0f", value))
+                        Text(NumberFormatting.currency(value, fractionDigits: 0))
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundStyle(AppTheme.accent)
                     }

@@ -12,6 +12,8 @@ struct DashboardView: View {
     @Binding var selectedTab: MainTabView.Tab
 
     @StateObject private var viewModel: HomeViewModel
+    @State private var isSideMenuOpen = false
+    @State private var sideMenuDragX: CGFloat = 0
 
     init(userID: String, selectedTab: Binding<MainTabView.Tab>) {
         self.userID = userID
@@ -54,9 +56,29 @@ struct DashboardView: View {
                 }
             }
         }
+        .overlay(alignment: .leading) {
+            sideMenuOverlay
+        }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+                        isSideMenuOpen.toggle()
+                        sideMenuDragX = 0
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Menu")
+            }
             ToolbarItem(placement: .principal) {
                 Text("Headquarters")
                     .font(AppTheme.titleMedium())
@@ -64,6 +86,187 @@ struct DashboardView: View {
             }
         }
         .onAppear { viewModel.loadData() }
+    }
+
+    private var sideMenuOverlay: some View {
+        GeometryReader { geo in
+            let menuWidth = min(320.0, geo.size.width * 0.82)
+            let maxDragClose = menuWidth
+            let drag = isSideMenuOpen ? max(0, sideMenuDragX) : menuWidth
+            let offsetX = isSideMenuOpen ? (-drag) : (-(menuWidth + 40))
+
+            ZStack(alignment: .leading) {
+                if isSideMenuOpen {
+                    Color.black
+                        .opacity(0.45)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) {
+                                isSideMenuOpen = false
+                                sideMenuDragX = 0
+                            }
+                        }
+                        .transition(.opacity)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(AppTheme.accent)
+                            .frame(width: 28, height: 28)
+                            .background(AppTheme.accent.opacity(0.14))
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("COMMAND MENU")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(AppTheme.textSecondary)
+                            Text("Secondary navigation")
+                                .font(AppTheme.caption())
+                                .foregroundStyle(AppTheme.textTertiary)
+                        }
+                        Spacer()
+                        Button {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) {
+                                isSideMenuOpen = false
+                                sideMenuDragX = 0
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .frame(width: 32, height: 32)
+                                .background(AppTheme.surfaceAlt.opacity(0.45))
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Rectangle()
+                        .fill(AppTheme.border)
+                        .frame(height: 1)
+
+                    VStack(spacing: 10) {
+                        NavigationLink {
+                            LeaderboardsView(userID: userID)
+                        } label: {
+                            sideMenuRow(title: "Leaderboards", subtitle: "Company value rankings", systemImage: "trophy.fill", tint: AppTheme.chipProducing)
+                        }
+                        .buttonStyle(.plain)
+                        .simultaneousGesture(TapGesture().onEnded {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) {
+                                isSideMenuOpen = false
+                                sideMenuDragX = 0
+                            }
+                        })
+
+                        NavigationLink {
+                            EncyclopediaView()
+                        } label: {
+                            sideMenuRow(title: "Encyclopedia", subtitle: "Recipes and item knowledge", systemImage: "book.fill", tint: AppTheme.chipAvailable)
+                        }
+                        .buttonStyle(.plain)
+                        .simultaneousGesture(TapGesture().onEnded {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) {
+                                isSideMenuOpen = false
+                                sideMenuDragX = 0
+                            }
+                        })
+
+                        NavigationLink {
+                            TutorialHubView()
+                        } label: {
+                            sideMenuRow(title: "Tutorial", subtitle: "How to play", systemImage: "graduationcap.fill", tint: AppTheme.accent)
+                        }
+                        .buttonStyle(.plain)
+                        .simultaneousGesture(TapGesture().onEnded {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) {
+                                isSideMenuOpen = false
+                                sideMenuDragX = 0
+                            }
+                        })
+
+                        NavigationLink {
+                            HelpCenterView()
+                        } label: {
+                            sideMenuRow(title: "Help", subtitle: "Support and FAQ", systemImage: "questionmark.circle.fill", tint: AppTheme.textSecondary)
+                        }
+                        .buttonStyle(.plain)
+                        .simultaneousGesture(TapGesture().onEnded {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) {
+                                isSideMenuOpen = false
+                                sideMenuDragX = 0
+                            }
+                        })
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .frame(width: menuWidth, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(AppTheme.surface.opacity(0.92))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(AppTheme.border.opacity(0.95), lineWidth: 1)
+                        )
+                )
+                .offset(x: offsetX)
+                .padding(.vertical, 8)
+                .gesture(
+                    DragGesture(minimumDistance: 6)
+                        .onChanged { value in
+                            guard isSideMenuOpen else { return }
+                            if value.translation.width < 0 {
+                                sideMenuDragX = min(maxDragClose, abs(value.translation.width))
+                            } else {
+                                sideMenuDragX = 0
+                            }
+                        }
+                        .onEnded { value in
+                            guard isSideMenuOpen else { return }
+                            let shouldClose = abs(value.translation.width) > (menuWidth * 0.35)
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) {
+                                isSideMenuOpen = shouldClose ? false : true
+                                sideMenuDragX = 0
+                            }
+                        }
+                )
+            }
+            .allowsHitTesting(isSideMenuOpen)
+        }
+    }
+
+    private func sideMenuRow(title: String, subtitle: String, systemImage: String, tint: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(tint)
+                .frame(width: 30, height: 30)
+                .background(tint.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(AppTheme.bodyMedium())
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text(subtitle)
+                    .font(AppTheme.caption())
+                    .foregroundStyle(AppTheme.textTertiary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(AppTheme.textTertiary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.surfaceAlt.opacity(0.55)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border.opacity(0.95), lineWidth: 1))
     }
 
     private var commandHeaderPanel: some View {
@@ -109,8 +312,8 @@ struct DashboardView: View {
         CommandRail(title: "Treasury Strip", systemImage: "banknote.fill") {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    stripTile("Cash", String(format: "$%.0f", viewModel.profile?.cash ?? 0), AppTheme.accent)
-                    stripTile("Inventory", String(format: "$%.0f", viewModel.totalInventoryValue), AppTheme.chipAvailable)
+                    stripTile("Cash", NumberFormatting.currency(viewModel.profile?.cash ?? 0, fractionDigits: 0), AppTheme.accent)
+                    stripTile("Inventory", NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 0), AppTheme.chipAvailable)
                     stripTile("Slots", "\(viewModel.usedSlotsCount)/\(viewModel.totalSlotsCount)", AppTheme.chipProspecting)
                     stripTile("Producing", "\(viewModel.producingCount)", AppTheme.chipProducing)
                     stripTile("Ready", "\(viewModel.readyCount)", AppTheme.chipReady)
@@ -236,7 +439,7 @@ struct DashboardView: View {
         CommandRail(title: "Market Situation", systemImage: "chart.xyaxis.line") {
             VStack(alignment: .leading, spacing: 8) {
                 metricRow("Assets listed", "\(viewModel.listedCount)", AppTheme.chipListed)
-                metricRow("Inventory liquidity", String(format: "$%.0f", viewModel.totalInventoryValue), AppTheme.chipAvailable)
+                metricRow("Inventory liquidity", NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 0), AppTheme.chipAvailable)
                 if viewModel.isLoadingProspecting {
                     Text("Prospecting feed syncing...")
                         .font(AppTheme.caption())

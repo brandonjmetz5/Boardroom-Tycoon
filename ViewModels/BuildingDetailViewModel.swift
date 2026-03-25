@@ -646,7 +646,7 @@ final class BuildingDetailViewModel: ObservableObject {
             let qty = ing.item.isFractional
                 ? BuildingLevelCatalog.scaleQuantityFractional(ing.quantity, throughputMultiplier: mult)
                 : BuildingLevelCatalog.scaleQuantity(ing.quantity, throughputMultiplier: mult)
-            return (ing.item.isFractional ? String(format: "%.1f", qty) : "\(Int(qty))") + " \(ing.item.name)"
+            return (ing.item.isFractional ? NumberFormatting.decimal(qty, fractionDigits: 1) : NumberFormatting.integer(Int(qty))) + " \(ing.item.name)"
         }.joined(separator: ", ")
     }
 
@@ -660,7 +660,7 @@ final class BuildingDetailViewModel: ObservableObject {
         let qty = out.item.isFractional
             ? BuildingLevelCatalog.scaleQuantityFractional(out.quantity, throughputMultiplier: mult)
             : BuildingLevelCatalog.scaleQuantity(out.quantity, throughputMultiplier: mult)
-        return (out.item.isFractional ? String(format: "%.1f", qty) : "\(Int(qty))") + " \(out.item.name)"
+        return (out.item.isFractional ? NumberFormatting.decimal(qty, fractionDigits: 1) : NumberFormatting.integer(Int(qty))) + " \(out.item.name)"
     }
 
     /// Next production end time (building-level).
@@ -777,7 +777,7 @@ final class BuildingDetailViewModel: ObservableObject {
             let qty = ing.item.isFractional
                 ? BuildingLevelCatalog.scaleQuantityFractional(ing.quantity, throughputMultiplier: mult)
                 : BuildingLevelCatalog.scaleQuantity(ing.quantity, throughputMultiplier: mult)
-            return (ing.item.isFractional ? String(format: "%.1f", qty) : "\(Int(qty))") + " \(ing.item.name)"
+            return (ing.item.isFractional ? NumberFormatting.decimal(qty, fractionDigits: 1) : NumberFormatting.integer(Int(qty))) + " \(ing.item.name)"
         }.joined(separator: ", ")
     }
 }

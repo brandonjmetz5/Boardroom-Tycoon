@@ -104,7 +104,7 @@ struct MarketView: View {
             }
         } message: {
             if let order = viewModel.selectedOrderForFulfillConfirm {
-                Text("Deliver \(order.lines.map { "\(Int($0.quantity)) \($0.resourceName) (Q\($0.resourceQuality))" }.joined(separator: ", ")) and receive \(String(format: "$%.2f", order.netToSeller)) (3% fee applied).")
+                Text("Deliver \(order.lines.map { "\(NumberFormatting.integer(Int($0.quantity))) \($0.resourceName) (Q\($0.resourceQuality))" }.joined(separator: ", ")) and receive \(NumberFormatting.currency(order.netToSeller, fractionDigits: 2)) (3% fee applied).")
             }
         }
         .alert("Buy this listing?", isPresented: Binding(
@@ -115,9 +115,11 @@ struct MarketView: View {
             Button("Buy") { viewModel.confirmBuyFromListing() }
         } message: {
             if let listing = viewModel.selectedListingToBuy {
-                let qtyText = listing.item.isFractional ? String(format: "%.2f", listing.quantity) : String(Int(listing.quantity))
+                let qtyText = listing.item.isFractional
+                    ? NumberFormatting.decimal(listing.quantity, fractionDigits: 2)
+                    : NumberFormatting.integer(Int(listing.quantity))
                 let total = listing.quantity * listing.pricePerUnit
-                Text("\(listing.item.name) (Q\(listing.quality))\nQuantity: \(qtyText)\nTotal: \(String(format: "$%.2f", total)) (3% fee applied)")
+                Text("\(listing.item.name) (Q\(listing.quality))\nQuantity: \(qtyText)\nTotal: \(NumberFormatting.currency(total, fractionDigits: 2)) (3% fee applied)")
             }
         }
     }
@@ -297,7 +299,7 @@ struct MarketView: View {
                             .padding(.vertical, 2)
                             .background(AppTheme.cardBackgroundAlt)
                             .clipShape(Capsule())
-                        Text("× \(Int(line.quantity))")
+                        Text("× \(NumberFormatting.integer(Int(line.quantity)))")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
@@ -305,17 +307,17 @@ struct MarketView: View {
             }
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(String(format: "$%.2f", order.totalPrice))
+                    Text(NumberFormatting.currency(order.totalPrice, fractionDigits: 2))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text(String(format: "$%.2f/unit", order.pricePerUnit))
+                    Text("\(NumberFormatting.currency(order.pricePerUnit, fractionDigits: 2))/unit")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppTheme.textTertiary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
                     if let delta {
-                        let text = String(format: "%+.0f%% vs selling", delta)
+                        let text = "\(NumberFormatting.signedPercentWhole(delta)) vs selling"
                         Text(text)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(delta >= 0 ? AppTheme.chipPositive : AppTheme.textError)
@@ -327,7 +329,7 @@ struct MarketView: View {
                             )
                             .clipShape(Capsule())
                     }
-                    Text("You receive: \(String(format: "$%.2f", order.netToSeller))")
+                    Text("You receive: \(NumberFormatting.currency(order.netToSeller, fractionDigits: 2))")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                     Text("3% fee")
@@ -489,7 +491,9 @@ struct MarketView: View {
 
     private func resourceListingRow(listing: MarketListing) -> some View {
         let isMine = listing.sellerUserID == userID
-        let qtyText = listing.item.isFractional ? String(format: "%.2f", listing.quantity) : String(Int(listing.quantity))
+        let qtyText = listing.item.isFractional
+            ? NumberFormatting.decimal(listing.quantity, fractionDigits: 2)
+            : NumberFormatting.integer(Int(listing.quantity))
         let delta = viewModel.dealDeltaForListing(listing)
         return HStack(alignment: .center, spacing: 12) {
             resourceIconView(name: listing.item.name)
@@ -506,7 +510,7 @@ struct MarketView: View {
                         .background(AppTheme.cardBackgroundAlt)
                         .clipShape(Capsule())
                     if let delta {
-                        let text = String(format: "%+.0f%%", delta)
+                        let text = NumberFormatting.signedPercentWhole(delta)
                         Text(text)
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(delta <= 0 ? AppTheme.chipPositive : AppTheme.textError)
@@ -519,7 +523,7 @@ struct MarketView: View {
                             .clipShape(Capsule())
                     }
                 }
-                Text("\(qtyText) available · \(String(format: "$%.2f", listing.pricePerUnit))/unit")
+                Text("\(qtyText) available · \(NumberFormatting.currency(listing.pricePerUnit, fractionDigits: 2))/unit")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppTheme.textTertiary)
             }
@@ -658,16 +662,16 @@ struct MarketView: View {
                             let fee = viewModel.feeAmount(for: total)
                             let net = viewModel.netToSeller(for: total)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Market fee (3%): \(String(format: "$%.2f", fee))")
+                                Text("Market fee (3%): \(NumberFormatting.currency(fee, fractionDigits: 2))")
                                     .font(.system(size: 12, weight: .regular))
                                     .foregroundStyle(AppTheme.textTertiary)
-                                Text("Seller receives: \(String(format: "$%.2f", net))")
+                                Text("Seller receives: \(NumberFormatting.currency(net, fractionDigits: 2))")
                                     .font(.system(size: 12, weight: .regular))
                                     .foregroundStyle(AppTheme.textSecondary)
                             }
                         }
                         if let cash = viewModel.profile?.cash, let total = Double(viewModel.newOrderTotalPriceText), total > 0, cash < total {
-                            Text("Not enough cash. You have \(String(format: "$%.2f", cash)).")
+                            Text("Not enough cash. You have \(NumberFormatting.currency(cash, fractionDigits: 2)).")
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(AppTheme.textError)
                         }
@@ -807,8 +811,8 @@ struct MarketView: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 4) {
-                    row("Current Bid", String(format: "$%.2f", listing.currentBid))
-                    row("Buy Now", String(format: "$%.2f", listing.buyNowPrice))
+                    row("Current Bid", NumberFormatting.currency(listing.currentBid, fractionDigits: 2))
+                    row("Buy Now", NumberFormatting.currency(listing.buyNowPrice, fractionDigits: 2))
                         .foregroundStyle(AppTheme.textPrimary)
                         .fontWeight(.semibold)
                 }
@@ -894,8 +898,8 @@ struct MarketView: View {
                 Form {
                     Section("Place Bid") {
                         Text(viewModel.mineLabel(for: listing.resourceType))
-                        Text(String(format: "Current Bid: $%.2f", listing.currentBid))
-                        Text(String(format: "Buy Now: $%.2f", listing.buyNowPrice))
+                        Text("Current Bid: \(NumberFormatting.currency(listing.currentBid, fractionDigits: 2))")
+                        Text("Buy Now: \(NumberFormatting.currency(listing.buyNowPrice, fractionDigits: 2))")
                         TextField("Enter bid amount", text: $viewModel.bidAmountText)
                             .keyboardType(.decimalPad)
                     }

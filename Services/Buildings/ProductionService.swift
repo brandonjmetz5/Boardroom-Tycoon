@@ -111,7 +111,7 @@ final class ProductionService {
                     errorPointer?.pointee = NSError(
                         domain: "ProductionService",
                         code: 2104,
-                        userInfo: [NSLocalizedDescriptionKey: "Not enough cash for R&D cycle. Need $\(Int(cycleCost))."]
+                        userInfo: [NSLocalizedDescriptionKey: "Not enough cash for R&D cycle. Need \(NumberFormatting.currency(cycleCost, fractionDigits: 0))."]
                     )
                     return nil
                 }
@@ -205,7 +205,7 @@ final class ProductionService {
                         errorPointer?.pointee = NSError(
                             domain: "ProductionService",
                             code: 2006,
-                            userInfo: [NSLocalizedDescriptionKey: "Not enough \(fuelLabel). This cycle costs \(Int(fuelRequired)) \(fuelLabel)."]
+                            userInfo: [NSLocalizedDescriptionKey: "Not enough \(fuelLabel). This cycle costs \(NumberFormatting.integer(Int(fuelRequired))) \(fuelLabel)."]
                         )
                         return nil
                     }

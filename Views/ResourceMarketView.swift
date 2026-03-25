@@ -55,9 +55,11 @@ struct ResourceMarketView: View {
             Button("Buy") { viewModel.confirmBuyFromListing() }
         } message: {
             if let listing = viewModel.selectedListingToBuy {
-                let qtyText = listing.item.isFractional ? String(format: "%.2f", listing.quantity) : String(Int(listing.quantity))
+                let qtyText = listing.item.isFractional
+                    ? NumberFormatting.decimal(listing.quantity, fractionDigits: 2)
+                    : NumberFormatting.integer(Int(listing.quantity))
                 let total = listing.quantity * listing.pricePerUnit
-                Text("\(listing.item.name) (Q\(listing.quality))\nQuantity: \(qtyText)\nTotal: \(String(format: "$%.2f", total)) (3% fee applied)")
+                Text("\(listing.item.name) (Q\(listing.quality))\nQuantity: \(qtyText)\nTotal: \(NumberFormatting.currency(total, fractionDigits: 2)) (3% fee applied)")
             }
         }
     }
@@ -213,14 +215,6 @@ struct ResourceMarketView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
                     Spacer()
-                    Text("Cheapest first")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(AppTheme.surfaceAlt.opacity(0.58))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border.opacity(0.95), lineWidth: 1))
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
         }
@@ -251,7 +245,9 @@ struct ResourceMarketView: View {
 
     private func resourceListingCard(listing: MarketListing) -> some View {
         let isMyListing = listing.sellerUserID == userID
-        let qtyText = listing.item.isFractional ? String(format: "%.2f", listing.quantity) : String(Int(listing.quantity))
+        let qtyText = listing.item.isFractional
+            ? NumberFormatting.decimal(listing.quantity, fractionDigits: 2)
+            : NumberFormatting.integer(Int(listing.quantity))
         let delta = viewModel.dealDeltaForListing(listing)
         let total = listing.quantity * listing.pricePerUnit
 
@@ -277,7 +273,7 @@ struct ResourceMarketView: View {
                 .padding(.leading, 3)
 
             HStack(alignment: .center, spacing: 12) {
-                resourceIconView(name: listing.item.name)
+                resourceIconView(name: listing.item.name, slot: 44, zoom: 1.0)
                     .frame(width: 44, height: 44)
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -300,7 +296,7 @@ struct ResourceMarketView: View {
                         }
                     }
 
-                    Text("\(qtyText) available · \(String(format: "$%.2f", listing.pricePerUnit))/unit")
+                    Text("\(qtyText) available · \(NumberFormatting.currency(listing.pricePerUnit, fractionDigits: 2))/unit")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppTheme.textTertiary)
 
@@ -311,7 +307,7 @@ struct ResourceMarketView: View {
                             .lineLimit(1)
                         Spacer()
 
-                        Text("Total \(String(format: "$%.2f", total))")
+                        Text("Total \(NumberFormatting.currency(total, fractionDigits: 2))")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
@@ -385,7 +381,7 @@ struct ResourceMarketView: View {
     }
 
     private func dealChip(delta: Double) -> some View {
-        let text = String(format: "%+.0f%%", delta)
+        let text = NumberFormatting.signedPercentWhole(delta)
         let isValue = delta <= 0
         let color = isValue ? AppTheme.chipPositive : AppTheme.textError
 
@@ -408,7 +404,7 @@ struct ResourceMarketView: View {
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(AppTheme.textTertiary)
                 Spacer()
-                Text(String(format: "%+.0f%%", delta))
+                Text(NumberFormatting.signedPercentWhole(delta))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(delta <= 0 ? AppTheme.chipPositive : AppTheme.textError)
             }
@@ -569,8 +565,8 @@ struct ResourceMarketView: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 if let iconName {
-                    resourceIconView(name: iconName)
-                        .frame(width: 28, height: 28)
+                    resourceIconView(name: iconName, slot: 34, zoom: 1.0)
+                        .frame(width: 34, height: 34)
                 } else {
                     ZStack {
                         Circle().fill(AppTheme.surfaceAlt.opacity(0.58))
@@ -578,7 +574,7 @@ struct ResourceMarketView: View {
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
-                    .frame(width: 28, height: 28)
+                    .frame(width: 34, height: 34)
                 }
                 Text(title)
                     .lineLimit(1)
@@ -601,25 +597,25 @@ struct ResourceMarketView: View {
     // MARK: - Resource icons
 
     @ViewBuilder
-    private func resourceIconView(name: String) -> some View {
+    private func resourceIconView(name: String, slot: CGFloat, zoom: CGFloat) -> some View {
         if let assetName = resourceAssetName(for: name) {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.cardBackgroundAlt.opacity(0.95))
-                Image(assetName)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFill()
-                    .clipShape(Circle())
-            }
+            Image(assetName)
+                .renderingMode(.original)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: slot * zoom, height: slot * zoom)
+                .frame(width: slot, height: slot)
+                .clipped()
         } else {
             ZStack {
                 Circle()
-                    .fill(AppTheme.accent.opacity(0.22))
+                    .fill(AppTheme.accent.opacity(0.14))
                 Text(String(name.prefix(1)).uppercased())
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(AppTheme.accent)
             }
+            .frame(width: slot, height: slot)
         }
     }
 

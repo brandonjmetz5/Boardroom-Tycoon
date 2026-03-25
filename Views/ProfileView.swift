@@ -104,9 +104,9 @@ struct ProfileView: View {
                 }
 
                 HStack(spacing: 10) {
-                    metricTile("LEVEL", "\(profile.level)", AppTheme.accent)
-                    metricTile("XP", "\(profile.xp)", AppTheme.chipAvailable)
-                    metricTile("R&D", "\(profile.researchPoints)", AppTheme.chipListed)
+                    metricTile("LEVEL", NumberFormatting.integer(profile.level), AppTheme.accent)
+                    metricTile("XP", NumberFormatting.integer(profile.xp), AppTheme.chipAvailable)
+                    metricTile("R&D", NumberFormatting.integer(profile.researchPoints), AppTheme.chipListed)
                 }
             }
         }
@@ -115,10 +115,10 @@ struct ProfileView: View {
     private func progressionRail(_ profile: PlayerProfile) -> some View {
         ProfileRail(title: "Progression Matrix", systemImage: "flag.fill") {
             VStack(alignment: .leading, spacing: 8) {
-                telemetryRow("LEVEL", "\(profile.level)")
-                telemetryRow("XP", "\(profile.xp)")
-                telemetryRow("BUILDING SLOTS", "\(profile.buildingSlotCount)")
-                telemetryRow("RESEARCH POINTS", "\(profile.researchPoints)")
+                telemetryRow("LEVEL", NumberFormatting.integer(profile.level))
+                telemetryRow("XP", NumberFormatting.integer(profile.xp))
+                telemetryRow("BUILDING SLOTS", NumberFormatting.integer(profile.buildingSlotCount))
+                telemetryRow("RESEARCH POINTS", NumberFormatting.integer(profile.researchPoints))
             }
         }
     }
@@ -126,11 +126,11 @@ struct ProfileView: View {
     private func financeRail(_ profile: PlayerProfile) -> some View {
         ProfileRail(title: "Treasury Ledger", systemImage: "banknote.fill") {
             VStack(alignment: .leading, spacing: 8) {
-                telemetryRow("LIQUID CASH", String(format: "$%.2f", profile.cash), tint: AppTheme.accent)
-                telemetryRow("SLOT CAPACITY", "\(profile.buildingSlotCount)", tint: AppTheme.chipProspecting)
+                telemetryRow("LIQUID CASH", NumberFormatting.currency(profile.cash, fractionDigits: 2), tint: AppTheme.accent)
+                telemetryRow("SLOT CAPACITY", NumberFormatting.integer(profile.buildingSlotCount), tint: AppTheme.chipProspecting)
                 telemetryRow(
                     "CASH / SLOT",
-                    String(format: "$%.2f", profile.cash / max(1, Double(profile.buildingSlotCount))),
+                    NumberFormatting.currency(profile.cash / max(1, Double(profile.buildingSlotCount)), fractionDigits: 2),
                     tint: AppTheme.chipReady
                 )
             }

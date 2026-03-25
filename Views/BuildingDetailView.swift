@@ -70,7 +70,7 @@ struct BuildingDetailView: View {
                         Text("LEVEL \(viewModel.currentBuilding.level)")
                             .font(.system(size: 12, weight: .bold, design: .monospaced))
                             .foregroundStyle(AppTheme.textTertiary)
-                        Text("Throughput x\(String(format: "%.2f", viewModel.throughputMultiplier))")
+                        Text("Throughput x\(NumberFormatting.decimal(viewModel.throughputMultiplier, fractionDigits: 2))")
                             .font(AppTheme.caption())
                             .foregroundStyle(AppTheme.textSecondary)
                     }
@@ -84,7 +84,7 @@ struct BuildingDetailView: View {
                             Text("Upgrade to Level \(viewModel.currentBuilding.level + 1)")
                                 .font(AppTheme.captionMedium())
                                 .foregroundStyle(AppTheme.textPrimary)
-                            Text(String(format: "Cash Requirement: $%.0f", viewModel.upgradeCashCost))
+                            Text("Cash Requirement: \(NumberFormatting.currency(viewModel.upgradeCashCost, fractionDigits: 0))")
                                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                                 .foregroundStyle(AppTheme.textSecondary)
                             upgradeRequirementIcons
@@ -117,7 +117,7 @@ struct BuildingDetailView: View {
             ForEach(reqs, id: \.itemID) { item in
                 ZStack(alignment: .bottomTrailing) {
                     resourceIconView(name: upgradeItemDisplayName(for: item.itemID), size: 32)
-                    Text("\(Int(item.quantity))")
+                    Text(NumberFormatting.integer(Int(item.quantity)))
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .foregroundStyle(.white)
                         .padding(3)
@@ -351,12 +351,12 @@ struct BuildingDetailView: View {
     private var assetActionsPanel: some View {
         BuildingPanel(title: "Asset Control", icon: "dollarsign.circle.fill") {
             VStack(alignment: .leading, spacing: 10) {
-                telemetryRow(label: "SYSTEM SALE VALUE", value: String(format: "$%.2f", viewModel.scrapValue()))
+                telemetryRow(label: "SYSTEM SALE VALUE", value: NumberFormatting.currency(viewModel.scrapValue(), fractionDigits: 2))
 
                 if viewModel.currentBuilding.isListedOnMarket == true {
                     if let listing = viewModel.currentListing {
-                        telemetryRow(label: "BUY NOW", value: String(format: "$%.2f", listing.buyNowPrice))
-                        telemetryRow(label: "CURRENT BID", value: String(format: "$%.2f", listing.currentBid))
+                        telemetryRow(label: "BUY NOW", value: NumberFormatting.currency(listing.buyNowPrice, fractionDigits: 2))
+                        telemetryRow(label: "CURRENT BID", value: NumberFormatting.currency(listing.currentBid, fractionDigits: 2))
                         if listing.currentBidderID == nil || listing.currentBidderID?.isEmpty == true {
                             Button {
                                 viewModel.cancelListing()
@@ -437,10 +437,10 @@ struct BuildingDetailView: View {
                                 telemetryRow(label: "LEVEL", value: "\(viewModel.currentBuilding.level)")
 
                                 if let pricing = viewModel.suggestedPricing() {
-                                    telemetryRow(label: "SUGGESTED BID", value: String(format: "$%.2f", pricing.startingBid))
+                                    telemetryRow(label: "SUGGESTED BID", value: NumberFormatting.currency(pricing.startingBid, fractionDigits: 2))
                                     telemetryRow(
                                         label: "SUGGESTED BUY NOW",
-                                        value: String(format: "$%.2f - $%.2f", pricing.suggestedBuyNowLow, pricing.suggestedBuyNowHigh),
+                                        value: "\(NumberFormatting.currency(pricing.suggestedBuyNowLow, fractionDigits: 2)) - \(NumberFormatting.currency(pricing.suggestedBuyNowHigh, fractionDigits: 2))",
                                         tint: AppTheme.textSecondary
                                     )
                                 }
@@ -650,7 +650,7 @@ struct BuildingDetailView: View {
     }
 
     private func formatQty(_ q: Double) -> String {
-        q.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(q))" : String(format: "%.1f", q)
+        q.truncatingRemainder(dividingBy: 1) == 0 ? NumberFormatting.integer(Int(q)) : NumberFormatting.decimal(q, fractionDigits: 1)
     }
 }
 

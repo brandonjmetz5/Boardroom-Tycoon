@@ -44,7 +44,7 @@ enum UpgradeCatalog {
     /// Human-readable name for building upgrade requirement (for UI).
     static func buildingUpgradeRequirementLabel(forLevel currentLevel: Int) -> String {
         let req = buildingUpgradeRequirement(forLevel: currentLevel)
-        return req.map { "\(Int($0.quantity)) \(itemDisplayName($0.itemID))" }.joined(separator: ", ")
+        return req.map { "\(NumberFormatting.integer(Int($0.quantity))) \(itemDisplayName($0.itemID))" }.joined(separator: ", ")
     }
 
     // MARK: - Machine upgrade (by building type) — retained for seed/item reference only; no longer used for upgrades
@@ -65,7 +65,7 @@ enum UpgradeCatalog {
 
     static func machineUpgradeRequirementLabel(for buildingType: BuildingType) -> String {
         let req = machineUpgradeRequirement(for: buildingType)
-        return req.map { "\(Int($0.quantity)) \(itemDisplayName($0.itemID))" }.joined(separator: ", ")
+        return req.map { "\(NumberFormatting.integer(Int($0.quantity))) \(itemDisplayName($0.itemID))" }.joined(separator: ", ")
     }
 
     private static func itemDisplayName(_ itemID: String) -> String {

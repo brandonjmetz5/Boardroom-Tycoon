@@ -144,8 +144,8 @@ struct PortfolioView: View {
     private var headerRail: some View {
         PortfolioRail(title: "Desk Status", systemImage: "dot.radiowaves.left.and.right") {
             HStack(spacing: 10) {
-                metricPill("SYMBOLS", "\(stocksVM.stocks.count)", AppTheme.accent)
-                metricPill("POSITIONS", "\(stocksVM.positionsWithStock.count)", AppTheme.chipAvailable)
+                metricPill("SYMBOLS", NumberFormatting.integer(stocksVM.stocks.count), AppTheme.accent)
+                metricPill("POSITIONS", NumberFormatting.integer(stocksVM.positionsWithStock.count), AppTheme.chipAvailable)
                 metricPill("MODE", stocksVM.canTrade ? "LIVE" : "READ-ONLY", stocksVM.canTrade ? AppTheme.chipReady : AppTheme.chipIdle)
             }
         }
@@ -173,7 +173,7 @@ struct PortfolioView: View {
                 Text(stock.name).font(AppTheme.bodyMedium()).foregroundStyle(AppTheme.textPrimary)
                 Text(stock.symbol).font(AppTheme.caption()).foregroundStyle(AppTheme.textSecondary)
                 if let pos = stocksVM.position(for: stock.symbol), pos.sharesOwned > 0 {
-                    Text("Own \(String(format: "%.2f", pos.sharesOwned)) shares")
+                    Text("Own \(NumberFormatting.decimal(pos.sharesOwned, fractionDigits: 2)) shares")
                         .font(AppTheme.captionMedium())
                         .foregroundStyle(AppTheme.textTertiary)
                 }
@@ -187,7 +187,7 @@ struct PortfolioView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                Text(String(format: "$%.2f", stock.currentPrice))
+                Text(NumberFormatting.currency(stock.currentPrice, fractionDigits: 2))
                     .font(AppTheme.monoNumber())
                     .foregroundStyle(AppTheme.textPrimary)
                 Text(stocksVM.formattedChange(stock.priceChange))
@@ -216,25 +216,25 @@ struct PortfolioView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(stock.name).font(AppTheme.bodyMedium()).foregroundStyle(AppTheme.textPrimary)
                     Text(stock.symbol).font(AppTheme.caption()).foregroundStyle(AppTheme.textSecondary)
-                    Text("\(String(format: "%.2f", position.sharesOwned)) shares")
+                    Text("\(NumberFormatting.decimal(position.sharesOwned, fractionDigits: 2)) shares")
                         .font(AppTheme.captionMedium())
                         .foregroundStyle(AppTheme.textTertiary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text(String(format: "$%.2f", marketValue))
+                    Text(NumberFormatting.currency(marketValue, fractionDigits: 2))
                         .font(AppTheme.monoNumber())
                         .foregroundStyle(AppTheme.accent)
-                    Text("Avg \(String(format: "$%.2f", position.averageCost))")
+                    Text("Avg \(NumberFormatting.currency(position.averageCost, fractionDigits: 2))")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(AppTheme.textTertiary)
-                    Text("\(pl >= 0 ? "+" : "-")$\(String(format: "%.2f", abs(pl)))")
+                    Text(NumberFormatting.signedCurrency(pl, fractionDigits: 2))
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundStyle(color)
                 }
             }
             HStack {
-                Text("Now \(String(format: "$%.2f", stock.currentPrice))")
+                Text("Now \(NumberFormatting.currency(stock.currentPrice, fractionDigits: 2))")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
@@ -256,10 +256,10 @@ struct PortfolioView: View {
                 Text("Portfolio value")
                     .font(AppTheme.caption())
                     .foregroundStyle(AppTheme.textSecondary)
-                Text(String(format: "$%.2f", stocksVM.portfolioValue))
+                Text(NumberFormatting.currency(stocksVM.portfolioValue, fractionDigits: 2))
                     .font(AppTheme.titleSmall())
                     .foregroundStyle(AppTheme.textPrimary)
-                Text("Today \(stocksVM.todayPL >= 0 ? "+" : "-")$\(String(format: "%.2f", abs(stocksVM.todayPL)))")
+                Text("Today \(NumberFormatting.signedCurrency(stocksVM.todayPL, fractionDigits: 2))")
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                     .foregroundStyle(stocksVM.todayPL >= 0 ? AppTheme.chipPositive : AppTheme.chipNegative)
             }
@@ -314,7 +314,7 @@ struct PortfolioView: View {
                                     }
                                     Spacer()
                                     VStack(alignment: .trailing, spacing: 2) {
-                                        Text(String(format: "$%.2f", stock.currentPrice))
+                                        Text(NumberFormatting.currency(stock.currentPrice, fractionDigits: 2))
                                             .font(AppTheme.monoNumber())
                                             .foregroundStyle(AppTheme.accent)
                                         Text(stocksVM.formattedChange(stock.priceChange))
@@ -373,11 +373,11 @@ struct PortfolioView: View {
                             .pickerStyle(.segmented)
 
                             if stocksVM.tradeSegment == 0, let cash = stocksVM.profile?.cash {
-                                Text("Cash: \(String(format: "$%.2f", cash))")
+                                Text("Cash: \(NumberFormatting.currency(cash, fractionDigits: 2))")
                                     .font(AppTheme.caption())
                                     .foregroundStyle(AppTheme.textSecondary)
                             } else if let pos = stocksVM.position(for: stock.symbol) {
-                                Text("You own: \(String(format: "%.2f", pos.sharesOwned)) shares")
+                                Text("You own: \(NumberFormatting.decimal(pos.sharesOwned, fractionDigits: 2)) shares")
                                     .font(AppTheme.caption())
                                     .foregroundStyle(AppTheme.textSecondary)
                             }
@@ -394,7 +394,7 @@ struct PortfolioView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
                             if let total = stocksVM.tradeTotal() {
-                                Text(stocksVM.tradeSegment == 0 ? "Cost: \(String(format: "$%.2f", total))" : "Proceeds: \(String(format: "$%.2f", total))")
+                                Text(stocksVM.tradeSegment == 0 ? "Cost: \(NumberFormatting.currency(total, fractionDigits: 2))" : "Proceeds: \(NumberFormatting.currency(total, fractionDigits: 2))")
                                     .font(AppTheme.bodyMedium())
                                     .foregroundStyle(AppTheme.accent)
                             }

@@ -81,7 +81,7 @@ struct StockChartView: View {
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
                 if let last = pts.last {
-                    Text(String(format: "$%.2f", last.price))
+                    Text(NumberFormatting.currency(last.price, fractionDigits: 2))
                         .font(AppTheme.monoNumber())
                         .foregroundStyle(lineColor)
                 }
@@ -198,7 +198,7 @@ struct StockChartView: View {
                     .foregroundStyle(AppTheme.textSecondary)
                 Spacer()
                 if let last = pts.last {
-                    Text(String(format: "$%.2f", last.price))
+                    Text(NumberFormatting.currency(last.price, fractionDigits: 2))
                         .font(AppTheme.monoNumber())
                         .foregroundStyle(lineColor)
                 }
@@ -245,9 +245,9 @@ struct StockChartView: View {
     }
 
     private static func formatPrice(_ value: Double) -> String {
-        if value >= 1000 { return String(format: "%.1fk", value / 1000) }
-        if value >= 1 { return String(format: "%.2f", value) }
-        return String(format: "%.3f", value)
+        if value >= 1000 { return "\(NumberFormatting.decimal(value / 1000, fractionDigits: 1))k" }
+        if value >= 1 { return NumberFormatting.decimal(value, fractionDigits: 2) }
+        return NumberFormatting.decimal(value, fractionDigits: 3)
     }
 
     private static func timeLabels(points: [StockPricePoint]) -> [(offset: Int, label: String)] {

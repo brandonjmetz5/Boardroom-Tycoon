@@ -85,7 +85,7 @@ final class StockPositionService {
                     return nil
                 }
                 if cash < cost {
-                    errorPointer?.pointee = NSError(domain: "StockPositionService", code: 402, userInfo: [NSLocalizedDescriptionKey: "Not enough cash. You need \(String(format: "%.2f", cost)) but have \(String(format: "%.2f", cash))."])
+                    errorPointer?.pointee = NSError(domain: "StockPositionService", code: 402, userInfo: [NSLocalizedDescriptionKey: "Not enough cash. You need \(NumberFormatting.currency(cost, fractionDigits: 2)) but have \(NumberFormatting.currency(cash, fractionDigits: 2))."])
                     return nil
                 }
 
@@ -104,7 +104,7 @@ final class StockPositionService {
                     errorPointer?.pointee = NSError(
                         domain: "StockPositionService",
                         code: 409,
-                        userInfo: [NSLocalizedDescriptionKey: "Ownership cap reached. Max allowed is \(String(format: "%.2f", maxAllowedShares)) shares (\(Int(capRatio * 100))%)."]
+                        userInfo: [NSLocalizedDescriptionKey: "Ownership cap reached. Max allowed is \(NumberFormatting.decimal(maxAllowedShares, fractionDigits: 2)) shares (\(NumberFormatting.integer(Int(capRatio * 100)))%)."]
                     )
                     return nil
                 }
@@ -168,7 +168,7 @@ final class StockPositionService {
                     return nil
                 }
                 if sharesOwned < shares {
-                    errorPointer?.pointee = NSError(domain: "StockPositionService", code: 400, userInfo: [NSLocalizedDescriptionKey: "You only own \(String(format: "%.2f", sharesOwned)) shares. Cannot sell \(String(format: "%.2f", shares))."])
+                    errorPointer?.pointee = NSError(domain: "StockPositionService", code: 400, userInfo: [NSLocalizedDescriptionKey: "You only own \(NumberFormatting.decimal(sharesOwned, fractionDigits: 2)) shares. Cannot sell \(NumberFormatting.decimal(shares, fractionDigits: 2))."])
                     return nil
                 }
 

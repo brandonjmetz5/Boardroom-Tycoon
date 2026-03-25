@@ -41,7 +41,7 @@ struct BuyOrderMarketView: View {
             }
         } message: {
             if let order = viewModel.selectedOrderForFulfillConfirm {
-                Text("Deliver \(order.lines.map { "\(Int($0.quantity)) \($0.resourceName) (Q\($0.resourceQuality))" }.joined(separator: ", ")) and receive \(String(format: "$%.2f", order.netToSeller)) (3% fee applied).")
+                Text("Deliver \(order.lines.map { "\(NumberFormatting.integer(Int($0.quantity))) \($0.resourceName) (Q\($0.resourceQuality))" }.joined(separator: ", ")) and receive \(NumberFormatting.currency(order.netToSeller, fractionDigits: 2)) (3% fee applied).")
             }
         }
     }
@@ -170,7 +170,7 @@ struct BuyOrderMarketView: View {
                             .padding(.vertical, 2)
                             .background(AppTheme.cardBackgroundAlt)
                             .clipShape(Capsule())
-                        Text("× \(Int(line.quantity))")
+                        Text("× \(NumberFormatting.integer(Int(line.quantity)))")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppTheme.textSecondary)
                     }
@@ -178,17 +178,17 @@ struct BuyOrderMarketView: View {
             }
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(String(format: "$%.2f", order.totalPrice))
+                    Text(NumberFormatting.currency(order.totalPrice, fractionDigits: 2))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text(String(format: "$%.2f/unit", order.pricePerUnit))
+                    Text("\(NumberFormatting.currency(order.pricePerUnit, fractionDigits: 2))/unit")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppTheme.textTertiary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
                     if let delta {
-                        let text = String(format: "%+.0f%% vs selling", delta)
+                        let text = "\(NumberFormatting.signedPercentWhole(delta)) vs selling"
                         Text(text)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(delta >= 0 ? AppTheme.chipPositive : AppTheme.textError)
@@ -200,7 +200,7 @@ struct BuyOrderMarketView: View {
                             )
                             .clipShape(Capsule())
                     }
-                    Text("You receive: \(String(format: "$%.2f", order.netToSeller))")
+                    Text("You receive: \(NumberFormatting.currency(order.netToSeller, fractionDigits: 2))")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                     Text("3% fee")
@@ -284,16 +284,16 @@ struct BuyOrderMarketView: View {
                             let fee = viewModel.feeAmount(for: total)
                             let net = viewModel.netToSeller(for: total)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Market fee (3%): \(String(format: "$%.2f", fee))")
+                                Text("Market fee (3%): \(NumberFormatting.currency(fee, fractionDigits: 2))")
                                     .font(.system(size: 12, weight: .regular))
                                     .foregroundStyle(AppTheme.textTertiary)
-                                Text("Seller receives: \(String(format: "$%.2f", net))")
+                                Text("Seller receives: \(NumberFormatting.currency(net, fractionDigits: 2))")
                                     .font(.system(size: 12, weight: .regular))
                                     .foregroundStyle(AppTheme.textSecondary)
                             }
                         }
                         if let cash = viewModel.profile?.cash, let total = Double(viewModel.newOrderTotalPriceText), total > 0, cash < total {
-                            Text("Not enough cash. You have \(String(format: "$%.2f", cash)).")
+                            Text("Not enough cash. You have \(NumberFormatting.currency(cash, fractionDigits: 2)).")
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(AppTheme.textError)
                         }

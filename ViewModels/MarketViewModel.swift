@@ -401,7 +401,7 @@ final class MarketViewModel: ObservableObject {
                 switch result {
                 case .success:
                     self.loadBuyOrders()
-                    self.buyOrderActionMessage = "Order fulfilled. You received \(String(format: "$%.2f", order.netToSeller))."
+                    self.buyOrderActionMessage = "Order fulfilled. You received \(NumberFormatting.currency(order.netToSeller, fractionDigits: 2))."
                 case .failure(let error):
                     self.buyOrderActionMessage = error.localizedDescription
                 }

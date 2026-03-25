@@ -111,8 +111,8 @@ struct BuildingMarketView: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 4) {
-                    row("Current Bid", String(format: "$%.2f", listing.currentBid))
-                    row("Buy Now", String(format: "$%.2f", listing.buyNowPrice))
+                    row("Current Bid", NumberFormatting.currency(listing.currentBid, fractionDigits: 2))
+                    row("Buy Now", NumberFormatting.currency(listing.buyNowPrice, fractionDigits: 2))
                         .foregroundStyle(AppTheme.textPrimary)
                         .fontWeight(.semibold)
                 }
@@ -203,7 +203,7 @@ struct BuildingMarketView: View {
                     Text(viewModel.mineLabel(for: listing.resourceType))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text(String(format: "Current Bid: $%.2f", listing.currentBid))
+                    Text("Current Bid: \(NumberFormatting.currency(listing.currentBid, fractionDigits: 2))")
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(AppTheme.textSecondary)
                     TextField("Your bid", text: $viewModel.bidAmountText)

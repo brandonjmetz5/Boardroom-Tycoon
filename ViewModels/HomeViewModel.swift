@@ -161,9 +161,9 @@ final class HomeViewModel: ObservableObject {
 
     func formattedQuantity(for inventoryItem: InventoryItem) -> String {
         if inventoryItem.item.isFractional {
-            return String(format: "%.2f", inventoryItem.quantity)
+            return NumberFormatting.decimal(inventoryItem.quantity, fractionDigits: 2)
         } else {
-            return String(Int(inventoryItem.quantity))
+            return NumberFormatting.integer(Int(inventoryItem.quantity))
         }
     }
 

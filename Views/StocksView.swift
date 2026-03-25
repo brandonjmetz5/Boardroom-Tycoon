@@ -86,7 +86,7 @@ struct StocksView: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 4) {
-                Text(String(format: "$%.2f", stock.currentPrice))
+                Text(NumberFormatting.currency(stock.currentPrice, fractionDigits: 2))
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppTheme.textPrimary)
                     .monospacedDigit()

@@ -431,7 +431,7 @@ final class BuildingService {
                 let costMultiplier = BuildingLevelCatalog.upgradeCostMultiplier(forTargetLevel: targetLevel)
                 let cashCost = (Self.baseUpgradeCashCost * costMultiplier).rounded()
                 if currentCash < cashCost {
-                    errorPointer?.pointee = NSError(domain: "BuildingService", code: 1304, userInfo: [NSLocalizedDescriptionKey: "Not enough cash. Upgrade costs $\(Int(cashCost))."])
+                    errorPointer?.pointee = NSError(domain: "BuildingService", code: 1304, userInfo: [NSLocalizedDescriptionKey: "Not enough cash. Upgrade costs \(NumberFormatting.currency(cashCost, fractionDigits: 0))."])
                     return nil
                 }
                 let required = UpgradeCatalog.buildingUpgradeRequirement(forLevel: level)

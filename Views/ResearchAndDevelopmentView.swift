@@ -107,7 +107,7 @@ struct ResearchAndDevelopmentView: View {
                             Text(viewModel.labUpgradeRequirementLabel)
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(AppTheme.textPrimary)
-                            Text(String(format: "Cash: $%.0f", viewModel.labUpgradeCashCost))
+                            Text("Cash: \(NumberFormatting.currency(viewModel.labUpgradeCashCost, fractionDigits: 0))")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
@@ -193,7 +193,7 @@ struct ResearchAndDevelopmentView: View {
             Image(systemName: "brain.head.profile")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppTheme.accent)
-            Text("\(viewModel.profile?.researchPoints ?? 0)")
+            Text(NumberFormatting.integer(viewModel.profile?.researchPoints ?? 0))
                 .font(.system(size: 18, weight: .bold, design: .monospaced))
                 .foregroundStyle(AppTheme.accent)
             Text("pts")
@@ -245,7 +245,7 @@ struct ResearchAndDevelopmentView: View {
                         Text("Cost")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(AppTheme.textTertiary)
-                        Text(String(format: "$%.0f", viewModel.researchCycleCost))
+                        Text(NumberFormatting.currency(viewModel.researchCycleCost, fractionDigits: 0))
                             .font(.system(size: 16, weight: .bold, design: .monospaced))
                             .foregroundStyle(AppTheme.textPrimary)
                     }

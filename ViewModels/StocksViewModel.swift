@@ -238,7 +238,7 @@ final class StocksViewModel: ObservableObject {
         let cash = profile?.cash ?? 0
         let cost = shares * stock.currentPrice
         if cost > cash {
-            tradeErrorMessage = "Not enough cash. Need \(String(format: "$%.2f", cost)), have \(String(format: "$%.2f", cash))."
+            tradeErrorMessage = "Not enough cash. Need \(NumberFormatting.currency(cost, fractionDigits: 2)), have \(NumberFormatting.currency(cash, fractionDigits: 2))."
             return
         }
 
@@ -257,7 +257,7 @@ final class StocksViewModel: ObservableObject {
                 self.isSubmitting = false
                 switch result {
                 case .success:
-                    self.recordTransaction(type: "stock_buy", amount: -cost, description: "Bought \(String(format: "%.2f", shares)) \(stock.symbol)")
+                    self.recordTransaction(type: "stock_buy", amount: -cost, description: "Bought \(NumberFormatting.decimal(shares, fractionDigits: 2)) \(stock.symbol)")
                     self.loadPositionsAndProfile()
                     self.closeTradeSheet()
                 case .failure(let error):
@@ -277,7 +277,7 @@ final class StocksViewModel: ObservableObject {
         let pos = position(for: stock.symbol)
         let owned = pos?.sharesOwned ?? 0
         if shares > owned {
-            tradeErrorMessage = "You own \(String(format: "%.2f", owned)) shares. Cannot sell more."
+            tradeErrorMessage = "You own \(NumberFormatting.decimal(owned, fractionDigits: 2)) shares. Cannot sell more."
             return
         }
 
@@ -290,7 +290,7 @@ final class StocksViewModel: ObservableObject {
                 switch result {
                 case .success:
                     let proceeds = shares * stock.currentPrice
-                    self.recordTransaction(type: "stock_sell", amount: proceeds, description: "Sold \(String(format: "%.2f", shares)) \(stock.symbol)")
+                    self.recordTransaction(type: "stock_sell", amount: proceeds, description: "Sold \(NumberFormatting.decimal(shares, fractionDigits: 2)) \(stock.symbol)")
                     self.loadPositionsAndProfile()
                     self.closeTradeSheet()
                 case .failure(let error):
@@ -314,8 +314,7 @@ final class StocksViewModel: ObservableObject {
     }
 
     private func parseQuantity(_ text: String) -> Double {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let value = Double(trimmed) else { return 0 }
+        guard let value = NumberFormatting.parseDecimalInput(text) else { return 0 }
         return max(0, value)
     }
 
@@ -331,9 +330,7 @@ final class StocksViewModel: ObservableObject {
     }
 
     func formattedChange(_ change: Double) -> String {
-        let absoluteChange = abs(change)
-        let sign = change >= 0 ? "+" : "-"
-        return "\(sign)$\(String(format: "%.2f", absoluteChange))"
+        NumberFormatting.signedCurrency(change, fractionDigits: 2)
     }
 
     private func refreshForLiveView() {

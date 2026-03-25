@@ -63,9 +63,9 @@ final class InventoryViewModel: ObservableObject {
 
     func formattedQuantity(for inventoryItem: InventoryItem) -> String {
         if inventoryItem.item.isFractional {
-            return String(format: "%.2f", inventoryItem.quantity)
+            return NumberFormatting.decimal(inventoryItem.quantity, fractionDigits: 2)
         } else {
-            return String(Int(inventoryItem.quantity))
+            return NumberFormatting.integer(Int(inventoryItem.quantity))
         }
     }
 
@@ -78,9 +78,9 @@ final class InventoryViewModel: ObservableObject {
 
     func formattedTotalQuantity(value: Double, isFractional: Bool) -> String {
         if isFractional {
-            return String(format: "%.2f", value)
+            return NumberFormatting.decimal(value, fractionDigits: 2)
         } else {
-            return String(Int(value))
+            return NumberFormatting.integer(Int(value))
         }
     }
 
@@ -195,7 +195,9 @@ final class InventoryViewModel: ObservableObject {
 
     func openListSheet(for item: InventoryItem) {
         selectedItemForListing = item
-        listQuantityText = item.item.isFractional ? String(format: "%.2f", item.quantity) : String(Int(item.quantity))
+        listQuantityText = item.item.isFractional
+            ? NumberFormatting.decimal(item.quantity, fractionDigits: 2)
+            : NumberFormatting.integer(Int(item.quantity))
         listPricePerUnitText = ""
         listErrorMessage = nil
     }
@@ -209,8 +211,8 @@ final class InventoryViewModel: ObservableObject {
 
     func postListing() {
         guard let item = selectedItemForListing else { return }
-        let qty = Double(listQuantityText.replacingOccurrences(of: ",", with: "."))
-        guard let quantity = qty, quantity > 0 else {
+        let quantity = NumberFormatting.parseDecimalInput(listQuantityText)
+        guard let quantity, quantity > 0 else {
             listErrorMessage = "Enter a valid quantity."
             return
         }
@@ -218,8 +220,8 @@ final class InventoryViewModel: ObservableObject {
             listErrorMessage = "You only have \(formattedQuantity(for: item))."
             return
         }
-        let price = Double(listPricePerUnitText.replacingOccurrences(of: ",", with: "."))
-        guard let pricePerUnit = price, pricePerUnit > 0 else {
+        let pricePerUnit = NumberFormatting.parseDecimalInput(listPricePerUnitText)
+        guard let pricePerUnit, pricePerUnit > 0 else {
             listErrorMessage = "Enter a valid price per unit."
             return
         }
