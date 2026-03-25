@@ -211,9 +211,6 @@ exports.onBuyOrderFilled = onDocumentUpdated("marketBuyOrders/{orderId}", async 
   if ((before.status || "") === "filled") return;
   if ((after.status || "") !== "filled") return;
 
-  const buyerUserID = after.buyerUserID || "";
-  if (!buyerUserID || buyerUserID === CPU_USER_ID) return; // player-driven only
-
   const lines = Array.isArray(after.lines) ? after.lines : [];
   const totalPrice = safeNum(after.totalPrice);
   const totalQty = lines.reduce((sum, l) => sum + safeNum(l.quantity), 0);
@@ -400,6 +397,11 @@ const MAX_CPU_UNITS_LISTED_PER_TICK = 10000;
 const MAX_DISTINCT_ITEMS_TO_TOUCH_PER_TICK = 30;
 const MAX_NEW_CPU_BUY_ORDERS_PER_TICK = 40;
 const MAX_CPU_ESCROW_SPEND_PER_TICK = 50000;
+const MAX_CPU_ACTIVE_LISTING_BUYS_PER_TICK = 3;
+const MAX_CPU_ACTIVE_LISTING_BUY_SPEND_PER_TICK = 20000;
+const CPU_ACTIVE_LISTING_BUY_CHANCE = 0.45;
+const MAX_CPU_ACTIVE_ORDER_FILLS_PER_TICK = 2;
+const CPU_ACTIVE_ORDER_FILL_CHANCE = 0.35;
 
 function clampMin1(n) {
   return Math.max(1, n);
@@ -816,6 +818,240 @@ async function ensureCpuBuyOrders(openOrders, allListings) {
   return {createdOrders, escrowSpent};
 }
 
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = arr[i];
+    arr[i] = arr[j];
+    arr[j] = t;
+  }
+  return arr;
+}
+
+function parseBuyOrderLines(orderData) {
+  const arr = Array.isArray(orderData.lines) ? orderData.lines : [];
+  if (arr.length > 0) {
+    return arr
+      .map((dict) => {
+        const resourceID = String(dict.resourceID || "");
+        const resourceName = String(dict.resourceName || "");
+        const resourceCategory = String(dict.resourceCategory || "");
+        const quantity = safeNum(dict.quantity);
+        const resourceQuality = clampMin1(Number(dict.resourceQuality || 1));
+        const isFractional = Boolean(dict.isFractional);
+        if (!resourceID || quantity <= 0) return null;
+        return {
+          resourceID,
+          resourceName,
+          resourceCategory,
+          quantity,
+          resourceQuality,
+          isFractional,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  const rid = String(orderData.resourceID || "");
+  if (!rid) return [];
+  const quantity = safeNum(orderData.quantity);
+  if (quantity <= 0) return [];
+  return [{
+    resourceID: rid,
+    resourceName: String(orderData.resourceName || ""),
+    resourceCategory: String(orderData.resourceCategory || ""),
+    quantity,
+    resourceQuality: clampMin1(Number(orderData.resourceQuality || 1)),
+    isFractional: Boolean(orderData.isFractional),
+  }];
+}
+
+async function cpuBuyOneListing(listingId) {
+  const listingRef = db.collection("marketListings").doc(String(listingId || ""));
+  const cpuProfileRef = db.collection("playerProfiles").doc(CPU_USER_ID);
+  const now = admin.firestore.Timestamp.now();
+
+  const result = await db.runTransaction(async (tx) => {
+    const listSnap = await tx.get(listingRef);
+    const listData = listSnap.data() || null;
+    if (!listData) return {bought: false, spent: 0};
+
+    const sellerUserID = String(listData.sellerUserID || "");
+    if (!sellerUserID || sellerUserID === CPU_USER_ID) return {bought: false, spent: 0};
+
+    const quantity = safeNum(listData.quantity);
+    const pricePerUnit = safeNum(listData.pricePerUnit);
+    if (quantity <= 0 || pricePerUnit <= 0) return {bought: false, spent: 0};
+
+    const total = quantity * pricePerUnit;
+    const fee = total * (FEE_PERCENT / 100);
+    const netToSeller = total - fee;
+
+    const cpuProfileSnap = await tx.get(cpuProfileRef);
+    const cpuCash = safeNum((cpuProfileSnap.data() || {}).cash);
+    if (cpuCash < total) return {bought: false, spent: 0};
+
+    const resourceID = String(listData.resourceID || listData.itemID || "");
+    const resourceName = String(listData.resourceName || listData.itemName || "");
+    const resourceCategory = String(listData.resourceCategory || listData.category || "");
+    const quality = clampMin1(Number(listData.quality || 1));
+    const isFractional = Boolean(listData.isFractional);
+    const invDocID = quality > 1 ? `${resourceID}-q${quality}` : resourceID;
+    const cpuInvRef = cpuProfileRef.collection("inventory").doc(invDocID);
+
+    tx.update(listingRef, {
+      soldAt: now,
+      soldToUserID: CPU_USER_ID,
+    });
+    tx.delete(listingRef);
+
+    tx.set(cpuInvRef, {
+      id: invDocID,
+      name: resourceName,
+      category: resourceCategory,
+      isFractional,
+      quantity: admin.firestore.FieldValue.increment(quantity),
+    }, {merge: true});
+
+    tx.set(cpuProfileRef, {cash: admin.firestore.FieldValue.increment(-total)}, {merge: true});
+    tx.set(db.collection("playerProfiles").doc(sellerUserID), {cash: admin.firestore.FieldValue.increment(netToSeller)}, {merge: true});
+
+    return {bought: true, spent: total};
+  });
+
+  return result;
+}
+
+async function executeCpuActiveListingBuys(allListings) {
+  if (Math.random() > CPU_ACTIVE_LISTING_BUY_CHANCE) {
+    return {fills: 0, spend: 0};
+  }
+
+  const candidates = allListings
+    .filter((l) => (l.sellerUserID || "") !== CPU_USER_ID)
+    .filter((l) => safeNum(l.quantity) > 0 && safeNum(l.pricePerUnit) > 0);
+  shuffleInPlace(candidates);
+
+  let fills = 0;
+  let spend = 0;
+
+  for (const listing of candidates) {
+    if (fills >= MAX_CPU_ACTIVE_LISTING_BUYS_PER_TICK) break;
+    if (spend >= MAX_CPU_ACTIVE_LISTING_BUY_SPEND_PER_TICK) break;
+    const estTotal = safeNum(listing.quantity) * safeNum(listing.pricePerUnit);
+    if (estTotal <= 0) continue;
+    if ((spend + estTotal) > MAX_CPU_ACTIVE_LISTING_BUY_SPEND_PER_TICK) continue;
+
+    // Avoid buying obviously overpriced asks.
+    const bucketListings = allListings.filter((x) =>
+      x.resourceID === listing.resourceID && Number(x.quality || 1) === Number(listing.quality || 1));
+    const ref = computeReferencePrice(listing.resourceID, listing.quality, bucketListings);
+    if (ref && safeNum(listing.pricePerUnit) > ref * 1.2) continue;
+
+    // Not every candidate should execute to keep it believable.
+    if (Math.random() > 0.55) continue;
+
+    const result = await cpuBuyOneListing(listing.id);
+    if (result && result.bought) {
+      fills += 1;
+      spend += safeNum(result.spent);
+    }
+  }
+
+  return {fills, spend};
+}
+
+async function cpuFillOneBuyOrder(orderId) {
+  const orderRef = db.collection("marketBuyOrders").doc(String(orderId || ""));
+  const cpuProfileRef = db.collection("playerProfiles").doc(CPU_USER_ID);
+  const cpuInventoryRef = cpuProfileRef.collection("inventory");
+  const now = admin.firestore.Timestamp.now();
+
+  const result = await db.runTransaction(async (tx) => {
+    const orderSnap = await tx.get(orderRef);
+    const orderData = orderSnap.data() || null;
+    if (!orderData) return {filled: false};
+
+    const status = String(orderData.status || "");
+    if (status !== "open") return {filled: false};
+    const buyerUserID = String(orderData.buyerUserID || "");
+    if (!buyerUserID || buyerUserID === CPU_USER_ID) return {filled: false};
+
+    const lines = parseBuyOrderLines(orderData);
+    if (lines.length === 0) return {filled: false};
+
+    const netToSeller = safeNum(orderData.netToSeller) || (safeNum(orderData.totalPrice) * (1 - FEE_PERCENT / 100));
+
+    const cpuInvSnapshots = new Map();
+    const buyerInvSnapshots = new Map();
+
+    for (const line of lines) {
+      const docID = line.resourceQuality > 1 ? `${line.resourceID}-q${line.resourceQuality}` : line.resourceID;
+      const cpuInvRef = cpuInventoryRef.doc(docID);
+      const buyerInvRef = db.collection("playerProfiles").doc(buyerUserID).collection("inventory").doc(docID);
+      const cpuInvSnap = await tx.get(cpuInvRef);
+      const buyerInvSnap = await tx.get(buyerInvRef);
+
+      const cpuQty = safeNum((cpuInvSnap.data() || {}).quantity);
+      if (cpuQty < line.quantity) return {filled: false};
+
+      cpuInvSnapshots.set(docID, {ref: cpuInvRef, data: cpuInvSnap.data() || {}, qty: cpuQty, line});
+      buyerInvSnapshots.set(docID, {ref: buyerInvRef, data: buyerInvSnap.data() || {}, qty: safeNum((buyerInvSnap.data() || {}).quantity), line});
+    }
+
+    tx.update(orderRef, {
+      status: "filled",
+      filledAt: now,
+      filledByUserID: CPU_USER_ID,
+    });
+
+    for (const [docID, cpuInv] of cpuInvSnapshots.entries()) {
+      const buyerInv = buyerInvSnapshots.get(docID);
+      if (!buyerInv) continue;
+
+      const newCpuQty = cpuInv.qty - cpuInv.line.quantity;
+      if (newCpuQty <= 0.0000001) {
+        tx.delete(cpuInv.ref);
+      } else {
+        tx.set(cpuInv.ref, {quantity: newCpuQty}, {merge: true});
+      }
+
+      tx.set(buyerInv.ref, {
+        id: docID,
+        name: cpuInv.line.resourceName,
+        category: cpuInv.line.resourceCategory,
+        isFractional: cpuInv.line.isFractional,
+        quantity: buyerInv.qty + cpuInv.line.quantity,
+      }, {merge: true});
+    }
+
+    tx.set(cpuProfileRef, {cash: admin.firestore.FieldValue.increment(netToSeller)}, {merge: true});
+    return {filled: true};
+  });
+
+  return result;
+}
+
+async function executeCpuActiveOrderFills(openOrders) {
+  if (Math.random() > CPU_ACTIVE_ORDER_FILL_CHANCE) {
+    return {fills: 0};
+  }
+
+  const candidates = openOrders
+    .filter((o) => String(o.status || "") === "open")
+    .filter((o) => String(o.buyerUserID || "") !== CPU_USER_ID);
+  shuffleInPlace(candidates);
+
+  let fills = 0;
+  for (const order of candidates) {
+    if (fills >= MAX_CPU_ACTIVE_ORDER_FILLS_PER_TICK) break;
+    if (Math.random() > 0.5) continue;
+    const result = await cpuFillOneBuyOrder(order.id || order.docID);
+    if (result && result.filled) fills += 1;
+  }
+  return {fills};
+}
+
 // Optional sample HTTP function
 exports.helloWorld = onRequest((request, response) => {
   logger.info("Hello logs!", {structuredData: true});
@@ -885,8 +1121,21 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
 
     const sell = await ensureCpuSellSupply(listings);
     const buy = await ensureCpuBuyOrders(openOrders, listings);
+    const [midListings] = await Promise.all([
+      fetchAllResourceListings(),
+    ]);
 
-    await updateMarketAggregates(listings, openOrders);
+    const activeListingBuys = await executeCpuActiveListingBuys(midListings);
+    const [afterListingBuysOpenOrders] = await Promise.all([
+      fetchOpenBuyOrders(),
+    ]);
+    const activeOrderFills = await executeCpuActiveOrderFills(afterListingBuysOpenOrders);
+
+    const [finalListings, finalOpenOrders] = await Promise.all([
+      fetchAllResourceListings(),
+      fetchOpenBuyOrders(),
+    ]);
+    await updateMarketAggregates(finalListings, finalOpenOrders);
 
     // ---- Stocks: tick-driven price updates from player-driven signals ----
     const signalsSnap = await stockSignalsRef().get();
@@ -1031,6 +1280,9 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
       sellItemsTouched: sell.itemsTouched,
       buyOrdersCreated: buy.createdOrders,
       buyEscrowSpent: buy.escrowSpent,
+      activeListingBuys: activeListingBuys.fills,
+      activeListingBuySpend: activeListingBuys.spend,
+      activeOrderFills: activeOrderFills.fills,
     });
 
     await db.collection("worldState").doc("worldTick").set(
@@ -1040,6 +1292,9 @@ exports.worldTick = onSchedule("every 1 minutes", async (event) => {
         lastCpuSellUnitsAdded: sell.unitsAdded,
         lastCpuBuyOrdersCreated: buy.createdOrders,
         lastCpuBuyEscrowSpent: buy.escrowSpent,
+        lastCpuActiveListingBuys: activeListingBuys.fills,
+        lastCpuActiveListingBuySpend: activeListingBuys.spend,
+        lastCpuActiveOrderFills: activeOrderFills.fills,
         lastAggregatesUpdatedAt: admin.firestore.Timestamp.now(),
         lastStocksUpdatedAt: admin.firestore.Timestamp.now(),
         lockUntil: null,

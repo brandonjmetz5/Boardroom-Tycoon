@@ -10,22 +10,9 @@ struct ResourceMarketView: View {
 
     // Local filter UI state that feeds into the view model.
     @State private var selectedResourceID: String?
-    @State private var minQuality: Int = 0
+    @State private var selectedQuality: Int?
     @State private var priceMinText: String = ""
     @State private var priceMaxText: String = ""
-    @State private var showOnlyCPUListings = false
-    @State private var showOnlyPlayerListings = false
-    @State private var showOnlyGoodDeals = false
-    @State private var hideOverpriced = false
-
-    // Local sort preference for how players like to browse.
-    enum SortMode: String, CaseIterable, Identifiable {
-        case bestDeals = "Best deals"
-        case cheapest = "Cheapest first"
-
-        var id: String { rawValue }
-    }
-    @State private var sortMode: SortMode = .bestDeals
 
     init(userID: String) {
         self.userID = userID
@@ -34,10 +21,11 @@ struct ResourceMarketView: View {
 
     var body: some View {
         ZStack {
+            AppTheme.background.ignoresSafeArea()
             LinearGradient(
-                colors: [AppTheme.background, AppTheme.cardBackground],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+                colors: [AppTheme.surface.opacity(0.12), Color.clear, AppTheme.surface.opacity(0.10)],
+                startPoint: .top,
+                endPoint: .bottom
             )
             .ignoresSafeArea()
 
@@ -46,14 +34,9 @@ struct ResourceMarketView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 2) {
-                    Text("Global Resource Exchange")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text("Hunt for edges, not scraps.")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
+                Text("Resource Exchange")
+                    .font(AppTheme.titleMedium())
+                    .foregroundStyle(AppTheme.textPrimary)
             }
         }
         .onAppear {
@@ -84,20 +67,13 @@ struct ResourceMarketView: View {
     private var content: some View {
         let base = viewModel.resourceListings
         let filtered = base.filter { listing in
-            if showOnlyCPUListings && listing.sellerUserID != "CPU" { return false }
-            if showOnlyPlayerListings && listing.sellerUserID == "CPU" { return false }
+            if let selectedResourceID, listing.item.id != selectedResourceID { return false }
+            if let selectedQuality, listing.quality != selectedQuality { return false }
 
             if let minPrice = parsePrice(priceMinText), listing.pricePerUnit < minPrice {
                 return false
             }
             if let maxPrice = parsePrice(priceMaxText), listing.pricePerUnit > maxPrice {
-                return false
-            }
-
-            if let delta = viewModel.dealDeltaForListing(listing) {
-                if showOnlyGoodDeals && delta > -10 { return false }
-                if hideOverpriced && delta >= 15 { return false }
-            } else if showOnlyGoodDeals {
                 return false
             }
 
@@ -109,22 +85,9 @@ struct ResourceMarketView: View {
             (listing, viewModel.dealDeltaForListing(listing))
         }
 
-        let sorted: [MarketListing] = {
-            switch sortMode {
-            case .cheapest:
-                return listingsWithDelta
-                    .map { $0.listing }
-                    .sorted { $0.pricePerUnit < $1.pricePerUnit }
-            case .bestDeals:
-                return listingsWithDelta
-                    .sorted { lhs, rhs in
-                        let l = lhs.delta ?? 0
-                        let r = rhs.delta ?? 0
-                        return l < r
-                    }
-                    .map { $0.listing }
-            }
-        }()
+        let sorted: [MarketListing] = listingsWithDelta
+            .map { $0.listing }
+            .sorted { $0.pricePerUnit < $1.pricePerUnit }
 
         let goodDealsCount = listingsWithDelta.filter { ($0.delta ?? 0) <= -10 }.count
         let overheatedCount = listingsWithDelta.filter { ($0.delta ?? 0) >= 15 }.count
@@ -191,38 +154,22 @@ struct ResourceMarketView: View {
 
     private func headerSection(total: Int, good: Int, overheated: Int) -> some View {
         VStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                AppTheme.cardBackground.opacity(0.9),
-                                AppTheme.cardBackgroundAlt.opacity(0.9)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18)
-                            .stroke(AppTheme.accent.opacity(0.25), lineWidth: 1)
-                    )
-
+            marketRail(title: "Desk Status", systemImage: "dot.radiowaves.left.and.right", tone: .priority) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .center, spacing: 10) {
                         Image(systemName: "chart.line.uptrend.xyaxis")
-                            .font(.system(size: 22, weight: .semibold))
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppTheme.accent)
-                            .frame(width: 40, height: 40)
-                            .background(AppTheme.accent.opacity(0.18))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .frame(width: 34, height: 34)
+                            .background(AppTheme.accent.opacity(0.16))
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Live order book")
-                                .font(.system(size: 16, weight: .semibold))
+                            Text("Live order board")
+                                .font(AppTheme.bodyMedium())
                                 .foregroundStyle(AppTheme.textPrimary)
-                            Text("Swipe through live liquidity, spot mispriced edges, and snipe value.")
-                                .font(.system(size: 12, weight: .regular))
+                            Text("Scan listings, compare deal delta, and execute fast.")
+                                .font(AppTheme.caption())
                                 .foregroundStyle(AppTheme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -231,60 +178,60 @@ struct ResourceMarketView: View {
 
                     HStack(spacing: 8) {
                         statPill(title: "LISTINGS", value: "\(total)")
-                        statPill(title: "VALUE PLAYS", value: "\(good)")
+                        statPill(title: "BELOW AVG", value: "\(good)")
                         statPill(title: "OVERHEATED", value: "\(overheated)")
                         Spacer()
                     }
                 }
-                .padding(AppTheme.cardPadding)
             }
 
-            HStack(spacing: 10) {
-                Button {
-                    syncFilterStateFromViewModel()
-                    showFilterSheet = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                        Text("Filters")
-                        if hasActiveFiltersSummary {
-                            Text(filtersSummaryText)
-                                .font(.system(size: 11, weight: .medium))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(AppTheme.cardBackgroundAlt.opacity(0.7))
-                                .clipShape(Capsule())
+            marketRail(title: "Execution Controls", systemImage: "slider.horizontal.3") {
+                HStack(spacing: 10) {
+                    Button {
+                        syncFilterStateFromViewModel()
+                        showFilterSheet = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                            Text("Filters")
+                            if hasActiveFiltersSummary {
+                                Text(filtersSummaryText)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(AppTheme.surface.opacity(0.58))
+                                    .clipShape(Capsule())
+                            }
                         }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.accent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(AppTheme.surfaceAlt.opacity(0.58))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border.opacity(0.95), lineWidth: 1))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppTheme.accent)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(AppTheme.cardBackgroundAlt.opacity(0.9))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    Spacer()
+                    Text("Cheapest first")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(AppTheme.surfaceAlt.opacity(0.58))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border.opacity(0.95), lineWidth: 1))
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
-
-                Spacer()
-
-                Picker("Sort", selection: $sortMode) {
-                    ForEach(SortMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 210)
             }
         }
         .padding(.horizontal, AppTheme.horizontalPadding)
-        .padding(.top, 4)
+        .padding(.top, 8)
     }
 
     private var hasActiveFiltersSummary: Bool {
         if selectedResourceID != nil { return true }
-        if minQuality > 0 { return true }
+        if selectedQuality != nil { return true }
         if !priceMinText.isEmpty || !priceMaxText.isEmpty { return true }
-        if showOnlyCPUListings || showOnlyPlayerListings { return true }
-        if showOnlyGoodDeals || hideOverpriced { return true }
         return false
     }
 
@@ -294,13 +241,9 @@ struct ResourceMarketView: View {
            let item = MarketCatalog.tradeableItems().first(where: { $0.id == id }) {
             parts.append(item.name)
         }
-        if minQuality > 0 {
-            parts.append("Q\(minQuality)+")
+        if let selectedQuality {
+            parts.append("Q\(selectedQuality)")
         }
-        if showOnlyCPUListings { parts.append("CPU only") }
-        if showOnlyPlayerListings { parts.append("Players only") }
-        if showOnlyGoodDeals { parts.append("Good deals") }
-        if hideOverpriced { parts.append("Hide overheated") }
         return parts.joined(separator: " · ")
     }
 
@@ -313,11 +256,11 @@ struct ResourceMarketView: View {
         let total = listing.quantity * listing.pricePerUnit
 
         return ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(AppTheme.cardBackground)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(AppTheme.surface.opacity(0.82))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(AppTheme.cardBackgroundAlt.opacity(0.6), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(AppTheme.border.opacity(0.95), lineWidth: 1)
                 )
 
             // Slim accent bar on the left to show deal quality without heavy gradients.
@@ -327,9 +270,9 @@ struct ResourceMarketView: View {
                     ? AppTheme.chipPositive
                     : (delta ?? 0) >= 15
                       ? AppTheme.textError
-                      : AppTheme.cardBackgroundAlt
+                      : AppTheme.surfaceAlt
                 )
-                .frame(width: 4)
+                .frame(width: 6)
                 .padding(.vertical, 10)
                 .padding(.leading, 3)
 
@@ -349,7 +292,7 @@ struct ResourceMarketView: View {
                             .foregroundStyle(AppTheme.textSecondary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(AppTheme.cardBackgroundAlt.opacity(0.9))
+                            .background(AppTheme.surfaceAlt.opacity(0.58))
                             .clipShape(Capsule())
 
                         if let delta {
@@ -362,21 +305,10 @@ struct ResourceMarketView: View {
                         .foregroundStyle(AppTheme.textTertiary)
 
                     HStack(spacing: 6) {
-                        if listing.sellerUserID == "CPU" {
-                            Text("CPU liquidity")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(AppTheme.cardBackgroundAlt.opacity(0.9))
-                                .clipShape(Capsule())
-                        } else {
-                            Text(listing.sellerName ?? "Player listing")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(AppTheme.textSecondary)
-                                .lineLimit(1)
-                        }
-
+                        Text("Market listing")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(1)
                         Spacer()
 
                         Text("Total \(String(format: "$%.2f", total))")
@@ -399,7 +331,7 @@ struct ResourceMarketView: View {
                                 .foregroundStyle(AppTheme.textError)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
-                                .background(AppTheme.cardBackgroundAlt.opacity(0.8))
+                                .background(AppTheme.surfaceAlt.opacity(0.58))
                                 .clipShape(Capsule())
                         }
                         .disabled(viewModel.isSubmitting)
@@ -411,7 +343,7 @@ struct ResourceMarketView: View {
                         Button {
                             viewModel.openBuyListingSheet(listing)
                         } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 7) {
                                 if viewModel.buyListingInProgress && viewModel.selectedListingToBuy?.id == listing.id {
                                     ProgressView()
                                         .tint(.white)
@@ -424,9 +356,9 @@ struct ResourceMarketView: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 9)
                             .background(AppTheme.chipReady)
-                            .clipShape(Capsule())
+                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                         }
                         .disabled(viewModel.buyListingInProgress)
                     }
@@ -447,7 +379,8 @@ struct ResourceMarketView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(AppTheme.cardBackgroundAlt.opacity(0.9))
+        .background(AppTheme.surfaceAlt.opacity(0.58))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border.opacity(0.95), lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
@@ -508,9 +441,9 @@ struct ResourceMarketView: View {
                 AppTheme.background.ignoresSafeArea()
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 16) {
                         Text("Tune the order book")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(AppTheme.titleSmall())
                             .foregroundStyle(AppTheme.textPrimary)
 
                         VStack(alignment: .leading, spacing: 8) {
@@ -519,43 +452,46 @@ struct ResourceMarketView: View {
                                 .foregroundStyle(AppTheme.textSecondary)
 
                             let items = MarketCatalog.tradeableItems()
+                            LazyVGrid(
+                                columns: [
+                                    GridItem(.adaptive(minimum: 90), spacing: 10)
+                                ],
+                                spacing: 10
+                            ) {
+                                iconFilterChip(
+                                    title: "All",
+                                    iconName: nil,
+                                    isSelected: selectedResourceID == nil
+                                ) {
+                                    selectedResourceID = nil
+                                }
 
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    filterChip(
-                                        title: "All",
-                                        isSelected: selectedResourceID == nil
+                                ForEach(items, id: \.id) { item in
+                                    iconFilterChip(
+                                        title: item.name,
+                                        iconName: item.name,
+                                        isSelected: selectedResourceID == item.id
                                     ) {
-                                        selectedResourceID = nil
-                                    }
-
-                                    ForEach(items, id: \.id) { item in
-                                        filterChip(
-                                            title: item.name,
-                                            isSelected: selectedResourceID == item.id
-                                        ) {
-                                            selectedResourceID = item.id
-                                        }
+                                        selectedResourceID = item.id
                                     }
                                 }
-                                .padding(.vertical, 4)
                             }
                         }
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Minimum quality")
+                            Text("Quality")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(AppTheme.textSecondary)
 
-                            HStack {
-                                Slider(value: Binding(
-                                    get: { Double(minQuality) },
-                                    set: { minQuality = Int($0.rounded()) }
-                                ), in: 0...5, step: 1)
-                                Text(minQuality == 0 ? "All" : "Q\(minQuality)+")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(AppTheme.textPrimary)
-                                    .frame(width: 44)
+                            HStack(spacing: 8) {
+                                filterChip(title: "All", isSelected: selectedQuality == nil) {
+                                    selectedQuality = nil
+                                }
+                                ForEach(1...5, id: \.self) { q in
+                                    filterChip(title: "Q\(q)", isSelected: selectedQuality == q) {
+                                        selectedQuality = q
+                                    }
+                                }
                             }
                         }
 
@@ -566,35 +502,24 @@ struct ResourceMarketView: View {
                             HStack(spacing: 12) {
                                 TextField("Min", text: $priceMinText)
                                     .keyboardType(.decimalPad)
-                                    .textFieldStyle(.roundedBorder)
+                                    .padding(.vertical, 10)
+                                    .padding(.horizontal, 12)
+                                    .background(AppTheme.surfaceAlt.opacity(0.58))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border, lineWidth: 1))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
                                 TextField("Max", text: $priceMaxText)
                                     .keyboardType(.decimalPad)
-                                    .textFieldStyle(.roundedBorder)
+                                    .padding(.vertical, 10)
+                                    .padding(.horizontal, 12)
+                                    .background(AppTheme.surfaceAlt.opacity(0.58))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border, lineWidth: 1))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
                             }
                         }
 
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Seller")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(AppTheme.textSecondary)
-
-                            Toggle("CPU liquidity only", isOn: $showOnlyCPUListings)
-                                .tint(AppTheme.accent)
-                            Toggle("Player listings only", isOn: $showOnlyPlayerListings)
-                                .tint(AppTheme.accent)
-                        }
-
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Deal quality vs market")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(AppTheme.textSecondary)
-                            Toggle("Only show strong value (≤ -10%)", isOn: $showOnlyGoodDeals)
-                                .tint(AppTheme.accent)
-                            Toggle("Hide overheated (≥ +15%)", isOn: $hideOverpriced)
-                                .tint(AppTheme.accent)
-                        }
                     }
-                    .padding(AppTheme.cardPadding)
+                    .padding(.horizontal, AppTheme.horizontalPadding)
+                    .padding(.vertical, 12)
                 }
             }
             .navigationTitle("Filters")
@@ -630,9 +555,46 @@ struct ResourceMarketView: View {
                 .background(
                     isSelected
                     ? AppTheme.accent
-                    : AppTheme.cardBackgroundAlt.opacity(0.9)
+                    : AppTheme.surfaceAlt.opacity(0.58)
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(isSelected ? AppTheme.accent.opacity(0.2) : AppTheme.border.opacity(0.95), lineWidth: 1)
                 )
                 .clipShape(Capsule())
+        }
+    }
+
+    private func iconFilterChip(title: String, iconName: String?, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                if let iconName {
+                    resourceIconView(name: iconName)
+                        .frame(width: 28, height: 28)
+                } else {
+                    ZStack {
+                        Circle().fill(AppTheme.surfaceAlt.opacity(0.58))
+                        Image(systemName: "square.grid.2x2.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .frame(width: 28, height: 28)
+                }
+                Text(title)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.textPrimary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .background(AppTheme.surfaceAlt.opacity(0.58))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSelected ? AppTheme.accent.opacity(0.7) : AppTheme.border.opacity(0.95), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
 
@@ -718,23 +680,50 @@ struct ResourceMarketView: View {
 
     private func resetFilters() {
         selectedResourceID = nil
-        minQuality = 0
+        selectedQuality = nil
         priceMinText = ""
         priceMaxText = ""
-        showOnlyCPUListings = false
-        showOnlyPlayerListings = false
-        showOnlyGoodDeals = false
-        hideOverpriced = false
     }
 
     private func syncFilterStateFromViewModel() {
         selectedResourceID = viewModel.filterResourceListingsID
-        minQuality = viewModel.minQualityForListings
+        selectedQuality = viewModel.minQualityForListings > 0 ? viewModel.minQualityForListings : nil
     }
 
     private func applyFiltersToViewModel() {
         viewModel.filterResourceListingsID = selectedResourceID
-        viewModel.minQualityForListings = minQuality
+        viewModel.minQualityForListings = 0
     }
+
+    private func marketRail<Content: View>(
+        title: String,
+        systemImage: String,
+        tone: MarketRailTone = .normal,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(tone == .priority ? AppTheme.accent : AppTheme.textSecondary)
+                Text(title.uppercased())
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Rectangle().fill(AppTheme.border).frame(height: 1)
+            }
+            content()
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.surface.opacity(0.82)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(tone == .priority ? AppTheme.accent.opacity(0.32) : AppTheme.border.opacity(0.95), lineWidth: 1)
+        )
+    }
+}
+
+private enum MarketRailTone {
+    case normal
+    case priority
 }
 
