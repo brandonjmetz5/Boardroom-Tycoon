@@ -317,11 +317,9 @@ struct DashboardView: View {
         CommandRail(title: "Treasury Strip", systemImage: "banknote.fill") {
             HStack(spacing: 10) {
                 stripTileStatic("Cash", NumberFormatting.currency(viewModel.profile?.cash ?? 0, fractionDigits: 0), AppTheme.accent)
-                    .frame(maxWidth: .infinity)
                 stripTileNav("Inventory", NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 0), AppTheme.chipAvailable) {
                     navigateToTab(.inventory)
                 }
-                .frame(maxWidth: .infinity)
             }
             .padding(.vertical, 2)
         }
@@ -339,6 +337,7 @@ struct DashboardView: View {
                 .minimumScaleFactor(0.72)
                 .allowsTightening(true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
         .background(RoundedRectangle(cornerRadius: 9).fill(AppTheme.surfaceAlt.opacity(0.55)))
@@ -363,6 +362,7 @@ struct DashboardView: View {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(AppTheme.textTertiary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 10)
             .padding(.horizontal, 12)
             .background(RoundedRectangle(cornerRadius: 9).fill(AppTheme.surfaceAlt.opacity(0.55)))
