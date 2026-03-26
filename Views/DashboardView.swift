@@ -21,6 +21,12 @@ struct DashboardView: View {
         _viewModel = StateObject(wrappedValue: HomeViewModel(userID: userID))
     }
 
+    private func navigateToTab(_ tab: MainTabView.Tab) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) {
+            selectedTab = tab
+        }
+    }
+
     var body: some View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
@@ -312,44 +318,80 @@ struct DashboardView: View {
         CommandRail(title: "Treasury Strip", systemImage: "banknote.fill") {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    stripTile("Cash", NumberFormatting.currency(viewModel.profile?.cash ?? 0, fractionDigits: 0), AppTheme.accent)
-                    stripTile("Inventory", NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 0), AppTheme.chipAvailable)
-                    stripTile("Slots", "\(viewModel.usedSlotsCount)/\(viewModel.totalSlotsCount)", AppTheme.chipProspecting)
-                    stripTile("Producing", "\(viewModel.producingCount)", AppTheme.chipProducing)
-                    stripTile("Ready", "\(viewModel.readyCount)", AppTheme.chipReady)
-                    stripTile("Listed", "\(viewModel.listedCount)", AppTheme.chipListed)
+                    stripTile("Cash", NumberFormatting.currency(viewModel.profile?.cash ?? 0, fractionDigits: 0), AppTheme.accent) {
+                        navigateToTab(.profile)
+                    }
+                    stripTile("Inventory", NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 0), AppTheme.chipAvailable) {
+                        navigateToTab(.inventory)
+                    }
+                    stripTile("Slots", "\(viewModel.usedSlotsCount)/\(viewModel.totalSlotsCount)", AppTheme.chipProspecting) {
+                        navigateToTab(.operations)
+                    }
+                    stripTile("Producing", "\(viewModel.producingCount)", AppTheme.chipProducing) {
+                        navigateToTab(.operations)
+                    }
+                    stripTile("Ready", "\(viewModel.readyCount)", AppTheme.chipReady) {
+                        navigateToTab(.operations)
+                    }
+                    stripTile("Listed", "\(viewModel.listedCount)", AppTheme.chipListed) {
+                        navigateToTab(.market)
+                    }
                 }
                 .padding(.vertical, 2)
             }
         }
     }
 
-    private func stripTile(_ title: String, _ value: String, _ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundStyle(AppTheme.textTertiary)
-            Text(value)
-                .font(AppTheme.monoNumber())
-                .foregroundStyle(color)
+    private func stripTile(_ title: String, _ value: String, _ color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title.uppercased())
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(AppTheme.textTertiary)
+                    Text(value)
+                        .font(AppTheme.monoNumber())
+                        .foregroundStyle(color)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(AppTheme.textTertiary)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .background(RoundedRectangle(cornerRadius: 9).fill(AppTheme.surfaceAlt.opacity(0.55)))
+            .overlay(RoundedRectangle(cornerRadius: 9).stroke(AppTheme.border.opacity(0.95), lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 9))
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
-        .background(RoundedRectangle(cornerRadius: 9).fill(AppTheme.surfaceAlt.opacity(0.55)))
-        .overlay(RoundedRectangle(cornerRadius: 9).stroke(AppTheme.border.opacity(0.95), lineWidth: 1))
+        .buttonStyle(.plain)
     }
 
     private var operationsPanel: some View {
         CommandRail(title: "Operations Matrix", systemImage: "gearshape.2.fill") {
             VStack(spacing: 10) {
                 HStack(spacing: 10) {
-                    StatTile(label: "PRODUCING", value: "\(viewModel.producingCount)", emphasis: .normal)
-                    StatTile(label: "READY", value: "\(viewModel.readyCount)", emphasis: .positive)
-                    StatTile(label: "LISTED", value: "\(viewModel.listedCount)", emphasis: .warning)
+                    Button { navigateToTab(.operations) } label: {
+                        StatTile(label: "PRODUCING", value: "\(viewModel.producingCount)", emphasis: .normal)
+                    }
+                    .buttonStyle(.plain)
+                    Button { navigateToTab(.operations) } label: {
+                        StatTile(label: "READY", value: "\(viewModel.readyCount)", emphasis: .positive)
+                    }
+                    .buttonStyle(.plain)
+                    Button { navigateToTab(.market) } label: {
+                        StatTile(label: "LISTED", value: "\(viewModel.listedCount)", emphasis: .warning)
+                    }
+                    .buttonStyle(.plain)
                 }
                 HStack(spacing: 10) {
-                    StatTile(label: "BUILDINGS", value: "\(viewModel.buildings.count)", emphasis: .normal)
-                    StatTile(label: "CAPACITY", value: "\(viewModel.usedSlotsCount)/\(viewModel.totalSlotsCount)", emphasis: .normal)
+                    Button { navigateToTab(.operations) } label: {
+                        StatTile(label: "BUILDINGS", value: "\(viewModel.buildings.count)", emphasis: .normal)
+                    }
+                    .buttonStyle(.plain)
+                    Button { navigateToTab(.operations) } label: {
+                        StatTile(label: "CAPACITY", value: "\(viewModel.usedSlotsCount)/\(viewModel.totalSlotsCount)", emphasis: .normal)
+                    }
+                    .buttonStyle(.plain)
                 }
                 if let profileError = viewModel.profileErrorMessage {
                     AlertRow(icon: "exclamationmark.triangle.fill", title: "Profile load issue", detail: profileError, tone: .danger)
@@ -391,7 +433,14 @@ struct DashboardView: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(dashboardAlerts) { alert in
-                        AlertRow(icon: alert.icon, title: alert.title, detail: alert.detail, tone: alert.tone)
+                        if let tab = alert.tabOnTap {
+                            Button { navigateToTab(tab) } label: {
+                                AlertRow(icon: alert.icon, title: alert.title, detail: alert.detail, tone: alert.tone)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            AlertRow(icon: alert.icon, title: alert.title, detail: alert.detail, tone: alert.tone)
+                        }
                     }
                 }
             }
@@ -438,16 +487,25 @@ struct DashboardView: View {
     private var marketSnapshotPanel: some View {
         CommandRail(title: "Market Situation", systemImage: "chart.xyaxis.line") {
             VStack(alignment: .leading, spacing: 8) {
-                metricRow("Assets listed", "\(viewModel.listedCount)", AppTheme.chipListed)
-                metricRow("Inventory liquidity", NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 0), AppTheme.chipAvailable)
+                Button { navigateToTab(.market) } label: {
+                    metricRow("Assets listed", "\(viewModel.listedCount)", AppTheme.chipListed)
+                }
+                .buttonStyle(.plain)
+                Button { navigateToTab(.inventory) } label: {
+                    metricRow("Inventory liquidity", NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 0), AppTheme.chipAvailable)
+                }
+                .buttonStyle(.plain)
                 if viewModel.isLoadingProspecting {
                     Text("Prospecting feed syncing...")
                         .font(AppTheme.caption())
                         .foregroundStyle(AppTheme.textSecondary)
                 } else if let job = viewModel.activeProspectingJob {
-                    Text("Prospecting: \(viewModel.prospectingLabel(for: job.resourceType))")
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.textSecondary)
+                    Button { navigateToTab(.operations) } label: {
+                        Text("Prospecting: \(viewModel.prospectingLabel(for: job.resourceType))")
+                            .font(AppTheme.caption())
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
                 } else {
                     Text("No active prospecting assignment.")
                         .font(AppTheme.caption())
@@ -483,19 +541,19 @@ struct DashboardView: View {
     private var dashboardAlerts: [DashboardAlert] {
         var alerts: [DashboardAlert] = []
         if viewModel.producingCount == 0 {
-            alerts.append(.init(icon: "pause.circle.fill", title: "Production idle", detail: "No active production cycles. Start output from Operations.", tone: .danger))
+            alerts.append(.init(icon: "pause.circle.fill", title: "Production idle", detail: "No active production cycles. Start output from Operations.", tone: .danger, tabOnTap: .operations))
         }
         if viewModel.readyCount > 0 {
-            alerts.append(.init(icon: "checkmark.circle.fill", title: "Collection ready", detail: "\(viewModel.readyCount) building(s) are ready to collect.", tone: .success))
+            alerts.append(.init(icon: "checkmark.circle.fill", title: "Collection ready", detail: "\(viewModel.readyCount) building(s) are ready to collect.", tone: .success, tabOnTap: .operations))
         }
         if let job = viewModel.activeProspectingJob {
             if job.isRevealed {
-                alerts.append(.init(icon: "sparkles", title: "Prospecting result available", detail: "\(viewModel.prospectingLabel(for: job.resourceType)) report ready.", tone: .warning))
+                alerts.append(.init(icon: "sparkles", title: "Prospecting result available", detail: "\(viewModel.prospectingLabel(for: job.resourceType)) report ready.", tone: .warning, tabOnTap: .operations))
             } else {
-                alerts.append(.init(icon: "scope", title: "Prospecting active", detail: "\(viewModel.prospectingLabel(for: job.resourceType)) underway.", tone: .neutral))
+                alerts.append(.init(icon: "scope", title: "Prospecting active", detail: "\(viewModel.prospectingLabel(for: job.resourceType)) underway.", tone: .neutral, tabOnTap: .operations))
             }
         } else if !viewModel.isLoadingProspecting {
-            alerts.append(.init(icon: "scope", title: "No active prospecting", detail: "Assign a new prospecting job to discover expansion options.", tone: .neutral))
+            alerts.append(.init(icon: "scope", title: "No active prospecting", detail: "Assign a new prospecting job to discover expansion options.", tone: .neutral, tabOnTap: .operations))
         }
         return alerts.prefix(4).map { $0 }
     }
@@ -644,6 +702,7 @@ private struct DashboardAlert: Identifiable {
     let title: String
     let detail: String
     let tone: AlertRow.Tone
+    let tabOnTap: MainTabView.Tab?
 }
 
 #Preview {
