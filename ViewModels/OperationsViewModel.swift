@@ -25,11 +25,14 @@ final class OperationsViewModel: ObservableObject {
     @Published private(set) var buildings: [Building] = []
     @Published private(set) var profile: PlayerProfile?
     @Published private(set) var prospectingJobs: [ProspectingJob] = []
+    @Published private(set) var inventoryItems: [InventoryItem] = []
     @Published private(set) var isLoading = true
     @Published private(set) var loadingErrorMessage: String?
     @Published var purchaseErrorMessage: String?
     @Published var showPurchaseSheet = false
+    @Published var showProduceAllSheet = false
     @Published private(set) var isPurchasing = false
+    @Published private(set) var isPerformingBulkAction = false
     @Published var selectedEmptySlotIndex: Int?
 
     // MARK: - Services
@@ -38,6 +41,9 @@ final class OperationsViewModel: ObservableObject {
     private let playerProfileService = PlayerProfileService()
     private let prospectingService = ProspectingService()
     private let mineMarketService = MineMarketService()
+    private let inventoryService = InventoryService()
+    private let productionService = ProductionService()
+    private let bulkProduceRequiredSlots = 10
 
     init(userID: String) {
         self.userID = userID
@@ -95,6 +101,20 @@ final class OperationsViewModel: ObservableObject {
                     self.prospectingJobs = loadedJobs
                 case .failure(let error):
                     self.loadingErrorMessage = error.localizedDescription
+                }
+                group.leave()
+            }
+        }
+
+        group.enter()
+        inventoryService.fetchInventory(for: userID) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let loadedInventory):
+                    self.inventoryItems = loadedInventory
+                case .failure:
+                    break
                 }
                 group.leave()
             }
@@ -190,6 +210,236 @@ final class OperationsViewModel: ObservableObject {
     func closePurchaseSheet() {
         showPurchaseSheet = false
         selectedEmptySlotIndex = nil
+    }
+
+    func openProduceAllSheet() {
+        guard isBulkProduceUnlocked else { return }
+        purchaseErrorMessage = nil
+        showProduceAllSheet = true
+    }
+
+    func closeProduceAllSheet() {
+        showProduceAllSheet = false
+    }
+
+    var readyBuildings: [Building] {
+        let now = Date()
+        return buildings.filter { isReadyToCollect(building: $0, now: now) }
+    }
+
+    var canCollectAll: Bool {
+        !readyBuildings.isEmpty && !isPerformingBulkAction
+    }
+
+    func collectAllReady() {
+        guard !isPerformingBulkAction else { return }
+        let targets = readyBuildings
+        guard !targets.isEmpty else { return }
+
+        isPerformingBulkAction = true
+        purchaseErrorMessage = nil
+
+        var index = 0
+        var failures: [String] = []
+
+        func step() {
+            guard index < targets.count else {
+                self.isPerformingBulkAction = false
+                if failures.isEmpty == false {
+                    self.purchaseErrorMessage = "Collect All finished with issues: \(failures.joined(separator: " | "))"
+                }
+                self.loadData()
+                return
+            }
+
+            let b = targets[index]
+            self.productionService.collectProduction(for: self.userID, buildingID: b.id) { [weak self] result in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    if case .failure(let error) = result {
+                        failures.append("\(b.name): \(error.localizedDescription)")
+                    }
+                    index += 1
+                    step()
+                }
+            }
+        }
+
+        step()
+    }
+
+    struct BulkInputLine: Identifiable {
+        let id: String
+        let name: String
+        let needed: Double
+        let have: Double
+    }
+
+    struct BulkOutputLine: Identifiable {
+        let id: String
+        let name: String
+        let quantity: Double
+    }
+
+    struct ProduceAllCandidate: Identifiable {
+        let id: String
+        let building: Building
+        let recipeName: String?
+        let inputs: [BulkInputLine]
+        let outputs: [BulkOutputLine]
+        let canStart: Bool
+        let blockedReason: String?
+    }
+
+    var isBulkProduceUnlocked: Bool {
+        totalSlotsCount >= bulkProduceRequiredSlots
+    }
+
+    var produceAllCandidates: [ProduceAllCandidate] {
+        buildings
+            .sorted { $0.slotIndex < $1.slotIndex }
+            .compactMap { produceCandidate(for: $0) }
+    }
+
+    private func produceCandidate(for building: Building) -> ProduceAllCandidate? {
+        // Skip R&D for now: bulk action is for production buildings only.
+        if building.type == .researchAndDevelopment { return nil }
+
+        let isExtractor = building.type == .mine || building.type == .rig || building.type == .quarry
+        if isExtractor {
+            let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: building.level)
+            let needFuel = BuildingLevelCatalog.scaleQuantity(ProductionService.baseFuelPerExtractorCycle, throughputMultiplier: mult)
+            let haveFuel = inventoryQuantity(for: ProductionService.fuelDocID(quality: 1))
+            let input = BulkInputLine(id: "\(building.id)-fuel", name: "Fuel Cells", needed: needFuel, have: haveFuel)
+            let outputQty = Double(
+                ProductionService.extractorOutput(
+                    abundance: building.abundance ?? 50,
+                    level: building.level,
+                    resourceType: building.resourceType
+                )
+            )
+            let outputName: String
+            if let rt = building.resourceType {
+                switch rt {
+                case .gold: outputName = "Raw Gold"
+                case .silver: outputName = "Raw Silver"
+                case .diamond: outputName = "Raw Diamonds"
+                case .oil: outputName = "Crude Oil"
+                case .coal: outputName = "Raw Coal"
+                case .iron: outputName = "Raw Iron"
+                case .quarry, .stoneQuarry: outputName = "Raw Stone"
+                case .sandQuarry: outputName = "Raw Sand"
+                case .gravelQuarry: outputName = "Raw Gravel"
+                default: outputName = "Output"
+                }
+            } else {
+                outputName = "Output"
+            }
+            let outputs = [BulkOutputLine(id: "\(building.id)-out", name: outputName, quantity: outputQty)]
+
+            let status = buildingStatus(for: building, now: Date())
+            let canStartForStatus = status == .idle
+            let hasInputs = haveFuel + 0.0000001 >= needFuel
+            let canStart = canStartForStatus && hasInputs
+            let blockedReason: String?
+            if status == .listed { blockedReason = "Listed on market" }
+            else if status == .producing { blockedReason = "Already producing" }
+            else if status == .ready { blockedReason = "Collect output first" }
+            else if hasInputs == false { blockedReason = "Missing Fuel Cells" }
+            else { blockedReason = nil }
+            return ProduceAllCandidate(
+                id: building.id,
+                building: building,
+                recipeName: "Extractor cycle",
+                inputs: [input],
+                outputs: outputs,
+                canStart: canStart,
+                blockedReason: blockedReason
+            )
+        }
+
+        var recipes = RecipeCatalog.recipes(forBuildingName: building.name)
+        if recipes.isEmpty { recipes = RecipeCatalog.recipes(forBuildingId: building.id) }
+        guard let recipe = recipes.first else {
+            return ProduceAllCandidate(id: building.id, building: building, recipeName: nil, inputs: [], outputs: [], canStart: false, blockedReason: "No recipe configured")
+        }
+
+        let mult = BuildingLevelCatalog.throughputMultiplier(forLevel: building.level)
+        let lines: [BulkInputLine] = recipe.inputItems.map { ing in
+            let need = ing.item.isFractional
+                ? BuildingLevelCatalog.scaleQuantityFractional(ing.quantity, throughputMultiplier: mult)
+                : BuildingLevelCatalog.scaleQuantity(ing.quantity, throughputMultiplier: mult)
+            let have = inventoryQuantity(for: ing.item.id)
+            return BulkInputLine(id: "\(building.id)-\(ing.item.id)", name: ing.item.name, needed: need, have: have)
+        }
+        let outputs: [BulkOutputLine] = recipe.outputItems.map { out in
+            let qty = out.item.isFractional
+                ? BuildingLevelCatalog.scaleQuantityFractional(out.quantity, throughputMultiplier: mult)
+                : BuildingLevelCatalog.scaleQuantity(out.quantity, throughputMultiplier: mult)
+            return BulkOutputLine(id: "\(building.id)-out-\(out.item.id)", name: out.item.name, quantity: qty)
+        }
+        let hasInputs = lines.allSatisfy { $0.have + 0.0000001 >= $0.needed }
+        let status = buildingStatus(for: building, now: Date())
+        let canStartForStatus = status == .idle
+        let canStart = canStartForStatus && hasInputs
+        let blockedReason: String?
+        if status == .listed { blockedReason = "Listed on market" }
+        else if status == .producing { blockedReason = "Already producing" }
+        else if status == .ready { blockedReason = "Collect output first" }
+        else if hasInputs == false { blockedReason = "Missing required inputs" }
+        else { blockedReason = nil }
+        return ProduceAllCandidate(
+            id: building.id,
+            building: building,
+            recipeName: recipe.name,
+            inputs: lines,
+            outputs: outputs,
+            canStart: canStart,
+            blockedReason: blockedReason
+        )
+    }
+
+    func startProductionFromBulk(candidate: ProduceAllCandidate) {
+        guard !isPerformingBulkAction else { return }
+        guard candidate.canStart else { return }
+
+        isPerformingBulkAction = true
+        purchaseErrorMessage = nil
+
+        let b = candidate.building
+        let isExtractor = b.type == .mine || b.type == .rig || b.type == .quarry
+        if isExtractor {
+            productionService.startProduction(for: userID, buildingID: b.id, targetQuality: 1) { [weak self] result in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.isPerformingBulkAction = false
+                    if case .failure(let error) = result {
+                        self.purchaseErrorMessage = error.localizedDescription
+                    }
+                    self.loadData()
+                }
+            }
+            return
+        }
+
+        var recipes = RecipeCatalog.recipes(forBuildingName: b.name)
+        if recipes.isEmpty { recipes = RecipeCatalog.recipes(forBuildingId: b.id) }
+        guard let recipe = recipes.first else {
+            isPerformingBulkAction = false
+            purchaseErrorMessage = "No recipe configured for \(b.name)."
+            return
+        }
+
+        productionService.startRecipeProduction(for: userID, building: b, recipe: recipe, targetQuality: 1) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isPerformingBulkAction = false
+                if case .failure(let error) = result {
+                    self.purchaseErrorMessage = error.localizedDescription
+                }
+                self.loadData()
+            }
+        }
     }
 
     // MARK: - Computed
@@ -310,6 +560,10 @@ final class OperationsViewModel: ObservableObject {
             return n == 1 ? "1 Fuel Cell" : "\(n) Fuel Cells"
         }
         return nil
+    }
+
+    private func inventoryQuantity(for itemId: String) -> Double {
+        inventoryItems.first(where: { $0.id == itemId || $0.item.id == itemId })?.quantity ?? 0
     }
 
     func formattedTimeRemaining(until endDate: Date, now: Date) -> String {

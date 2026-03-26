@@ -66,6 +66,12 @@ struct OperationsView: View {
         )) {
             purchaseSheetView
         }
+        .sheet(isPresented: Binding(
+            get: { viewModel.showProduceAllSheet },
+            set: { viewModel.showProduceAllSheet = $0 }
+        )) {
+            produceAllSheetView
+        }
     }
 
     // MARK: - Panel sections
@@ -117,6 +123,45 @@ struct OperationsView: View {
 
                 if let purchaseErrorMessage = viewModel.purchaseErrorMessage {
                     OpsAlertRow(icon: "exclamationmark.triangle.fill", title: "Recent Action Issue", detail: purchaseErrorMessage, tone: .danger)
+                }
+
+                HStack(spacing: 10) {
+                    Button {
+                        viewModel.collectAllReady()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "shippingbox.fill")
+                            Text("Collect All")
+                                .lineLimit(1)
+                        }
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.surfaceAlt.opacity(0.6)))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.chipReady.opacity(0.45), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.canCollectAll == false)
+
+                    if viewModel.isBulkProduceUnlocked {
+                        Button {
+                            viewModel.openProduceAllSheet()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "play.fill")
+                                Text("Produce All")
+                                    .lineLimit(1)
+                            }
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.surfaceAlt.opacity(0.6)))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.accent.opacity(0.45), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
@@ -401,6 +446,147 @@ struct OperationsView: View {
         }
         .buttonStyle(.plain)
         .disabled(viewModel.isPurchasing || viewModel.selectedEmptySlotIndex == nil)
+    }
+
+    // MARK: - Produce all sheet
+
+    private var produceAllSheetView: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let error = viewModel.purchaseErrorMessage {
+                            OpsAlertRow(icon: "exclamationmark.triangle.fill", title: "Recent Action Issue", detail: error, tone: .danger)
+                        }
+
+                        let candidates = viewModel.produceAllCandidates
+                        if candidates.isEmpty {
+                            OpsAlertRow(icon: "info.circle.fill", title: "No eligible buildings", detail: "No production buildings available for bulk start.", tone: .neutral)
+                        } else {
+                            VStack(spacing: 10) {
+                                ForEach(candidates) { candidate in
+                                    bulkStartCard(candidate: candidate)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.horizontalPadding)
+                    .padding(.top, 14)
+                    .padding(.bottom, 24)
+                }
+            }
+            .navigationTitle("Produce All")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") { viewModel.closeProduceAllSheet() }
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+            .overlay {
+                if viewModel.isPerformingBulkAction {
+                    ProgressView("Processing...")
+                        .padding(18)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.surface))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.border, lineWidth: 1))
+                }
+            }
+        }
+    }
+
+    private func bulkStartCard(candidate: OperationsViewModel.ProduceAllCandidate) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(candidate.building.name)
+                        .font(AppTheme.bodyMedium())
+                        .foregroundStyle(AppTheme.textPrimary)
+                    if let recipeName = candidate.recipeName {
+                        Text("Default recipe: \(recipeName)")
+                            .font(AppTheme.caption())
+                            .foregroundStyle(AppTheme.textTertiary)
+                    }
+                }
+                Spacer()
+                if candidate.canStart {
+                    Text("READY")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(AppTheme.chipReady)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(AppTheme.chipReady.opacity(0.14)))
+                } else if let reason = candidate.blockedReason {
+                    Text(reason.uppercased())
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(AppTheme.textTertiary)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+
+            if candidate.inputs.isEmpty == false {
+                VStack(spacing: 6) {
+                    ForEach(candidate.inputs) { line in
+                        HStack {
+                            Text(line.name)
+                                .font(AppTheme.caption())
+                                .foregroundStyle(AppTheme.textSecondary)
+                            Spacer()
+                            Text("\(formatQty(line.have)) / \(formatQty(line.needed))")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(line.have + 0.0000001 >= line.needed ? AppTheme.chipReady : AppTheme.chipNegative)
+                        }
+                    }
+                }
+            }
+
+            if candidate.outputs.isEmpty == false {
+                VStack(spacing: 6) {
+                    ForEach(candidate.outputs) { line in
+                        HStack {
+                            Text("Output: \(line.name)")
+                                .font(AppTheme.caption())
+                                .foregroundStyle(AppTheme.textSecondary)
+                            Spacer()
+                            Text(formatQty(line.quantity))
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                    }
+                }
+            }
+
+            Button {
+                viewModel.startProductionFromBulk(candidate: candidate)
+            } label: {
+                HStack {
+                    Image(systemName: "play.fill")
+                    Text("Start")
+                }
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AppTheme.textPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(AppTheme.surfaceAlt.opacity(0.62)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke((candidate.canStart ? AppTheme.accent : AppTheme.border).opacity(0.9), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(candidate.canStart == false || viewModel.isPerformingBulkAction)
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.surfaceAlt.opacity(0.45)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border, lineWidth: 1))
+    }
+
+    private func formatQty(_ value: Double) -> String {
+        if abs(value.rounded() - value) < 0.0000001 {
+            return NumberFormatting.integer(Int(value))
+        }
+        return NumberFormatting.decimal(value, fractionDigits: 1)
     }
 }
 
