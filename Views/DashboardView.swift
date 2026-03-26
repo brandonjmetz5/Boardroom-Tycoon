@@ -53,7 +53,6 @@ struct DashboardView: View {
                         assetsPanel
                         alertsPanel
                         progressionPanel
-                        marketSnapshotPanel
                         quickActionsPanel
                     }
                     .padding(.horizontal, AppTheme.horizontalPadding)
@@ -318,23 +317,9 @@ struct DashboardView: View {
         CommandRail(title: "Treasury Strip", systemImage: "banknote.fill") {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    stripTile("Cash", NumberFormatting.currency(viewModel.profile?.cash ?? 0, fractionDigits: 0), AppTheme.accent) {
-                        navigateToTab(.profile)
-                    }
-                    stripTile("Inventory", NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 0), AppTheme.chipAvailable) {
+                    stripTileStatic("Cash", NumberFormatting.currency(viewModel.profile?.cash ?? 0, fractionDigits: 0), AppTheme.accent)
+                    stripTileNav("Inventory", NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 0), AppTheme.chipAvailable) {
                         navigateToTab(.inventory)
-                    }
-                    stripTile("Slots", "\(viewModel.usedSlotsCount)/\(viewModel.totalSlotsCount)", AppTheme.chipProspecting) {
-                        navigateToTab(.operations)
-                    }
-                    stripTile("Producing", "\(viewModel.producingCount)", AppTheme.chipProducing) {
-                        navigateToTab(.operations)
-                    }
-                    stripTile("Ready", "\(viewModel.readyCount)", AppTheme.chipReady) {
-                        navigateToTab(.operations)
-                    }
-                    stripTile("Listed", "\(viewModel.listedCount)", AppTheme.chipListed) {
-                        navigateToTab(.market)
                     }
                 }
                 .padding(.vertical, 2)
@@ -342,7 +327,22 @@ struct DashboardView: View {
         }
     }
 
-    private func stripTile(_ title: String, _ value: String, _ color: Color, action: @escaping () -> Void) -> some View {
+    private func stripTileStatic(_ title: String, _ value: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(AppTheme.textTertiary)
+            Text(value)
+                .font(AppTheme.monoNumber())
+                .foregroundStyle(color)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(RoundedRectangle(cornerRadius: 9).fill(AppTheme.surfaceAlt.opacity(0.55)))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(AppTheme.border.opacity(0.95), lineWidth: 1))
+    }
+
+    private func stripTileNav(_ title: String, _ value: String, _ color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -481,37 +481,6 @@ struct DashboardView: View {
             Text(complete ? "DONE" : "PENDING")
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundStyle(complete ? AppTheme.chipReady : AppTheme.textTertiary)
-        }
-    }
-
-    private var marketSnapshotPanel: some View {
-        CommandRail(title: "Market Situation", systemImage: "chart.xyaxis.line") {
-            VStack(alignment: .leading, spacing: 8) {
-                Button { navigateToTab(.market) } label: {
-                    metricRow("Assets listed", "\(viewModel.listedCount)", AppTheme.chipListed)
-                }
-                .buttonStyle(.plain)
-                Button { navigateToTab(.inventory) } label: {
-                    metricRow("Inventory liquidity", NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 0), AppTheme.chipAvailable)
-                }
-                .buttonStyle(.plain)
-                if viewModel.isLoadingProspecting {
-                    Text("Prospecting feed syncing...")
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.textSecondary)
-                } else if let job = viewModel.activeProspectingJob {
-                    Button { navigateToTab(.operations) } label: {
-                        Text("Prospecting: \(viewModel.prospectingLabel(for: job.resourceType))")
-                            .font(AppTheme.caption())
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Text("No active prospecting assignment.")
-                        .font(AppTheme.caption())
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-            }
         }
     }
 
