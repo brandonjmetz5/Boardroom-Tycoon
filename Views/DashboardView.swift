@@ -315,15 +315,15 @@ struct DashboardView: View {
 
     private var resourceStrip: some View {
         CommandRail(title: "Treasury Strip", systemImage: "banknote.fill") {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    stripTileStatic("Cash", NumberFormatting.currency(viewModel.profile?.cash ?? 0, fractionDigits: 0), AppTheme.accent)
-                    stripTileNav("Inventory", NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 0), AppTheme.chipAvailable) {
-                        navigateToTab(.inventory)
-                    }
+            HStack(spacing: 10) {
+                stripTileStatic("Cash", NumberFormatting.currency(viewModel.profile?.cash ?? 0, fractionDigits: 0), AppTheme.accent)
+                    .frame(maxWidth: .infinity)
+                stripTileNav("Inventory", NumberFormatting.currency(viewModel.totalInventoryValue, fractionDigits: 0), AppTheme.chipAvailable) {
+                    navigateToTab(.inventory)
                 }
-                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity)
             }
+            .padding(.vertical, 2)
         }
     }
 
@@ -335,6 +335,9 @@ struct DashboardView: View {
             Text(value)
                 .font(AppTheme.monoNumber())
                 .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .allowsTightening(true)
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
@@ -352,6 +355,9 @@ struct DashboardView: View {
                     Text(value)
                         .font(AppTheme.monoNumber())
                         .foregroundStyle(color)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .allowsTightening(true)
                 }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .bold))
