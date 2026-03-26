@@ -291,8 +291,88 @@ final class OperationsViewModel: ObservableObject {
         let blockedReason: String?
     }
 
+    struct PurchaseOutputPreview: Identifiable {
+        let id: String
+        let label: String
+        let outputNames: [String]
+    }
+
+    struct ProspectingOption: Identifiable {
+        let resourceType: ResourceType
+        let title: String
+        var id: String { resourceType.rawValue }
+    }
+
     var isBulkProduceUnlocked: Bool {
         totalSlotsCount >= bulkProduceRequiredSlots
+    }
+
+    let prospectingCost: Double = 25_000
+
+    var prospectingOptions: [ProspectingOption] {
+        [
+            ProspectingOption(resourceType: .gold, title: "Prospect Gold Mine"),
+            ProspectingOption(resourceType: .silver, title: "Prospect Silver Mine"),
+            ProspectingOption(resourceType: .diamond, title: "Prospect Diamond Mine"),
+            ProspectingOption(resourceType: .oil, title: "Prospect Oil Rig"),
+            ProspectingOption(resourceType: .coal, title: "Prospect Coal Mine"),
+            ProspectingOption(resourceType: .iron, title: "Prospect Iron Mine"),
+            ProspectingOption(resourceType: .sandQuarry, title: "Prospect Sand Quarry"),
+            ProspectingOption(resourceType: .stoneQuarry, title: "Prospect Stone Quarry"),
+            ProspectingOption(resourceType: .gravelQuarry, title: "Prospect Gravel Quarry")
+        ]
+    }
+
+    func purchaseBuildingAssetName(for purchasable: PurchasableBuilding) -> String {
+        let key = purchasable.name.lowercased()
+        if key.contains("gold refinery") { return "icon_gold_refinery" }
+        if key.contains("oil refinery") { return "icon_oil_refinery" }
+        if key.contains("coal refinery") { return "icon_coal_refinery" }
+        if key.contains("iron refinery") { return "icon_iron_bar_factory" }
+        if key.contains("silver refinery") { return "icon_silver_refinery" }
+        if key.contains("diamond refinery") { return "icon_diamond_refinery" }
+        if key.contains("fuel processing plant") { return "icon_fuel_processing_plant" }
+        if key.contains("construction materials") { return "icon_construction_materials_factory" }
+        if key.contains("material depot") { return "icon_materials_depot" }
+        if key.contains("tech plant") { return "icon_tech_plant" }
+        if key.contains("steel mill") { return "icon_iron_bar_factory" }
+        if key.contains("fabrication plant") { return "icon_fabrication_plant" }
+        if key.contains("diamond processing plant") { return "icon_diamond_processing_plant" }
+        if key.contains("silver processing plant") { return "icon_silver_processing_plant" }
+        if key.contains("gold processing plant") { return "icon_gold_refinery" }
+        if key.contains("jewelry shop") { return "icon_blueprint" }
+        if key.contains("research") { return "icon_blueprint" }
+        return "icon_blueprint"
+    }
+
+    func purchaseOutputPreviews(for purchasable: PurchasableBuilding) -> [PurchaseOutputPreview] {
+        if purchasable.type == .researchAndDevelopment {
+            return [PurchaseOutputPreview(id: "rd", label: "Research cycle", outputNames: ["Research Points"])]
+        }
+
+        var recipes = RecipeCatalog.recipes(forBuildingName: purchasable.name)
+        if recipes.isEmpty { recipes = RecipeCatalog.recipes(forBuildingId: purchasable.id) }
+        if recipes.isEmpty { return [] }
+
+        return recipes.map { recipe in
+            let names = recipe.outputItems.map { $0.item.name }
+            return PurchaseOutputPreview(id: recipe.id, label: recipe.name, outputNames: names)
+        }
+    }
+
+    func prospectingAssetName(for resourceType: ResourceType) -> String {
+        switch resourceType {
+        case .gold: return "icon_gold_refinery"
+        case .silver: return "icon_raw_silver_mine"
+        case .diamond: return "icon_raw_diamond_mine"
+        case .oil: return "icon_oil_rig"
+        case .coal: return "icon_raw_coal_mine"
+        case .iron: return "icon_iron_bar_factory"
+        case .quarry, .stoneQuarry: return "icon_stone_quarry"
+        case .sandQuarry: return "icon_sand_quarry"
+        case .gravelQuarry: return "icon_gravel_quarry"
+        default: return "icon_blueprint"
+        }
     }
 
     var produceAllCandidates: [ProduceAllCandidate] {

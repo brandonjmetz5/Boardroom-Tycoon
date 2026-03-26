@@ -365,23 +365,67 @@ struct OperationsView: View {
                                     Button {
                                         viewModel.purchaseBuilding(p)
                                     } label: {
-                                        HStack(alignment: .top) {
-                                            VStack(alignment: .leading, spacing: 3) {
-                                                Text(p.name)
-                                                    .font(AppTheme.bodyMedium())
-                                                    .foregroundStyle(AppTheme.textPrimary)
-                                                Text("Type: \(p.type.rawValue)")
-                                                    .font(AppTheme.caption())
-                                                    .foregroundStyle(AppTheme.textSecondary)
+                                        ZStack(alignment: .leading) {
+                                            Image(viewModel.purchaseBuildingAssetName(for: p))
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(maxWidth: .infinity, minHeight: 138, maxHeight: 138)
+                                                .clipped()
+                                                .opacity(0.55)
+
+                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                .fill(Color.black.opacity(0.28))
+
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                HStack(alignment: .top, spacing: 8) {
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        Text(p.name)
+                                                            .font(AppTheme.bodyMedium())
+                                                            .foregroundStyle(AppTheme.textPrimary)
+                                                        Text("Type: \(p.type.rawValue)")
+                                                            .font(AppTheme.caption())
+                                                            .foregroundStyle(AppTheme.textPrimary.opacity(0.92))
+                                                    }
+                                                    Spacer(minLength: 8)
+                                                    Text(NumberFormatting.currency(p.cost, fractionDigits: 0))
+                                                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                                        .foregroundStyle(AppTheme.accent)
+                                                }
+
+                                                let previews = viewModel.purchaseOutputPreviews(for: p)
+                                                if previews.isEmpty {
+                                                    Text("Outputs: not configured")
+                                                        .font(AppTheme.caption())
+                                                        .foregroundStyle(AppTheme.textPrimary.opacity(0.85))
+                                                } else {
+                                                    VStack(alignment: .leading, spacing: 4) {
+                                                        ForEach(Array(previews.prefix(2))) { preview in
+                                                            VStack(alignment: .leading, spacing: 2) {
+                                                                Text(preview.label)
+                                                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                                                    .foregroundStyle(AppTheme.textPrimary.opacity(0.86))
+                                                                    .lineLimit(1)
+                                                                HStack(spacing: 5) {
+                                                                    ForEach(preview.outputNames, id: \.self) { outName in
+                                                                        purchaseOutputChip(outputName: outName)
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        if previews.count > 2 {
+                                                            Text("+\(previews.count - 2) more recipe(s)")
+                                                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                                                .foregroundStyle(AppTheme.textPrimary.opacity(0.8))
+                                                        }
+                                                    }
+                                                }
                                             }
-                                            Spacer()
-                                            Text(NumberFormatting.currency(p.cost, fractionDigits: 0))
-                                                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                                                .foregroundStyle(AppTheme.accent)
+                                            .padding(10)
                                         }
-                                        .padding(10)
+                                        .frame(maxWidth: .infinity, minHeight: 138, maxHeight: 138, alignment: .leading)
                                         .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.surfaceAlt.opacity(0.5)))
                                         .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border, lineWidth: 1))
+                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                                     }
                                     .buttonStyle(.plain)
                                     .disabled(viewModel.isPurchasing || viewModel.selectedEmptySlotIndex == nil)
@@ -391,15 +435,9 @@ struct OperationsView: View {
 
                         OpsPanel(title: "Prospect Resource Site", icon: "scope") {
                             VStack(spacing: 8) {
-                                prospectButton("Prospect Gold Mine", .gold)
-                                prospectButton("Prospect Silver Mine", .silver)
-                                prospectButton("Prospect Diamond Mine", .diamond)
-                                prospectButton("Prospect Oil Rig", .oil)
-                                prospectButton("Prospect Coal Mine", .coal)
-                                prospectButton("Prospect Iron Mine", .iron)
-                                prospectButton("Prospect Sand Quarry", .sandQuarry)
-                                prospectButton("Prospect Stone Quarry", .stoneQuarry)
-                                prospectButton("Prospect Gravel Quarry", .gravelQuarry)
+                                ForEach(viewModel.prospectingOptions) { option in
+                                    prospectButton(option)
+                                }
                             }
                         }
                     }
@@ -427,22 +465,38 @@ struct OperationsView: View {
         }
     }
 
-    private func prospectButton(_ title: String, _ resourceType: ResourceType) -> some View {
+    private func prospectButton(_ option: OperationsViewModel.ProspectingOption) -> some View {
         Button {
-            viewModel.startProspecting(resourceType)
+            viewModel.startProspecting(option.resourceType)
         } label: {
-            HStack {
-                Text(title)
-                    .font(AppTheme.bodyMedium())
-                    .foregroundStyle(AppTheme.textPrimary)
-                Spacer()
-                Text("1 SLOT")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(AppTheme.textTertiary)
+            ZStack(alignment: .leading) {
+                Image(viewModel.prospectingAssetName(for: option.resourceType))
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, minHeight: 108, maxHeight: 108)
+                    .clipped()
+                    .opacity(0.55)
+
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.black.opacity(0.28))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(option.title)
+                        .font(AppTheme.bodyMedium())
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text("Cost: \(NumberFormatting.currency(viewModel.prospectingCost, fractionDigits: 0))")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(AppTheme.accent)
+                    Text("Uses 1 slot")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(AppTheme.textPrimary.opacity(0.9))
+                }
+                .padding(10)
             }
-            .padding(10)
+            .frame(maxWidth: .infinity, minHeight: 108, maxHeight: 108, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.surfaceAlt.opacity(0.5)))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(viewModel.isPurchasing || viewModel.selectedEmptySlotIndex == nil)
@@ -587,6 +641,35 @@ struct OperationsView: View {
             return NumberFormatting.integer(Int(value))
         }
         return NumberFormatting.decimal(value, fractionDigits: 1)
+    }
+
+    private func purchaseOutputChip(outputName: String) -> some View {
+        HStack(spacing: 4) {
+            if let asset = ItemResourceIconAsset.assetName(forItemDisplayName: outputName) {
+                Image(asset)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 14, height: 14)
+            } else {
+                Circle()
+                    .fill(AppTheme.surfaceAlt.opacity(0.8))
+                    .frame(width: 14, height: 14)
+                    .overlay(
+                        Text(String(outputName.prefix(1)).uppercased())
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    )
+            }
+
+            Text(outputName)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(AppTheme.surface.opacity(0.8)))
+        .overlay(Capsule().stroke(AppTheme.border.opacity(0.9), lineWidth: 1))
     }
 }
 
