@@ -51,6 +51,10 @@ struct BuildingDetailView: View {
         .onAppear {
             viewModel.onDismiss = { dismiss() }
             viewModel.refreshBuilding()
+            viewModel.startRealtimeUpdates()
+        }
+        .onDisappear {
+            viewModel.stopRealtimeUpdates()
         }
         .sheet(isPresented: $viewModel.showListingSheet) {
             listingSheetView
@@ -157,21 +161,23 @@ struct BuildingDetailView: View {
                     Text("Production lock active while building is listed on market.")
                         .font(AppTheme.captionMedium())
                         .foregroundStyle(AppTheme.chipListed)
-                } else if viewModel.isReadyToCollect(at: Date()) {
-                    Button {
-                        viewModel.collectProduction()
-                    } label: {
-                        commandAction(title: "Collect Output", icon: "shippingbox.fill", color: AppTheme.chipReady)
-                    }
-                    .buttonStyle(.plain)
-                } else if viewModel.currentBuilding.isProducing == true, let nextEnd = viewModel.nextProductionEndTime() {
+                } else if viewModel.currentBuilding.isProducing == true, let end = viewModel.currentBuilding.productionEndsAt {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
-                        HStack(spacing: 8) {
-                            Image(systemName: "clock.fill")
-                                .foregroundStyle(AppTheme.chipProducing)
-                            Text("Cycle ETA: \(viewModel.formattedTimeRemaining(until: nextEnd, now: context.date))")
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                .foregroundStyle(AppTheme.chipProducing)
+                        if viewModel.isReadyToCollect(at: context.date) {
+                            Button {
+                                viewModel.collectProduction()
+                            } label: {
+                                commandAction(title: "Collect Output", icon: "shippingbox.fill", color: AppTheme.chipReady)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            HStack(spacing: 8) {
+                                Image(systemName: "clock.fill")
+                                    .foregroundStyle(AppTheme.chipProducing)
+                                Text("Cycle ETA: \(viewModel.formattedTimeRemaining(until: end, now: context.date))")
+                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(AppTheme.chipProducing)
+                            }
                         }
                     }
                 } else if viewModel.canStartProduction {

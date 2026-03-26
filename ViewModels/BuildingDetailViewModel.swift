@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import FirebaseFirestore
 
 @MainActor
 final class BuildingDetailViewModel: ObservableObject {
@@ -51,12 +52,49 @@ final class BuildingDetailViewModel: ObservableObject {
 
     var onDismiss: (() -> Void)?
 
+    private var buildingListener: ListenerRegistration?
+    private var productionEndRefreshTimer: Timer?
+
     init(userID: String, building: Building) {
         self.userID = userID
         self.currentBuilding = building
     }
 
     // MARK: - Actions
+
+    func startRealtimeUpdates() {
+        stopRealtimeUpdates()
+
+        let buildingRef = Firestore.firestore()
+            .collection("playerProfiles")
+            .document(userID)
+            .collection("buildings")
+            .document(currentBuilding.id)
+
+        buildingListener = buildingRef.addSnapshotListener { [weak self] snapshot, error in
+            guard let self else { return }
+            guard error == nil, let data = snapshot?.data() else { return }
+
+            if let updated = self.parseBuilding(id: self.currentBuilding.id, data: data) {
+                Task { @MainActor in
+                    self.currentBuilding = updated
+                    self.refreshListingIfNeeded()
+                    self.loadRecipesIfNeeded()
+                    self.scheduleProductionEndRefreshIfNeeded()
+                }
+            }
+        }
+
+        scheduleProductionEndRefreshIfNeeded()
+    }
+
+    func stopRealtimeUpdates() {
+        buildingListener?.remove()
+        buildingListener = nil
+
+        productionEndRefreshTimer?.invalidate()
+        productionEndRefreshTimer = nil
+    }
 
     func refreshBuilding() {
         buildingService.fetchBuildings(for: userID) { [weak self] result in
@@ -69,6 +107,7 @@ final class BuildingDetailViewModel: ObservableObject {
                         self.refreshListingIfNeeded()
                         self.loadRecipesIfNeeded()
                         self.loadInventory()
+                        self.scheduleProductionEndRefreshIfNeeded()
                     }
                 case .failure:
                     break
@@ -94,6 +133,73 @@ final class BuildingDetailViewModel: ObservableObject {
                 if case .success(let items) = result { self.inventoryItems = items }
             }
         }
+    }
+
+    private func scheduleProductionEndRefreshIfNeeded() {
+        productionEndRefreshTimer?.invalidate()
+        productionEndRefreshTimer = nil
+
+        guard currentBuilding.isProducing == true, let end = currentBuilding.productionEndsAt else { return }
+        let now = Date()
+        guard end > now else { return }
+
+        let fireAt = end.addingTimeInterval(0.35) // small buffer to avoid edge-of-second UI jitter
+        productionEndRefreshTimer = Timer(fireAt: fireAt, interval: 0, target: self, selector: #selector(handleProductionEndTimerFired), userInfo: nil, repeats: false)
+        if let t = productionEndRefreshTimer {
+            RunLoop.main.add(t, forMode: .common)
+        }
+    }
+
+    @objc private func handleProductionEndTimerFired() {
+        refreshBuilding()
+    }
+
+    private func parseBuilding(id: String, data: [String: Any]) -> Building? {
+        guard
+            let name = data["name"] as? String,
+            let typeRawValue = data["type"] as? String,
+            let type = BuildingType(rawValue: typeRawValue),
+            let level = data["level"] as? Int,
+            let capacity = data["capacity"] as? Int
+        else { return nil }
+
+        let slotIndex = data["slotIndex"] as? Int ?? Int.max
+        let resourceType: ResourceType? = (data["resourceType"] as? String).flatMap { ResourceType(rawValue: $0) }
+        let abundance = data["abundance"] as? Int
+        let isStarterMine = data["isStarterMine"] as? Bool
+        let isProducing = data["isProducing"] as? Bool
+
+        let productionStartedAt: Date? = (data["productionStartedAt"] as? Timestamp)?.dateValue()
+        let productionEndsAt: Date? = (data["productionEndsAt"] as? Timestamp)?.dateValue()
+
+        let pendingOutputQuantity = data["pendingOutputQuantity"] as? Double
+        let pendingOutputItemId = data["pendingOutputItemId"] as? String
+        let pendingOutputItemName = data["pendingOutputItemName"] as? String
+        let pendingOutputQuality = data["pendingOutputQuality"] as? Int
+
+        let isListedOnMarket = data["isListedOnMarket"] as? Bool
+        let marketListingID = data["marketListingID"] as? String
+
+        return Building(
+            id: id,
+            name: name,
+            type: type,
+            level: level,
+            capacity: capacity,
+            slotIndex: slotIndex,
+            resourceType: resourceType,
+            abundance: abundance,
+            isStarterMine: isStarterMine,
+            isProducing: isProducing,
+            productionStartedAt: productionStartedAt,
+            productionEndsAt: productionEndsAt,
+            pendingOutputQuantity: pendingOutputQuantity,
+            pendingOutputItemId: pendingOutputItemId,
+            pendingOutputItemName: pendingOutputItemName,
+            pendingOutputQuality: pendingOutputQuality,
+            isListedOnMarket: isListedOnMarket,
+            marketListingID: marketListingID
+        )
     }
 
     private func loadQualityForCurrentOutput() {
